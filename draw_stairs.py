@@ -34,7 +34,14 @@ def get_normals(r_modules, R2Z, h=0.001):
     return np.array(normal)
 
 def get_normals_angles(normal):
-    print(np.linalg.norm(normal[0]))
+    angles = []
+
+    for idx in range(len(normal)):
+        theta = np.arccos(np.dot(normal[idx],np.array([0,1])))
+        print(math.degrees(theta))
+        angles.append(theta)
+    
+    return np.array(angles)
 
 
 
@@ -83,7 +90,8 @@ def draw_BFS(Rc,vigR, draw=False, full_curve = False):
 
 x_modules, y_modules = calc_modules_pos(Rc, module_width, nb_modules, R2Z)
 normal = get_normals(x_modules, R2Z)
-get_normals_angles(normal)
+angles = get_normals_angles(normal)
+print(angles)
 
 ## Plotting time ##
 
