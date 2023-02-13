@@ -38,10 +38,12 @@ def get_normals_angles(normal):
 
     for idx in range(len(normal)):
         theta = np.arccos(np.dot(normal[idx],np.array([0,1])))
-        print(math.degrees(theta))
         angles.append(theta)
     
-    return np.array(angles)
+    angles = np.array(angles)
+    print("angle to normal [deg]: ", np.around(np.degrees(angles),3))
+
+    return angles
 
 
 
@@ -91,14 +93,13 @@ def draw_BFS(Rc,vigR, draw=False, full_curve = False):
 x_modules, y_modules = calc_modules_pos(Rc, module_width, nb_modules, R2Z)
 normal = get_normals(x_modules, R2Z)
 angles = get_normals_angles(normal)
-print(angles)
 
 ## Plotting time ##
 
 fig, ax = plt.subplots(1,1,figsize=(15,1.5))
 
 plot_time = 20 #seconds
-is_timer = False
+is_timer = True
 if is_timer:
     timer = fig.canvas.new_timer(interval = plot_time*1000)
     timer.add_callback(plt.close)
