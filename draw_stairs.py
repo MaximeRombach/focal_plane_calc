@@ -20,45 +20,8 @@ R2Z = interp1d(t['R'],t1,kind='cubic') #leave 'cubic' interpolation for normal v
 r = np.linspace(0,vigR,1000)
 z = R2Z(r) # Calculate focal plane curve from csv data
 
-def get_normals(r_modules, R2Z, h=0.001):
-    normal = []
-    for idx in range(len(r_modules)):
-        x0, y0, xa, ya = r_modules[idx], R2Z(r_modules[idx]), r_modules[idx]+h, R2Z(r_modules[idx]+h)
-        dx = h
-        dy = ya - y0
-        norm = math.hypot(dx, dy)
-        dx /= norm
-        dy /= norm
-        normal.append([-dy, dx])
-
-    return np.array(normal)
-
-def get_normals_angles(normal):
-    angles = []
-
-    for idx in range(len(normal)):
-        theta = np.arccos(np.dot(normal[idx],np.array([0,1])))
-        angles.append(theta)
-    
-    angles = np.array(angles)
-    print("angle to normal [deg]: ", np.around(np.degrees(angles),3))
-
-    return angles
-
-
-
-def draw_normals(x_modules, y_modules, normal, length=10, draw=True):
-    if not draw:
-        return
-    else:
-        for idx in range(len(x_modules)):
-            x0, y0 = x_modules[idx], y_modules[idx]
-            nx, ny = normal[idx][0]*length, normal[idx][1]*length
-            ax.plot((x0, x0+nx), (y0, y0+ny))
-            # ax.plot((x0, x0), (y0, y0+1*length),'r--')
-
-
 def calc_modules_pos(Rc, module_width, nb_modules, R2Z, BFS = False):
+
 
     r_modules = np.array(range(0,nb_modules*module_width,module_width))
     if BFS: # Calculate module pos on Best Fit Sphere
@@ -77,8 +40,47 @@ def calc_modules_pos(Rc, module_width, nb_modules, R2Z, BFS = False):
 
     return r_modules, z_modules
 
-def draw_BFS(Rc,vigR, draw=False, full_curve = False):
+def get_normals(r_modules, R2Z, h=0.001):
+    """Calculates the normal vectors to the curve
+    Their coordinates are stored in "normal" element-wise ex: normal[0]=[nx0,ny0]"""
+    normal = []
+    for idx in range(len(r_modules)):
+        x0, y0, xa, ya = r_modules[idx], R2Z(r_modules[idx]), r_modules[idx]+h, R2Z(r_modules[idx]+h)
+        dx = h
+        dy = ya - y0
+        norm = math.hypot(dx, dy)
+        dx /= norm
+        dy /= norm
+        normal.append([-dy, dx])
 
+    return np.array(normal)
+
+def get_normals_angles(normal):
+    """Calculates the angle between the normal vectors and the vertical"""
+    angles = []
+
+    for idx in range(len(normal)):
+        theta = np.arccos(np.dot(normal[idx],np.array([0,1])))
+        angles.append(theta)
+    
+    angles = np.array(angles)
+    print("angle to normal [deg]: ", np.around(np.degrees(angles),3))
+
+    return angles
+
+def draw_normals(x_modules, y_modules, normal, length=10, draw=True):
+    if not draw:
+        return
+    else:
+        for idx in range(len(x_modules)):
+            x0, y0 = x_modules[idx], y_modules[idx]
+            nx, ny = normal[idx][0]*length, normal[idx][1]*length
+            ax.plot((x0, x0+nx), (y0, y0+ny))
+            # ax.plot((x0, x0), (y0, y0+1*length),'r--')
+
+def draw_BFS(Rc,vigR, draw=False, full_curve = False):
+    """Draws the Best Fit Sphere of the focal surface for comparison with the interpolated one
+    full_curve criteria draws both sides of the curve"""
     if not draw:
         return
     if full_curve: 
