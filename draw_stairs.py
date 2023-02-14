@@ -78,6 +78,15 @@ def draw_normals(x_modules, y_modules, normal, length=10, draw=True):
             ax.plot((x0, x0+nx), (y0, y0+ny))
             # ax.plot((x0, x0), (y0, y0+1*length),'r--')
 
+def draw_modules_width(x_modules):
+    for i in range(len(x_modules)): # draw modules width
+        x_min = x_modules[i]-module_width/2
+        x_max = x_modules[i]+module_width/2
+        if i == 0:
+            ax.hlines(y=y_modules[i], xmin=x_min, xmax=x_max, color='r', label="fiber tips line", linewidth=1.25)
+        else:
+            ax.hlines(y=y_modules[i], xmin=x_min, xmax=x_max, color='r')
+
 def draw_BFS(Rc,vigR, draw=False, full_curve = False):
     """Draws the Best Fit Sphere of the focal surface for comparison with the interpolated one
     full_curve criteria draws both sides of the curve"""
@@ -98,7 +107,7 @@ angles = get_normals_angles(normal)
 
 ## Plotting time ##
 
-fig, ax = plt.subplots(1,1,figsize=(15,1.5))
+fig, ax = plt.subplots(1,1,figsize=(15,2))
 
 plot_time = 20 #seconds
 is_timer = True
@@ -106,15 +115,9 @@ if is_timer:
     timer = fig.canvas.new_timer(interval = plot_time*1000)
     timer.add_callback(plt.close)
 
-draw_normals(x_modules,y_modules,normal)
+draw_normals(x_modules,y_modules,normal,length=10)
 # plt.plot(x_radius, y_radius, '-.',label="BFS")
-for i in range(len(x_modules)): # draw modules width
-    x_min = x_modules[i]-module_width/2
-    x_max = x_modules[i]+module_width/2
-    if i == 0:
-        ax.hlines(y=y_modules[i], xmin=x_min, xmax=x_max, color='r', label="fiber tips line", linewidth=1.25)
-    else:
-        ax.hlines(y=y_modules[i], xmin=x_min, xmax=x_max, color='r')
+draw_modules_width(x_modules)
 plt.plot(r,z,'--g',label="focal surface")
 draw_BFS(Rc,vigR, draw=False)
 plt.legend()
