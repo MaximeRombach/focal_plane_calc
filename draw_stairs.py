@@ -13,10 +13,12 @@ module_width = 80 # Module width [mm]
 nb_modules = 8 #number of modules of one side of the axis
 
 t = Table.read('MM1536-cfg1-20210910.csv', comment='#')
-t1 = -t['Z']
-CRD = t['CRD']
+t1 = t['Z']
+CRD_data = t['CRD']
+R = t['R']
 
 R2Z = interp1d(t['R'],t1,kind='cubic') #leave 'cubic' interpolation for normal vectors calculations
+R2CRD = interp1d(t['R'],CRD_data,kind='cubic')
 r = np.linspace(0,vigR,1000)
 z = R2Z(r) # Calculate focal plane curve from csv data
 
@@ -51,7 +53,7 @@ def get_normals(r_modules, R2Z, h=0.001):
         norm = math.hypot(dx, dy)
         dx /= norm
         dy /= norm
-        normal.append([-dy, dx])
+        normal.append([dy, -dx])
 
     return np.array(normal)
 
@@ -101,6 +103,19 @@ def draw_BFS(Rc,vigR, draw=False, full_curve = False):
 
     ax.plot(x,y,label='BFS',color='orange',linestyle='-.')
 
+def draw_R2CRD(r,R,CRD_data,R2CRD, draw=True):
+    if not draw:
+        return
+    fig = plt.figure(num='R2CRD')
+    plt.plot(r,R2CRD(r),label='interpolation')
+    plt.scatter(R,CRD_data,marker='.',color='red',label='data')
+    plt.legend()
+    plt.title('Chief Ray Deviation in terms of radial pos on focal surface')
+    plt.xlabel('R [mm]')
+    plt.ylabel('CRD [deg]')
+    plt.grid()
+
+
 x_modules, y_modules = calc_modules_pos(Rc, module_width, nb_modules, R2Z)
 normal = get_normals(x_modules, R2Z)
 angles = get_normals_angles(normal)
@@ -111,11 +126,8 @@ fig, ax = plt.subplots(1,1,figsize=(15,2))
 
 plot_time = 20 #seconds
 is_timer = True
-if is_timer:
-    timer = fig.canvas.new_timer(interval = plot_time*1000)
-    timer.add_callback(plt.close)
 
-draw_normals(x_modules,y_modules,normal,length=10)
+draw_normals(x_modules,y_modules,normal,length=1.5*Rc)
 # plt.plot(x_radius, y_radius, '-.',label="BFS")
 draw_modules_width(x_modules)
 plt.plot(r,z,'--g',label="focal surface")
@@ -125,8 +137,11 @@ plt.title('Focal surface and module arrangement')
 plt.xlabel('R [mm]')
 plt.ylabel('Z [mm]')
 plt.grid()
+draw_R2CRD(r,R,CRD_data,R2CRD, draw=True)
 
 if is_timer:
-    timer.start()
-
-plt.show()
+    plt.show(block=False)
+    plt.pause(plot_time)
+    plt.close('all')
+else:
+    plt.show()
