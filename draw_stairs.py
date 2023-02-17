@@ -81,10 +81,10 @@ def draw_normals(x_modules, y_modules, normal, length=10, plot_axis=0, draw=True
         for idx in range(len(x_modules)):
             x0, y0 = x_modules[idx], y_modules[idx]
             nx, ny = normal[idx][0]*length, normal[idx][1]*length
-            axs[plot_axis].plot((x0, x0+nx), (y0, y0+ny))
+            plt.plot((x0, x0+nx), (y0, y0+ny))
             # axs[0].plot((x0, x0), (y0, y0+1*length),'r--')
 
-def rotate_modules_2_surface(x_modules, y_modules, angles):
+def rotate_modules_tangent_2_surface(x_modules, y_modules, angles):
     new_left_module = []
     new_right_module = []
 
@@ -102,19 +102,20 @@ def rotate_modules_2_surface(x_modules, y_modules, angles):
 
     return np.array(new_left_module), np.array(new_right_module)
 
+
 def draw_modules(plot_axis=0, draw=True, draw_one = False, module_number = None):
     if not draw:
         return
     if not draw_one:
         for i in range(len(new_left_module)): # draw modules width
             if i == 0:
-                axs[plot_axis].plot((new_left_module[i][0],new_right_module[i][0]),
+                plt.plot((new_left_module[i][0],new_right_module[i][0]),
                         (new_left_module[i][1],new_right_module[i][1]), color='b', label="tangent modules", linewidth=1.25)
             else:
-                axs[plot_axis].plot((new_left_module[i][0],new_right_module[i][0]),
+                plt.plot((new_left_module[i][0],new_right_module[i][0]),
                         (new_left_module[i][1],new_right_module[i][1]))
     else:
-        axs[plot_axis].plot((new_left_module[module_number][0],new_right_module[module_number][0]),
+        plt.plot((new_left_module[module_number][0],new_right_module[module_number][0]),
                         (new_left_module[module_number][1],new_right_module[module_number][1]), color='b', label="tangent module", linewidth=1.25)
 
 def tolerance_envelop(r,R2Z):
@@ -141,15 +142,14 @@ def draw_modules_width(plot_axis=0, draw=True, draw_one = False, module_number =
             x_min = x_modules[i]-module_width/2
             x_max = x_modules[i]+module_width/2
 
-            
             if i == 0: # Draw all the modules
-                axs[plot_axis].plot((x_min,x_max),(y_modules[i], y_modules[i]), color='r', label="fiber tips line", linewidth=1.25)
+                plt.plot((x_min,x_max),(y_modules[i], y_modules[i]), color='r', label="Horizontal modules", linewidth=1.25)
             else:
-                axs[plot_axis].plot((x_min,x_max),(y_modules[i], y_modules[i]), color='r')
+                plt.plot((x_min,x_max),(y_modules[i], y_modules[i]), color='r')
     else: # Draw only module of interest
         x_min, x_max = x_modules[module_number]-module_width/2, x_modules[module_number]+module_width/2
 
-        axs[plot_axis].plot((x_min,x_max),(y_modules[module_number], y_modules[module_number]), color='r')
+        plt.plot((x_min,x_max),(y_modules[module_number], y_modules[module_number]), color='r', label="Horizontal modules", linewidth=1.25)
 
 def draw_BFS(Rc,vigR, draw=False, full_curve = False):
     """Draws the Best Fit Sphere of the focal surface for comparison with the interpolated one
@@ -183,44 +183,47 @@ def draw_envelop(plot_axis = 0,draw = True, draw_legend=False):
     if not draw:
         return
     if draw_legend:
-        axs[plot_axis].plot(r_envelop_minus, z_envelop_minus, envelop_looks, linewidth = 0.75,
+        plt.plot(r_envelop_minus, z_envelop_minus, envelop_looks, linewidth = 0.75,
                             label='Tolerance envelop = {} $\mu$m'.format(tolerance_envelop_width*10**3))
     else:
-        axs[plot_axis].plot(r_envelop_minus, z_envelop_minus, envelop_looks, linewidth = 0.75)
+        plt.plot(r_envelop_minus, z_envelop_minus, envelop_looks, linewidth = 0.75)
 
-    axs[plot_axis].plot(r_envelop_plus, z_envelop_plus, envelop_looks, linewidth = 0.75)
+    plt.plot(r_envelop_plus, z_envelop_plus, envelop_looks, linewidth = 0.75)
 
 def zoom_in_1module(module_number, xbound, ybound, plot_axis=1, draw=True):
 
     if not draw:
         return
     
+    fig = plt.figure('Zoomed in module',figsize=(15,5))
     x_center, y_center = x_modules[module_number], y_modules[module_number]
     xlim_min, xlim_max, ylim_min, ylim_max = x_center - xbound, x_center + xbound,  y_center - ybound, y_center + ybound
 
-    axs[plot_axis].plot(r,z,'--g',label="focal surface")
-    draw_modules_width(plot_axis=1, draw=False, draw_one=True, module_number=module_number)
+    plt.plot(r,z,'--g',label="focal surface")
+    draw_modules_width(plot_axis=1, draw=True, draw_one=True, module_number=module_number)
     draw_envelop(plot_axis=1, draw_legend=True)
     draw_modules(plot_axis=1, draw_one=True, module_number=module_number)
 
-    axs[plot_axis].set_xlim(xlim_min, xlim_max)
-    axs[plot_axis].set_ylim(ylim_min, ylim_max)
-    axs[plot_axis].legend()
-    axs[plot_axis].set_xlabel('R [mm]')
-    axs[plot_axis].set_ylabel('Z [mm]')
-    axs[plot_axis].grid()
+    plt.xlim(xlim_min, xlim_max)
+    plt.ylim(ylim_min, ylim_max)
+    plt.title('Zoom in module #{}'.format(module_number+1))
+    plt.legend()
+    plt.xlabel('R [mm]')
+    plt.ylabel('Z [mm]')
+    plt.grid()
 
 
 x_modules, y_modules = calc_modules_pos(Rc, module_width, nb_modules, R2Z)
 normal = get_normals(x_modules, R2Z)
 angles = get_normals_angles(normal)
-new_left_module, new_right_module = rotate_modules_2_surface(x_modules, y_modules, angles)
+new_left_module, new_right_module = rotate_modules_tangent_2_surface(x_modules, y_modules, angles)
 r_envelop_plus, z_envelop_plus, r_envelop_minus, z_envelop_minus = tolerance_envelop(r,R2Z)
 # print(new_left_module)
 
 ## Plotting time ##
 
-fig, axs = plt.subplots(2,1,figsize=(12,8))
+# fig = plt.figure(figsize=(12,8))
+fig = plt.figure('Full focal surface',figsize=(15,5))
 # fig, ax = plt.subplots()
 
 plot_time = 20 #seconds
@@ -230,15 +233,15 @@ draw_normals(x_modules,y_modules,normal,length=10)
 # plt.plot(x_radius, y_radius, '-.',label="BFS")
 draw_modules_width()
 draw_modules(draw = True)
-axs[0].plot(r,z,'--g',label="focal surface")
+plt.plot(r,z,'--g',label="focal surface")
 draw_BFS(Rc,vigR, draw=False)
 draw_envelop()
-zoom_in_1module(module_number = 3, xbound=45, ybound=1, draw=True)
-axs[0].legend(shadow=True)
-axs[0].set_title('Focal surface and module arrangement')
-axs[0].set_xlabel('R [mm]')
-axs[0].set_ylabel('Z [mm]')
-axs[0].grid()
+plt.legend(shadow=True)
+plt.title('Focal surface and module arrangement')
+plt.xlabel('R [mm]')
+plt.ylabel('Z [mm]')
+plt.grid()
+zoom_in_1module(module_number = 0, xbound=45, ybound=1, draw=True)
 draw_R2CRD(r,R_data,CRD_data,R2CRD, draw=False)
 
 
