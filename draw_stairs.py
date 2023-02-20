@@ -22,6 +22,7 @@ CRD_data = t['CRD']
 R_data = t['R']
 
 R2Z = interp1d(R_data,Z_data,kind='cubic', fill_value = "extrapolate") #leave 'cubic' interpolation for normal vectors calculations
+
 R2CRD = interp1d(R_data,CRD_data,kind='cubic')
 r = np.linspace(0,vigR,1000)
 z = R2Z(r) # Calculate focal plane curve from csv data
@@ -74,7 +75,7 @@ def get_normals_angles(normal, print_data = True):
 
     return angles
   
-def draw_normals(x_modules, y_modules, normal, length=10, plot_axis=0, draw=True):
+def draw_normals(x_modules, y_modules, normal, length=10, draw=True):
     if not draw:
         return
     else:
@@ -102,6 +103,23 @@ def rotate_modules_tangent_2_surface(x_modules, y_modules, angles):
 
     return np.array(new_left_module), np.array(new_right_module)
 
+def translate_module_in_envelop(dist, module_number, draw = True):
+
+    if not draw:
+        return
+
+    new_left_module_translated = []
+    new_right_module_translated = []
+    for (theta,module_l,module_r) in zip(angles, new_left_module, new_right_module):
+        dx, dy= np.sin(theta)*dist, np.cos(theta)*dist
+        Rt= np.array([[1,0,dx],[0,1,dy],[0,0,1]])
+        new_left_module_translated.append(Rt @ module_l)
+        new_right_module_translated.append(Rt @ module_r)
+    
+    plt.plot((new_left_module_translated[module_number][0],new_right_module_translated[module_number][0]),
+                        (new_left_module_translated[module_number][1],new_right_module_translated[module_number][1]),'k',
+                        label="Module translated ({} $\mu$m)".format(int(dist*1000)))
+
 
 def draw_modules(plot_axis=0, draw=True, draw_one = False, module_number = None):
     if not draw:
@@ -110,13 +128,13 @@ def draw_modules(plot_axis=0, draw=True, draw_one = False, module_number = None)
         for i in range(len(new_left_module)): # draw modules width
             if i == 0:
                 plt.plot((new_left_module[i][0],new_right_module[i][0]),
-                        (new_left_module[i][1],new_right_module[i][1]), color='b', label="tangent modules", linewidth=1.25)
+                        (new_left_module[i][1],new_right_module[i][1]), color='b', label="Tangent modules", linewidth=1.25)
             else:
                 plt.plot((new_left_module[i][0],new_right_module[i][0]),
                         (new_left_module[i][1],new_right_module[i][1]))
     else:
         plt.plot((new_left_module[module_number][0],new_right_module[module_number][0]),
-                        (new_left_module[module_number][1],new_right_module[module_number][1]), color='b', label="tangent module", linewidth=1.25)
+                        (new_left_module[module_number][1],new_right_module[module_number][1]), color='b', label="Tangent module", linewidth=1.25)
 
 def tolerance_envelop(r,R2Z):
 
@@ -184,7 +202,7 @@ def draw_envelop(plot_axis = 0,draw = True, draw_legend=False):
         return
     if draw_legend:
         plt.plot(r_envelop_minus, z_envelop_minus, envelop_looks, linewidth = 0.75,
-                            label='Tolerance envelop = {} $\mu$m'.format(tolerance_envelop_width*10**3))
+                            label='Tolerance envelop = {} $\mu$m'.format(int(tolerance_envelop_width*10**3)))
     else:
         plt.plot(r_envelop_minus, z_envelop_minus, envelop_looks, linewidth = 0.75)
 
@@ -199,10 +217,11 @@ def zoom_in_1module(module_number, xbound, ybound, plot_axis=1, draw=True):
     x_center, y_center = x_modules[module_number], y_modules[module_number]
     xlim_min, xlim_max, ylim_min, ylim_max = x_center - xbound, x_center + xbound,  y_center - ybound, y_center + ybound
 
-    plt.plot(r,z,'--g',label="focal surface")
+    plt.plot(r,z,'--g',label="Focal surface")
     draw_modules_width(plot_axis=1, draw=True, draw_one=True, module_number=module_number)
     draw_envelop(plot_axis=1, draw_legend=True)
     draw_modules(plot_axis=1, draw_one=True, module_number=module_number)
+    translate_module_in_envelop(dist=0.025, module_number=module_number)
 
     plt.xlim(xlim_min, xlim_max)
     plt.ylim(ylim_min, ylim_max)
@@ -233,7 +252,7 @@ draw_normals(x_modules,y_modules,normal,length=10)
 # plt.plot(x_radius, y_radius, '-.',label="BFS")
 draw_modules_width()
 draw_modules(draw = True)
-plt.plot(r,z,'--g',label="focal surface")
+plt.plot(r,z,'--g',label="Focal surface")
 draw_BFS(Rc,vigR, draw=False)
 draw_envelop()
 plt.legend(shadow=True)
@@ -241,7 +260,7 @@ plt.title('Focal surface and module arrangement')
 plt.xlabel('R [mm]')
 plt.ylabel('Z [mm]')
 plt.grid()
-zoom_in_1module(module_number = 0, xbound=45, ybound=1, draw=True)
+zoom_in_1module(module_number = 3, xbound=45, ybound=1, draw=True)
 draw_R2CRD(r,R_data,CRD_data,R2CRD, draw=False)
 
 
