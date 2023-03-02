@@ -12,8 +12,8 @@ from shapely.plotting import plot_polygon, plot_points
 la = 1.8 # alpha arm length [mm]
 lb = 1.8 # beta arm length [mm]
 p = 6.2 # pitch [mm]
-alpha = np.linspace(-180,180,200)
-beta = np.linspace(-180,180,200)
+alpha = np.linspace(-180,180,180)
+beta = np.linspace(-180,180,180)
 module_vertices_x = np.array([0,80,40,0])
 module_vertices_y = np.array([0,0,69.3,0])
 start_offset_x = 6.2
@@ -54,37 +54,37 @@ xx = np.array(xx, dtype='object')
 yy = np.array(yy, dtype='object')
 
 
+### Define area for 1 positioner ###
 
-
+draw = True
 c1 = np.cos(np.deg2rad(alpha))
 s1 = np.sin(np.deg2rad(alpha))
 
 c2 = np.cos(np.deg2rad(beta))
 s2 = np.sin(np.deg2rad(beta))
 
+xa, ya, xab, yab = la*c1, la*s1, (lb+la)*c2, (la+lb)*s2
 
-### Define area for 1 positioner ###
 
-xa, ya, xb, yb = la*c1, la*s1, (lb+la)*c2, (la+lb)*s2
-coords_a = []
-coords_b = []
-for (x,y) in zip(xa,ya):
-    coords_a.append((x,y))
-for (x,y) in zip(xb,yb):
-    coords_b.append((x,y))
+for idx, (x_shift, y_shift) in enumerate(zip(xx,yy)):
+    for (x_shifted, y_shifted)in zip(x_shift, y_shift):
+        xa1, ya1, xab1, yab1 = xa + x_shifted, ya + y_shifted, xab + x_shifted, yab + y_shifted
+        coords_int = []
+        coords_ext = []
+        for (x,y) in zip(xa1,ya1):
+            coords_int.append((x,y))
+        for (x,y) in zip(xab1,yab1):
+            coords_ext.append((x,y))
 
-poly_a = Polygon(coords_a)
-poly_b = Polygon(coords_b)
-workspace = poly_b.difference(poly_a)
-x_ext,y_ext = workspace.exterior.coords.xy
-x_wks_int, y_wks_int = workspace.interiors[0].coords.xy
+        interior = coords_int[::-1]
+        poly_c1 = Polygon(coords_ext, [interior])
+        plot_polygon(poly_c1)
 
-# coord = Polygon(workspace.exterior.coords.xy+1)
-plot_points(workspace.centroid)
-plot_polygon(workspace)
-plt.plot(module_vertices_x,module_vertices_y)
+# interior = coords_a2[::-1]
+# poly_c2 = Polygon(coords_ab2, [interior])
+# plot_polygon(poly_c2)
+
+plt.plot(module_vertices_x,module_vertices_y, color='orange')
 plt.grid()
-plt.show()
-
-# plt.plot(module_vertices_x,module_vertices_y)
-# plt.show()
+if draw:
+    plt.show()
