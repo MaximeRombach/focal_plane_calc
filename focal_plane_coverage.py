@@ -10,13 +10,18 @@ from shapely.ops import unary_union
 from shapely.plotting import plot_polygon, plot_points
 
 ## Parameters ##
-la = 1.8 # alpha arm length [mm]
+
+la = 1.8 # alpha arm length [mm] /!\ lb > la /!\
 lb = 1.8 # beta arm length [mm]
 p = 6.2 # pitch [mm]
 alpha = np.linspace(-180,180,180)
 beta = np.linspace(-180,180,180)
-module_vertices_x = np.array([0,80,40,0])
-module_vertices_y = np.array([0,0,69.3,0])
+# module_vertices_x = np.array([0,80,40,0])
+# module_vertices_y = np.array([0,0,69.3,0])
+module_vertices_x = np.array([7.5, 72.5, 76.25, 40, 3.75, 7.5])
+module_vertices_y = np.array([0, 0, 6.5, 69.3, 6.5, 0])
+module_vertices_x = np.array([7.5, 72.5, 76.25, 43.75, 36.25, 3.75, 7.5])
+module_vertices_y = np.array([0, 0, 6.5, 62.8, 62.8, 6.5, 0])
 start_offset_x = 6.2
 start_offset_y = 3.41
 
@@ -98,7 +103,7 @@ s1 = np.sin(np.deg2rad(alpha))
 c2 = np.cos(np.deg2rad(beta))
 s2 = np.sin(np.deg2rad(beta))
 
-xa, ya, xab, yab = la*c1, la*s1, (lb+la)*c2, (la+lb)*s2
+xa, ya, xab, yab = (lb-la)*c1, (lb-la)*s1, (lb+la)*c2, (la+lb)*s2
 
 wks_list = []
 
@@ -121,12 +126,12 @@ coverage_no_walls = round(total_positioners_area.area/module.area * 100,1)
 
 fig = plt.figure(figsize=(8,8))
 ax = fig.add_subplot()
-plt.title("Module with raw positioner coverage")
+plt.title("Module with raw positioner coverage without walls")
 plot_polygon(module, facecolor='None', edgecolor='black', add_points=False)
 plt.scatter(xx1,yy1, marker='.', color='k')
 for idx, wks in enumerate(wks_list):
     if idx == 0:
-         label_cov = "Coverage: {} %".format(coverage_with_walls)
+         label_cov = "Coverage: {} %".format(coverage_no_walls)
     else:
          label_cov = None
     plot_polygon(wks, add_points=False, alpha=0.2, facecolor='red', edgecolor='black', label = label_cov)
@@ -134,12 +139,14 @@ plt.xlabel('x position [mm]')
 plt.ylabel('y position [mm]')
 plt.legend(shadow = True)
 
-# plt.figure(figsize=(8,8))
-# plt.title("Module with summed coverage & walls")
-# plot_polygon(module, facecolor='None', edgecolor='black', add_points=False)
-# plt.scatter(xx1,yy1, marker='.', color='k')
-# plot_polygon(coverage_walls, add_points=False, alpha=0.2, edgecolor='black', label = "Coverage: {} %".format(coverage_with_walls))
-# plt.legend()
+plt.figure(figsize=(8,8))
+plt.title("Module with summed coverage & walls")
+plot_polygon(module, facecolor='None', edgecolor='black', add_points=False)
+plt.scatter(xx1,yy1, marker='.', color='k')
+plot_polygon(positioners_area_with_walls, add_points=False, alpha=0.2, edgecolor='black', label = "Coverage: {} %".format(coverage_with_walls))
+plt.xlabel('x position [mm]')
+plt.ylabel('y position [mm]')
+plt.legend(shadow = True)
 
 
 print(coverage_no_walls)
