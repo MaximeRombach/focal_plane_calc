@@ -30,6 +30,8 @@ frame_thickness = 3 # [mm] thickness of frame between modules
 start_offset_x = 6.2 # [mm]
 start_offset_y = 3.41 # [mm]
 draw = True
+is_timer = True
+plot_time = 20 # [s] plotting time
 
 ## Positioners numbering:
             # 0: bottom left
@@ -132,10 +134,12 @@ for idx, (dx, dy) in enumerate(zip(xx1, yy1)):
         poly_c1 = Polygon(coords_ext, [interior])
         wks_list.append(poly_c1)
 
-multi_poly = MultiPolygon(wks_list)
+multi_wks = MultiPolygon(wks_list)
 total_positioners_workspace = unary_union(wks_list)
 module_w_beta_and_safety_dist = module.buffer(-offset_from_module_edges)
 workspace_with_walls = module_w_beta_and_safety_dist.intersection(total_positioners_workspace)
+
+absolutely_all = MultiPolygon([module, module_w_beta_and_safety_dist, workspace_with_walls])
 
 angle = 180
 dist = 80*np.sqrt(3)/6
@@ -149,7 +153,10 @@ transformed_mesh = rotate_and_translate(triang_meshgrid, angle, DX, DY)
 
 transformed_module = rotate_and_translate(module, angle, DX, DY)
 
-transformed_wks = rotate_and_translate(multi_poly, angle, DX, DY)
+transformed_wks = rotate_and_translate(multi_wks, angle, DX, DY)
+
+transformed_all = rotate_and_translate(absolutely_all, angle, DX, DY)
+
 
 coverage_with_walls = round(workspace_with_walls.area/module.area * 100,1)
 coverage_no_walls = round(total_positioners_workspace.area/module.area * 100,1)
@@ -183,6 +190,7 @@ plot_polygon(module_w_beta_and_safety_dist, facecolor='None', linestyle = '--', 
              , label = "Safety dist = {} mm".format(offset_from_module_edges))
 plt.scatter(xx1,yy1, marker='.', color='k')
 plot_polygon(workspace_with_walls, add_points=False, alpha=0.2, edgecolor='black', label = "Coverage with walls: {} %".format(coverage_with_walls))
+plot_polygon(transformed_all, add_points=False, alpha=0.2, edgecolor='black')
 plt.xlabel('x position [mm]')
 plt.ylabel('y position [mm]')
 plt.legend(shadow = True)
@@ -190,5 +198,12 @@ plt.legend(shadow = True)
 
 print(coverage_no_walls)
 
-if draw:
-    plt.show()
+if draw and is_timer:
+
+     plt.show(block=False)
+     plt.pause(plot_time)
+     plt.close('all')
+
+elif draw and not is_timer:
+     
+     plt.show()
