@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import random
 import array as array
+import math
 
 from shapely.geometry import Polygon, Point
 from shapely.ops import unary_union
@@ -27,8 +28,7 @@ The effective coverage shall be calculated as the usable positioner area vs the 
             # count a row then switch to left side of next one to continue
             # last positoner: top one
 
-"""1)a)"""
-## Define triangular meshgrid ##
+"""1)a) Define triangular meshgrid of positioners' centeral """
 
 nb_rows = 11
 x_inc = 3.1 # [mm] Horizontal increment at each row
@@ -74,8 +74,8 @@ xx1, yy1 = param.remove_positioner(xx1, yy1, list_to_remove)
 
 triang_meshgrid = MultiPoint(param.to_polygon_format(xx1, yy1)) # convert the meshgrid into shapely standard for later manipulation
 
-"""1)b)"""
-### Define area for 1 modules ###
+
+"""1)b) Define coverage for 1 modules"""
 
 c1 = np.cos(np.deg2rad(param.alpha))
 s1 = np.sin(np.deg2rad(param.alpha))
@@ -98,30 +98,39 @@ for idx, (dx, dy) in enumerate(zip(xx1, yy1)):
         poly_c1 = Polygon(coords_ext, [interior])
         wks_list.append(poly_c1)
 
+
+
 coords_module = param.to_polygon_format(param.module_vertices_x, param.module_vertices_y)
+# coords_module = param.to_polygon_format(param.create_equilateral_module_base(param.module_width))
 module = Polygon(coords_module)
 
 multi_wks = MultiPolygon(wks_list)
 total_positioners_workspace = unary_union(wks_list)
 module_w_beta_and_safety_dist = module.buffer(-param.offset_from_module_edges)
-workspace_with_walls = module_w_beta_and_safety_dist.intersection(total_positioners_workspace)
 
-module_collection = GeometryCollection([module, module_w_beta_and_safety_dist, workspace_with_walls, triang_meshgrid])
+if param.is_wall:
+     effective_wks = module_w_beta_and_safety_dist.intersection(total_positioners_workspace)
+else:
+     effective_wks = total_positioners_workspace
+
+module_collection = GeometryCollection([module, module_w_beta_and_safety_dist, effective_wks, triang_meshgrid])
 print(module_collection.geoms)
-coverage_with_walls = round(workspace_with_walls.area/module.area * 100,1)
+coverage_with_walls = round(effective_wks.area/module.area * 100,1)
 coverage_no_walls = round(total_positioners_workspace.area/module.area * 100,1)
 
 """2)a) Start meshing the grid for intermediate frame (4 triangles: 3 upwards + 1 downwards)"""
 
-intermediate_frame_thick = 0
 angles = np.array([-30, 90, 210])
 flip = [True,False,False,False]
-dist = 2*param.module_width*np.sqrt(3)/6 + intermediate_frame_thick
+dist = 2*param.module_width*np.sqrt(3)/6 + param.intermediate_frame_thick
 
 x_inter = np.cos(np.deg2rad(angles))*dist
-x_inter = np.insert(x_inter, 0,0)
+# x_inter = np.insert(x_inter, 0, np.cos(np.deg2rad(30))*dist)
+x_inter = np.insert(x_inter, 0, 0)
 y_inter = np.sin(np.deg2rad(angles))*dist
-y_inter = np.insert(y_inter, 0,0)
+# y_inter = np.insert(x_inter, 0, np.sin(np.deg2rad(30))*dist)
+y_inter = np.insert(y_inter, 0, 0)
+
 listing = []
 intermediate_collection = []
 covered_area = 0
@@ -139,45 +148,54 @@ for idx, (rotate, dx, dy) in enumerate(zip(flip, x_inter, y_inter)):
      covered_area += transformed_all.geoms[2].area
 
 bounding_polygon_intermediate_frame = unary_union(MultiPolygon(listing)).convex_hull
+# to_origin = bounding_polygon_intermediate_frame.bounds[0:2]
+# print(to_origin)
 intermediate_collection = GeometryCollection(intermediate_collection)
-available_intermediate_area = bounding_polygon_intermediate_frame.area
+
+# intermediate_collection = param.rotate_and_translate(intermediate_collection, 0, -to_origin[0], -to_origin[1])
+# bounding_polygon_intermediate_frame = param.rotate_and_translate(bounding_polygon_intermediate_frame, 0, -to_origin[0], -to_origin[1])
+
+available_intermediate_area = round(bounding_polygon_intermediate_frame.area,1)
 intermediate_coverage = round(covered_area/available_intermediate_area*100,1)
 
 """2)b) Start meshing the grid for the whole thing"""
 
-### Plot plot time ###
+centroid_intermediate_frame = bounding_polygon_intermediate_frame.centroid
+
+
+""" Plot plot time """ 
 
 draw = True
-is_timer = True
+is_timer = False
 plot_time = 20 # [s] plotting time
 
-# fig = plt.figure(figsize=(8,8))
-# plt.title("Module coverage raw")
-# plot_polygon(module, facecolor='None', edgecolor='black', add_points=False)
-# plot_polygon(module_w_beta_and_safety_dist, facecolor='None', edgecolor='red', linestyle = '--', add_points=False
-#              , label = "Safety dist = {} mm".format(param.offset_from_module_edges))
-# plt.scatter(xx1,yy1, marker='.', color='k')
-# for idx, wks in enumerate(wks_list):
-#     if idx == 0:
-#          label_cov = "Coverage w/o walls: {} %".format(coverage_no_walls)
-#     else:
-#          label_cov = None
-#     plot_polygon(wks, add_points=False, alpha=0.2, facecolor='red', edgecolor='black', label = label_cov)
-# plt.xlabel('x position [mm]')
-# plt.ylabel('y position [mm]')
-# plt.legend(shadow = True)
+fig = plt.figure(figsize=(8,8))
+plt.title("Module coverage raw")
+plot_polygon(module, facecolor='None', edgecolor='black', add_points=False)
+plot_polygon(module_w_beta_and_safety_dist, facecolor='None', edgecolor='red', linestyle = '--', add_points=False
+             , label = "Safety dist = {} mm".format(param.offset_from_module_edges))
+plt.scatter(xx1,yy1, marker='.', color='k')
+for idx, wks in enumerate(wks_list):
+    if idx == 0:
+         label_cov = "Coverage w/o walls: {} %".format(coverage_no_walls)
+    else:
+         label_cov = None
+    plot_polygon(wks, add_points=False, alpha=0.2, facecolor='red', edgecolor='black', label = label_cov)
+plt.xlabel('x position [mm]')
+plt.ylabel('y position [mm]')
+plt.legend(shadow = True)
 
-# plt.figure(figsize=(8,8))
-# plt.title("Module coverage with summed coverage & walls")
-# plot_polygon(module, facecolor='None', edgecolor='black', add_points=False)
-# plot_polygon(module_w_beta_and_safety_dist, facecolor='None', linestyle = '--', add_points=False
-#              , label = "Safety dist = {} mm".format(param.offset_from_module_edges))
-# plt.scatter(xx1,yy1, marker='.', color='k')
-# plot_polygon(workspace_with_walls, add_points=False, alpha=0.2, edgecolor='black', label = "Coverage with walls: {} %".format(coverage_with_walls))
+plt.figure(figsize=(8,8))
+plt.title("Module coverage with summed coverage & walls")
+plot_polygon(module, facecolor='None', edgecolor='black', add_points=False)
+plot_polygon(module_w_beta_and_safety_dist, facecolor='None', linestyle = '--', add_points=False
+             , label = "Safety dist = {} mm".format(param.offset_from_module_edges))
+plt.scatter(xx1,yy1, marker='.', color='k')
+plot_polygon(effective_wks, add_points=False, alpha=0.2, edgecolor='black', label = "Coverage with walls: {} %".format(coverage_with_walls))
 
-# plt.xlabel('x position [mm]')
-# plt.ylabel('y position [mm]')
-# plt.legend(shadow = True)
+plt.xlabel('x position [mm]')
+plt.ylabel('y position [mm]')
+plt.legend(shadow = True)
 
 plt.figure(figsize=(8,8))
 plt.title("Intermediate frame coverage")
@@ -197,7 +215,7 @@ for idx, mod_collection in enumerate(intermediate_collection.geoms):
           elif (isinstance (mod_collection.geoms[jdx], MultiPoint)):
                plot_points(mod_collection.geoms[jdx], marker='.', color='k')
 
-plot_polygon(bounding_polygon_intermediate_frame, add_points=False, facecolor='None', linestyle = '-.', color = 'green', label = 'Available area')
+plot_polygon(bounding_polygon_intermediate_frame, add_points=False, facecolor='None', linestyle = '-.', color = 'green', label = 'Available area: {} mm$^2$'.format(available_intermediate_area))
 
 plt.xlabel('x position [mm]')
 plt.ylabel('y position [mm]')
