@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import random
 import array as array
 import math
+import json
 
 from shapely.geometry import Polygon, Point
 from shapely.ops import unary_union
@@ -28,7 +29,14 @@ The effective coverage shall be calculated as the usable positioner area vs the 
             # count a row then switch to left side of next one to continue
             # last positoner: top one
 
+# with open(".vscode\launch.json","r") as file:
+#      data = json.load(file)
+# print(data)
 """1)a) Define triangular meshgrid of positioners' centeral """
+
+module = param.chanfered_base(param.module_width, chanfer_length=7.5)
+coords_module_x, coords_module_y = module.exterior.coords.xy
+print(coords_module_x[0])
 
 nb_rows = 11
 x_inc = 3.1 # [mm] Horizontal increment at each row
@@ -69,8 +77,11 @@ for idx in range(nb_rows):
         xx1 = np.hstack((xx1, xx_new))
         yy1 = np.hstack((yy1, yy_new))
 
+# list_to_remove = [0, 1,2,3,4,5,6,7,8,9,10, nb_rows,12, 22, -1]
 list_to_remove = [0, nb_rows, -1]
+# list_to_remove = []
 xx1, yy1 = param.remove_positioner(xx1, yy1, list_to_remove)
+nb_robots = len(xx1)
 
 triang_meshgrid = MultiPoint(param.to_polygon_format(xx1, yy1)) # convert the meshgrid into shapely standard for later manipulation
 
@@ -98,12 +109,6 @@ for idx, (dx, dy) in enumerate(zip(xx1, yy1)):
         poly_c1 = Polygon(coords_ext, [interior])
         wks_list.append(poly_c1)
 
-
-
-coords_module = param.to_polygon_format(param.module_vertices_x, param.module_vertices_y)
-# coords_module = param.to_polygon_format(param.create_equilateral_module_base(param.module_width))
-module = Polygon(coords_module)
-
 multi_wks = MultiPolygon(wks_list)
 total_positioners_workspace = unary_union(wks_list)
 module_w_beta_and_safety_dist = module.buffer(-param.offset_from_module_edges)
@@ -114,7 +119,7 @@ else:
      effective_wks = total_positioners_workspace
 
 module_collection = GeometryCollection([module, module_w_beta_and_safety_dist, effective_wks, triang_meshgrid])
-print(module_collection.geoms)
+# print(module_collection.geoms)
 coverage_with_walls = round(effective_wks.area/module.area * 100,1)
 coverage_no_walls = round(total_positioners_workspace.area/module.area * 100,1)
 
@@ -174,7 +179,7 @@ plt.title("Module coverage raw")
 plot_polygon(module, facecolor='None', edgecolor='black', add_points=False)
 plot_polygon(module_w_beta_and_safety_dist, facecolor='None', edgecolor='red', linestyle = '--', add_points=False
              , label = "Safety dist = {} mm".format(param.offset_from_module_edges))
-plt.scatter(xx1,yy1, marker='.', color='k')
+plt.scatter(xx1,yy1, marker='.', color='k', label = "{} robots".format(nb_robots))
 for idx, wks in enumerate(wks_list):
     if idx == 0:
          label_cov = "Coverage w/o walls: {} %".format(coverage_no_walls)
@@ -190,7 +195,7 @@ plt.title("Module coverage with summed coverage & walls")
 plot_polygon(module, facecolor='None', edgecolor='black', add_points=False)
 plot_polygon(module_w_beta_and_safety_dist, facecolor='None', linestyle = '--', add_points=False
              , label = "Safety dist = {} mm".format(param.offset_from_module_edges))
-plt.scatter(xx1,yy1, marker='.', color='k')
+plt.scatter(xx1,yy1, marker='.', color='k', label = "{} robots".format(nb_robots))
 plot_polygon(effective_wks, add_points=False, alpha=0.2, edgecolor='black', label = "Coverage with walls: {} %".format(coverage_with_walls))
 
 plt.xlabel('x position [mm]')
@@ -201,9 +206,11 @@ plt.figure(figsize=(8,8))
 plt.title("Intermediate frame coverage")
 for idx, mod_collection in enumerate(intermediate_collection.geoms):
      if idx == 0:
-          label = 'Coverage: {} %'.format(intermediate_coverage)
+          label_coverage = 'Coverage: {} %'.format(intermediate_coverage)
+          label_robots = "{} robots".format(nb_robots)
      else: 
-          label = None
+          label_coverage = None
+          label_robots = None
      for jdx, geo in enumerate(mod_collection.geoms):
           # plot_polygon(geometry[jdx], add_points=False, facecolor='None' , edgecolor='black')
           if (isinstance (mod_collection.geoms[jdx], Polygon)) and jdx == 0:
@@ -211,9 +218,9 @@ for idx, mod_collection in enumerate(intermediate_collection.geoms):
           elif (isinstance (mod_collection.geoms[jdx], Polygon)) and jdx == 1:
                plot_polygon(mod_collection.geoms[jdx], add_points=False, facecolor='None', linestyle = '--')
           elif (isinstance (mod_collection.geoms[jdx], Polygon)) and jdx == 2:
-               plot_polygon(mod_collection.geoms[jdx], add_points=False, alpha=0.2, edgecolor='black', label = label)
+               plot_polygon(mod_collection.geoms[jdx], add_points=False, alpha=0.2, edgecolor='black', label = label_coverage)
           elif (isinstance (mod_collection.geoms[jdx], MultiPoint)):
-               plot_points(mod_collection.geoms[jdx], marker='.', color='k')
+               plot_points(mod_collection.geoms[jdx], marker='.', color='k', label = label_robots)
 
 plot_polygon(bounding_polygon_intermediate_frame, add_points=False, facecolor='None', linestyle = '-.', color = 'green', label = 'Available area: {} mm$^2$'.format(available_intermediate_area))
 

@@ -1,7 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import numpy as np
-from shapely import affinity
+from shapely import affinity, MultiPolygon
+import matplotlib.pyplot as plt
+from shapely.geometry import Polygon
+from shapely.ops import unary_union
+from shapely.plotting import plot_polygon
+
 ## Parameters ##
 
 """ Focal plane parameters """
@@ -42,19 +47,29 @@ is_wall = True # flag for protective shields or not on modules
 intermediate_frame_thick = 3 # [mm] spacing between modules inside intermediate frame
 
 def remove_positioner(xx,yy, list_to_remove):
-     
+     """ Input:
+          - xx, yy: grid of center of positioners
+          - list_to_remove: list of positioners position to remove
+
+          Output:
+          - xx_sliced, yy_sliced: grid of center of positioners minus the ones removed
+     """
      xx_sliced = np.delete(xx,list_to_remove)
      yy_sliced = np.delete(yy,list_to_remove)
 
      return xx_sliced, yy_sliced
 
 def to_polygon_format(x,y):
+     """ Input:
+          - x,y: 2 sets of coordinates for polygon creation
 
-    coords = []
-    for (i,j) in zip(x,y):
-            coords.append((i,j))
-
-    return coords
+          Output:
+          - coords: list of tuples for each polygon vertices (just for convenience) """
+     coords = []
+     for (i,j) in zip(x,y):
+               coords.append((i,j))
+               
+     return coords
 
 def rotate_and_translate(geom, angle, dx, dy, origin = 'centroid'):
 
@@ -63,20 +78,39 @@ def rotate_and_translate(geom, angle, dx, dy, origin = 'centroid'):
 
      return transformed_geom
 
-def create_equilateral_module_base(module_width, offset = [0,0]):
+def equilateral_vertices(module_width, offset = [0,0]):
       
-      x_vertices = np.ones(4)
-      x_vertices[0] = offset[0]
-      x_vertices[1] = x_vertices[0] + module_width
-      x_vertices[2] = x_vertices[0] + module_width * np.cos(np.deg2rad(60))
-      x_vertices[3] = x_vertices[0]
+     x_vertices = np.ones(4)
+     x_vertices[0] = offset[0]
+     x_vertices[1] = x_vertices[0] + module_width
+     x_vertices[2] = x_vertices[0] + module_width * np.cos(np.deg2rad(60))
+     x_vertices[3] = x_vertices[0]
 
 
-      y_vertices = np.ones(4)
-      y_vertices[0] = offset[1]
-      y_vertices[1] = y_vertices[0]
-      y_vertices[2] = y_vertices[0] + module_width * np.sin(np.deg2rad(60))
-      y_vertices[3] = y_vertices[0]
+     y_vertices = np.ones(4)
+     y_vertices[0] = offset[1]
+     y_vertices[1] = y_vertices[0]
+     y_vertices[2] = y_vertices[0] + module_width * np.sin(np.deg2rad(60))
+     y_vertices[3] = y_vertices[0]
 
-      return x_vertices,y_vertices
+     return x_vertices,y_vertices
 
+def chanfered_base(module_width, chanfer_length = 7.5):
+
+     x_vertices,y_vertices = equilateral_vertices(module_width)
+     module_triangle = Polygon(to_polygon_format(x_vertices,y_vertices))
+     x_vertices,y_vertices = equilateral_vertices(chanfer_length)
+     chanfer_triangle = Polygon(to_polygon_format(x_vertices-0.0001,y_vertices-0.0001))
+     chanfers = [chanfer_triangle]
+     angles = [120, 240]
+     module_centroid = module_triangle.centroid
+     for angle in angles:
+          rot_chanfer_triangle = rotate_and_translate(chanfer_triangle, angle, 0, 0, origin = module_centroid)
+          chanfers.append(rot_chanfer_triangle)
+          chanfered_base = module_triangle.difference(rot_chanfer_triangle)
+          
+
+     multi_chanfers = MultiPolygon(chanfers)
+     chanfered_base = module_triangle.difference(multi_chanfers)
+     
+     return chanfered_base
