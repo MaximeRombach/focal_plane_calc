@@ -24,9 +24,26 @@ beta = np.linspace(-180,180,180) # [deg] rotational range of beta arm (holding t
 beta2fibre = 1 # [mm] distance fiber center to edge of beta arm
 
 
+x_inc = 3.1 # [mm] Horizontal increment at each row
+y_inc = 5.369 # [mm] Vertical increment at each row
+
 """ Module parameters """ 
 
-module_width = 80 # [mm] triangle side length
+nb_robots = 63
+
+if nb_robots == 75:
+
+     module_width = 80 # [mm] triangle side length
+     nb_rows = 11 # number of rows of positioners
+
+elif nb_robots == 63:
+      
+     module_width =  74# [mm] triangle side length
+     nb_rows = 10 # number of rows of positioners
+
+else:
+      raise Exception('Invalid number of robots or number of robots not supported')
+
 
 # Raw triangle
 module_vertices_x = np.array([0,80,40,0])
