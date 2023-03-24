@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 from shapely.geometry import Polygon
 from shapely.ops import unary_union
 from shapely.plotting import plot_polygon
+import os
+from datetime import datetime
 
 ## Parameters ##
 
@@ -29,7 +31,7 @@ y_inc = 5.369 # [mm] Vertical increment at each row
 
 """ Module parameters """ 
 
-nb_robots = 63
+nb_robots = 102
 
 if nb_robots == 75:
 
@@ -38,8 +40,13 @@ if nb_robots == 75:
 
 elif nb_robots == 63:
       
-     module_width =  74# [mm] triangle side length
+     module_width = 73.8# [mm] triangle side length
      nb_rows = 10 # number of rows of positioners
+
+elif nb_robots == 102:
+      
+     module_width = 92.4 # [mm] triangle side length
+     nb_rows = 13 # number of rows of positioners
 
 else:
       raise Exception('Invalid number of robots or number of robots not supported')
@@ -61,7 +68,7 @@ start_offset_y = 3.41 # [mm]
 is_wall = True # flag for protective shields or not on modules
 
 """ Intermediate frame parameters """
-intermediate_frame_thick = 3 # [mm] spacing between modules inside intermediate frame
+intermediate_frame_thick = 0 # [mm] spacing between modules inside intermediate frame
 
 def remove_positioner(xx,yy, list_to_remove):
      """ Input:
@@ -131,3 +138,22 @@ def chanfered_base(module_width, chanfer_length = 7.5):
      chanfered_base = module_triangle.difference(multi_chanfers)
      
      return chanfered_base
+
+def save_figures_to_dir(save, suffix_name):
+
+     if not save:
+           return
+     
+
+
+     script_dir = os.path.dirname(__file__)
+     results_dir = os.path.join(script_dir, 'Results/')
+
+     now = datetime.now()
+     today_filename = now.strftime("%Y-%m-%d--%H-%M-%S_") + suffix_name + ".png"
+
+
+     if not os.path.isdir(results_dir):
+          os.makedirs(results_dir)
+
+     plt.savefig(results_dir + today_filename)
