@@ -13,8 +13,8 @@ from datetime import datetime
 
 """ Focal plane parameters """
 
-vigR = 613.27
-curve_radius = 11067
+vigR = 613.27 # [mm] radius of the instrument
+curve_radius = 11067 # [mm] curvature of the focal plane
 
 """Positioner parameters""" 
 
@@ -31,7 +31,7 @@ y_inc = 5.369 # [mm] Vertical increment at each row
 
 """ Module parameters """ 
 
-nb_robots = 102
+nb_robots = 75
 
 if nb_robots == 75:
 
@@ -68,7 +68,12 @@ start_offset_y = 3.41 # [mm]
 is_wall = True # flag for protective shields or not on modules
 
 """ Intermediate frame parameters """
-intermediate_frame_thick = 0 # [mm] spacing between modules inside intermediate frame
+
+intermediate_frame_thick = 1 # [mm] spacing between modules inside intermediate frame
+
+""" Global frame parameters """
+
+global_frame_thick = 1 # [mm] spacing between modules in global arrangement
 
 def remove_positioner(xx,yy, list_to_remove):
      """ Input:
@@ -124,7 +129,7 @@ def chanfered_base(module_width, chanfer_length = 7.5):
      x_vertices,y_vertices = equilateral_vertices(module_width)
      module_triangle = Polygon(to_polygon_format(x_vertices,y_vertices))
      x_vertices,y_vertices = equilateral_vertices(chanfer_length)
-     chanfer_triangle = Polygon(to_polygon_format(x_vertices-0.0001,y_vertices-0.0001))
+     chanfer_triangle = Polygon(to_polygon_format(x_vertices-0.0001,y_vertices-0.0001)) # tiny diff for geometry to intersect in one point rather tha infinite points (there is a better solution)
      chanfers = [chanfer_triangle]
      angles = [120, 240]
      module_centroid = module_triangle.centroid
@@ -144,8 +149,6 @@ def save_figures_to_dir(save, suffix_name):
      if not save:
            return
      
-
-
      script_dir = os.path.dirname(__file__)
      results_dir = os.path.join(script_dir, 'Results/')
 
@@ -156,4 +159,4 @@ def save_figures_to_dir(save, suffix_name):
      if not os.path.isdir(results_dir):
           os.makedirs(results_dir)
 
-     plt.savefig(results_dir + today_filename)
+     plt.savefig(results_dir + today_filename, bbox_inches = 'tight')

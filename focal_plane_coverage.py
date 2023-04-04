@@ -114,78 +114,24 @@ else:
      effective_wks = total_positioners_workspace
 
 module_collection = GeometryCollection([module, module_w_beta_and_safety_dist, effective_wks, triang_meshgrid])
-# print(module_collection.geoms)
+module_collection = affinity.translate(module_collection, xoff = -reference_centroid.x, yoff = -reference_centroid.y)
 coverage_with_walls = round(effective_wks.area/module.area * 100,1)
 coverage_no_walls = round(total_positioners_workspace.area/module.area * 100,1)
 
 """ 2)a) Start meshing the grid for intermediate frame (4 triangles: 3 upwards + 1 downwards) """
 
-n_modules = 3
+dist_inter = 2*param.module_width*np.sqrt(3)/6 + param.intermediate_frame_thick # distance between each neighbor from center module
+angles = np.array([-30, 90, 210]) # angular positions of neighbors
+flip = [True,False,False,False] # 
 
-dist = 2*param.module_width*np.sqrt(3)/6 + param.intermediate_frame_thick
-x_grid_inter = np.zeros(n_modules)
-x_grid_inter[0:2]= np.linspace(reference_centroid.x, 2*reference_centroid.x, 2)
-x_grid_inter[2]= np.linspace(reference_centroid.x , reference_centroid.x , 1)
-y_grid_inter = np.zeros(n_modules)
-y_grid_inter[0:2:2]+= np.sin(np.deg2rad(30))*dist
-y_grid_inter[2]+= np.sin(np.deg2rad(30))*dist + 2*param.module_width*np.sqrt(3)/6
-flip = np.zeros(n_modules)
-flip[0:2:2] += 1
+x_grid_inter = np.cos(np.deg2rad(angles))*dist_inter
+x_grid_inter = np.insert(x_grid_inter, 0, 0)
+y_grid_inter = np.sin(np.deg2rad(angles))*dist_inter
+y_grid_inter = np.insert(y_grid_inter, 0, 0)
 
-# n_row = 2
-# dist = 2*param.module_width*np.sqrt(3)/6 + param.intermediate_frame_thick
-# x_grid_inter = np.zeros(n_row)
-# y_grid_inter = np.zeros(n_row)
-# flip = np.zeros(n_row)
-
-# for idx in range(n_row):
-
-#      offset_x = reference_centroid.x + dist * np.cos(np.deg2rad(30)) * idx
-#      offset_y = reference_centroid.y + dist * (np.sin(np.deg2rad(30)) + 1) * idx
-
-#      new_row_x = np.linspace(offset_x, (n_row - idx ) * dist * np.cos(np.deg2rad(30)) + offset_x, n_row - idx + 1)
-#      new_row_y = offset_y * np.ones(len(new_row_x))
-#      new_flip = np.zeros(len(new_row_x))
-     
-
-#      if idx == 0:
-#          x_grid_inter = new_row_x
-#          y_grid_inter = new_row_y
-#          new_flip[::2] += 1
-#          flip = new_flip
-#      else: 
-#          x_grid_inter = np.hstack((x_grid_inter, new_row_x))
-#          y_grid_inter = np.hstack((y_grid_inter, new_row_y))
-#          new_flip[1::2] += 1
-#          flip = np.hstack((flip, new_flip))
-
-#      if idx == param.nb_rows - 1:
-#         new_row_x = np.array([offset_x * (idx + 1)])
-#         new_row_y = offset_y * (idx + 1) * np.ones(len(new_row_x))
-#         new_flip = np.zeros(1)
-
-#         x_grid_inter = np.hstack((x_grid_inter, new_row_x))
-#         y_grid_inter = np.hstack((y_grid_inter, new_row_y))
-#         flip = np.hstack((flip, new_flip))
-
-
-# angles = np.array([-30, 90, 210])
-# flip = [True,False,False,False]
-
-# x_grid_inter = np.cos(np.deg2rad(angles))*dist
-# # x_inter = np.insert(x_inter, 0, np.cos(np.deg2rad(30))*dist)
-# # x_grid_inter = np.insert(x_grid_inter, 0, 0)
-# y_grid_inter = np.sin(np.deg2rad(angles))*dist
-# # y_inter = np.insert(x_inter, 0, np.sin(np.deg2rad(30))*dist)
-# # y_grid_inter = np.insert(y_grid_inter, 0, 0)
-
-listing = [module_collection.geoms[0]]
-intermediate_collection = [module_collection]
-covered_area = module_collection.geoms[2].area
-
-# listing = []
-# intermediate_collection = []
-# covered_area = 0
+boundaries = []
+intermediate_collection = []
+covered_area = 0
 
 for idx, (rotate, dx, dy) in enumerate(zip(flip, x_grid_inter, y_grid_inter)):
 
@@ -195,17 +141,12 @@ for idx, (rotate, dx, dy) in enumerate(zip(flip, x_grid_inter, y_grid_inter)):
           angle = 0
 
      transformed_all = param.rotate_and_translate(module_collection, angle, dx, dy, origin = "centroid")
-     listing.append(transformed_all.geoms[0])
+     boundaries.append(transformed_all.geoms[0])
      intermediate_collection.append(transformed_all)
-     covered_area += transformed_all.geoms[2].area
+     covered_area += transformed_all.geoms[2].area # add the net covered area of each module
 
-bounding_polygon_intermediate_frame = unary_union(MultiPolygon(listing)).convex_hull
-# to_origin = bounding_polygon_intermediate_frame.bounds[0:2]
-# print(to_origin)
+bounding_polygon_intermediate_frame = unary_union(MultiPolygon(boundaries)).convex_hull
 intermediate_collection = GeometryCollection(intermediate_collection)
-
-# # intermediate_collection = param.rotate_and_translate(intermediate_collection, 0, -to_origin[0], -to_origin[1])
-# # bounding_polygon_intermediate_frame = param.rotate_and_translate(bounding_polygon_intermediate_frame, 0, -to_origin[0], -to_origin[1])
 
 available_intermediate_area = round(bounding_polygon_intermediate_frame.area,1)
 intermediate_coverage = round(covered_area/available_intermediate_area*100,1)
@@ -213,24 +154,62 @@ intermediate_coverage = round(covered_area/available_intermediate_area*100,1)
 
 """2)b) Start meshing the grid for the whole thing"""
 
+dist = 2*param.module_width*np.sqrt(3)/6 + param.intermediate_frame_thick
+# x_grid_inter = np.zeros(n_modules)
+# x_grid_inter[0:2]= np.linspace(reference_centroid.x, 2*reference_centroid.x, 2)
+# x_grid_inter[2]= np.linspace(reference_centroid.x , reference_centroid.x , 1)
+# y_grid_inter = np.zeros(n_modules)
+# y_grid_inter[0:2:2]+= np.sin(np.deg2rad(30))*dist
+# y_grid_inter[2]+= np.sin(np.deg2rad(30))*dist + 2*param.module_width*np.sqrt(3)/6
+# flip = np.zeros(n_modules)
+# flip[0:2:2] += 1
+
+
+# x_grid_inter = np.zeros(n_row)
+# y_grid_inter = np.zeros(n_row)
+# flip = np.zeros(n_row)
+
+# for idx in range(n_row):
+
+#      offset_x = reference_centroid.x + dist * np.cos(np.deg2rad(30)) * idx
+#      offset_y_row = reference_centroid.y + dist * (np.sin(np.deg2rad(30)) + 1) * idx
+#      offset_y = dist * np.sin(np.deg2rad(30))
+
+#      new_row_x = np.linspace(offset_x, (n_row - idx ) * dist * np.cos(np.deg2rad(30)) + offset_x, n_row - idx + 1)
+#      new_row_y = offset_y_row * np.ones(len(new_row_x))
+#      new_row_y[1::2] += offset_y
+#      new_flip = np.zeros(len(new_row_x))
+     
+#      if idx == 0:
+#          x_grid_inter = new_row_x
+#          y_grid_inter = new_row_y
+#          new_flip[1::2] += 1
+#          flip = new_flip
+#      else: 
+#          x_grid_inter = np.hstack((x_grid_inter, new_row_x))
+#          y_grid_inter = np.hstack((y_grid_inter, new_row_y))
+#          new_flip[1::2] += 1
+#          flip = np.hstack((flip, new_flip))
+
+# x_grid_inter, y_grid_inter = param.remove_positioner(x_grid_inter, y_grid_inter, [-1])
+
 # centroid_intermediate_frame = bounding_polygon_intermediate_frame.centroid
 ## Pizza of module
-# pizza_angle = 60
-# vigR_lim_x = param.vigR * np.cos(np.deg2rad(np.linspace(0,pizza_angle,20)))
-# vigR_lim_x = np.insert(vigR_lim_x, 0, 0)
-# print(vigR_lim_x)
-# vigR_lim_y = param.vigR * np.sin(np.deg2rad(np.linspace(0,pizza_angle,20)))
-# vigR_lim_y = np.insert(vigR_lim_y, 0, 0)
-# pizza = Polygon(param.to_polygon_format(vigR_lim_x, vigR_lim_y))
+pizza_angle = 360
+n_vigR = 100
+vigR_lim_x = param.vigR * np.cos(np.deg2rad(np.linspace(0,pizza_angle,n_vigR)))
+vigR_lim_x = np.insert(vigR_lim_x, 0, 0)
+vigR_lim_y = param.vigR * np.sin(np.deg2rad(np.linspace(0,pizza_angle,n_vigR)))
+vigR_lim_y = np.insert(vigR_lim_y, 0, 0)
+pizza = Polygon(param.to_polygon_format(vigR_lim_x, vigR_lim_y))
 # area_to_cover = pizza.area
-
-
 """ Plot plot time """ 
 
 draw = True
 is_timer = False
 save_plots = False
 plot_time = 20 # [s] plotting time
+ignore_points = False
 
 fig = plt.figure(figsize=(8,8))
 figtitle = "Module_coverage_raw_" + str(param.nb_robots)
@@ -285,9 +264,12 @@ for idx, mod_collection in enumerate(intermediate_collection.geoms):
                plot_polygon(mod_collection.geoms[jdx], add_points=False, facecolor='None', linestyle = '--')
           elif (isinstance (mod_collection.geoms[jdx], Polygon)) and jdx == 2:
                plot_polygon(mod_collection.geoms[jdx], add_points=False, alpha=0.2, edgecolor='black', label = label_coverage)
-          elif (isinstance (mod_collection.geoms[jdx], MultiPoint)):
+               cent = mod_collection.geoms[jdx].centroid
+               plot_points(cent)
+          elif (isinstance (mod_collection.geoms[jdx], MultiPoint) and not ignore_points):
                plot_points(mod_collection.geoms[jdx], marker='.', color='k', label = label_robots)
-     # plt.scatter(x_grid_inter,y_grid_inter, marker='o', color='r')
+plt.scatter(x_grid_inter,y_grid_inter, marker='o', color='r')
+plot_polygon(pizza, add_points=False, facecolor='None', linestyle = '--', edgecolor = 'black')
 
 plot_polygon(bounding_polygon_intermediate_frame, add_points=False, facecolor='None', linestyle = '-.', color = 'green', label = 'Available area: {} mm$^2$'.format(available_intermediate_area))
 plt.xlabel('x position [mm]')
