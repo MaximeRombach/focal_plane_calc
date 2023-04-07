@@ -1,11 +1,10 @@
+# %%
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import numpy as np
 import matplotlib.pyplot as plt
 import random
 import array as array
-import math
-import json
 import updown_tri as tri
 
 from shapely.geometry import Polygon, Point
@@ -114,6 +113,7 @@ if param.is_wall:
 else:
      effective_wks = total_positioners_workspace
 
+
 module_collection = GeometryCollection([module, module_w_beta_and_safety_dist, effective_wks, triang_meshgrid])
 module_collection = affinity.translate(module_collection, xoff = -reference_centroid.x, yoff = -reference_centroid.y)
 coverage_with_walls = round(effective_wks.area/module.area * 100,1)
@@ -146,6 +146,7 @@ for idx, (rotate, dx, dy) in enumerate(zip(flip, x_grid_inter, y_grid_inter)):
      intermediate_collection.append(transformed_all)
      covered_area += transformed_all.geoms[2].area # add the net covered area of each module
 
+
 bounding_polygon_intermediate_frame = unary_union(MultiPolygon(boundaries)).convex_hull
 intermediate_collection.append(bounding_polygon_intermediate_frame)
 intermediate_collection = GeometryCollection(intermediate_collection)
@@ -154,16 +155,16 @@ available_intermediate_area = round(bounding_polygon_intermediate_frame.area,1)
 intermediate_coverage = round(covered_area/available_intermediate_area*100,1)
 # intermediate_coverage = round(covered_area/area_to_cover*100,1)
 
+# %% Global grid
 """2)b) Start meshing the grid for the whole thing"""
 
-inter_frame_width = 2*param.module_width + 2*param.intermediate_frame_thick*np.cos(np.deg2rad(30))
+inter_frame_width = 2*param.module_width + 2*param.intermediate_frame_thick*np.cos(np.deg2rad(30))+2*param.global_frame_thick
 dist_global = 2*inter_frame_width*np.sqrt(3)/6 + param.global_frame_thick
 inter_centroid = inter_frame_width*np.sqrt(3)/3*np.array([np.cos(np.deg2rad(30)), np.sin(np.deg2rad(30))])
 
 nb_max_modules = round(2*param.vigR / (inter_frame_width + param.global_frame_thick), 0)
 print(nb_max_modules)
 
-# center_coords = [(1, 0, 0), (1, 1, 0), (0, 1, 0), (0, 1, 1), (0, 0, 1), (1, 0, 1), (-1, 2, 0), (2, -1, 0)]
 center_coords = []
 
 a_max = 6
@@ -176,15 +177,18 @@ for a in np.arange(-a_max,a_max):
                if a + b + c == 1 or a + b + c == 2:
                     center_coords.append((a,b,c))
 
-center_coords = list(dict.fromkeys(center_coords))
-print(center_coords)
 x_grid = []
 y_grid = []
 flip_global = []
+vigR_tresh = 50
 
-for a,b,c in center_coords:
+for a,b,c in center_coords: # build total grid
 
      x,y = tri.tri_center(a,b,c,inter_frame_width)
+     
+     if not np.sqrt(x**2 + y**2) < param.vigR - vigR_tresh: # check if module falls in vignetting radius
+          continue
+
      if tri.points_up(a,b,c):
           flip_global.append(0)
      else: 
@@ -194,21 +198,10 @@ for a,b,c in center_coords:
 
 pizza = param.make_vigR_polygon()
 
-for idx, (x, y) in enumerate(zip(x_grid, y_grid)):
-
-     if not pizza.contains(Point(x,y)):
-          x_grid.pop(idx)
-          y_grid.pop(idx)
-          print(f'removing {idx}')
-
 grid = MultiPoint(param.to_polygon_format(x_grid, y_grid))
-
-plot_points(grid)
-plot_polygon(pizza, add_points = False, facecolor='None', edgecolor = 'black')
-
 plt.show()
 
-boundaries_global = []
+global_boundaries = []
 global_collection = []
 covered_area_global = 0
 
@@ -222,21 +215,23 @@ for idx, (rotate, dx, dy) in enumerate(zip(flip_global, x_grid, y_grid)):
      transformed_all = param.rotate_and_translate(intermediate_collection, angle, dx, dy, origin = "centroid")
      # boundaries.append(transformed_all.geoms[0])
      global_collection.append(transformed_all)
+     global_boundaries.append(transformed_all.geoms[4])
+     print(transformed_all.geoms[4])
      plot_polygon(transformed_all.geoms[0].geoms[0], add_points = False, facecolor = 'None', edgecolor = 'black')
-     plot_polygon(transformed_all.geoms[4], add_points = False, facecolor = 'None', edgecolor = 'black')
+     plot_polygon(transformed_all.geoms[4], add_points = False, facecolor = 'None', linestyle = '--')
      # covered_area += transformed_all.geoms[2].area # add the net covered area of each module
+
+global_bounding_polygon = unary_union(MultiPolygon(global_boundaries)).convex_hull
+plot_polygon(global_bounding_polygon, add_points = False, facecolor = 'None', edgecolor = 'orange', linestyle = '--')
 plt.scatter(x_grid,y_grid,color='red')
 
-# bounding_polygon_intermediate_frame = unary_union(MultiPolygon(boundaries)).convex_hull
-# global_collection = GeometryCollection(global_collection)
+total_modules = len(x_grid)*len(x_grid_inter)
+total_robots = total_modules*param.nb_robots
 
-# available_intermediate_area = round(bounding_polygon_intermediate_frame.area,1)
-# intermediate_coverage = round(covered_area/available_intermediate_area*100,1)
+print(f"Total # modules: {total_modules} \n", f"Total # robots: {total_robots}")
 
-# centroid_intermediate_frame = bounding_polygon_intermediate_frame.centroid
-## Pizza of module
+# %% 
 
-# area_to_cover = pizza.area
 """ Plot plot time """ 
 
 draw = True
@@ -290,10 +285,16 @@ for idx, mod_collection in enumerate(intermediate_collection.geoms):
      else: 
           label_coverage = None
           label_robots = None
+     if (isinstance (mod_collection, Polygon)):
+          print(mod_collection)
+          plot_polygon(mod_collection, add_points=False, facecolor='None', linestyle = '-.', color = 'green', label = 'Available area: {} mm$^2$'.format(available_intermediate_area))
+          continue
+
      for jdx, geo in enumerate(mod_collection.geoms):
           # plot_polygon(geometry[jdx], add_points=False, facecolor='None' , edgecolor='black')
           if (isinstance (mod_collection.geoms[jdx], Polygon)) and jdx == 0:
                plot_polygon(mod_collection.geoms[jdx], add_points=False, facecolor='None' , edgecolor='black')
+               print(module_collection.geoms[jdx])
           elif (isinstance (mod_collection.geoms[jdx], Polygon)) and jdx == 1:
                plot_polygon(mod_collection.geoms[jdx], add_points=False, facecolor='None', linestyle = '--')
           elif (isinstance (mod_collection.geoms[jdx], Polygon)) and jdx == 2:
@@ -304,11 +305,23 @@ for idx, mod_collection in enumerate(intermediate_collection.geoms):
                plot_points(mod_collection.geoms[jdx], marker='.', color='k', label = label_robots)
 plt.scatter(x_grid_inter,y_grid_inter, marker='o', color='r')
 
-plot_polygon(bounding_polygon_intermediate_frame, add_points=False, facecolor='None', linestyle = '-.', color = 'green', label = 'Available area: {} mm$^2$'.format(available_intermediate_area))
+# plot_polygon(bounding_polygon_intermediate_frame, add_points=False, facecolor='None', linestyle = '-.', color = 'green', label = 'Available area: {} mm$^2$'.format(available_intermediate_area))
 plt.xlabel('x position [mm]')
 plt.ylabel('y position [mm]')
 plt.legend(shadow = True)
 param.save_figures_to_dir(save_plots, figtitle)
+
+plt.figure(figsize=(10,10))
+if param.intermediate_frame_thick != param.global_frame_thick:
+     figtitle = f"Semi frameless - {param.nb_robots} per module"
+elif param.intermediate_frame_thick == param.global_frame_thick and param.global_frame_thick == 0:
+     figtitle = f"Frameless - {param.nb_robots} per module"
+else:
+     figtitle = f"Framed - {param.nb_robots} per module"
+plt.title(figtitle)
+plot_polygon(pizza, add_points = False, facecolor = 'None', edgecolor = 'black', linestyle = '--')
+
+
 
 if draw and is_timer:
      

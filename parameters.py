@@ -73,7 +73,7 @@ intermediate_frame_thick = 0 # [mm] spacing between modules inside intermediate 
 
 """ Global frame parameters """
 
-global_frame_thick = 0 # [mm] spacing between modules in global arrangement
+global_frame_thick = 1 # [mm] spacing between modules in global arrangement
 
 def remove_positioner(xx,yy, list_to_remove):
      """ Input:
@@ -163,7 +163,7 @@ def save_figures_to_dir(save, suffix_name):
 
 def make_vigR_polygon(pizza_angle = 360):
       
-     n_vigR = 100
+     n_vigR = 500
      vigR_lim_x = vigR * np.cos(np.deg2rad(np.linspace(0,pizza_angle,n_vigR)))
      vigR_lim_y = vigR * np.sin(np.deg2rad(np.linspace(0,pizza_angle,n_vigR)))
      if pizza_angle == 360:
