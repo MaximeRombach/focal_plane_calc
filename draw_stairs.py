@@ -6,15 +6,18 @@ import matplotlib.pyplot as plt
 import math
 from astropy.table import Table, vstack
 from scipy.interpolate import interp1d
+import parameters as param
 
 ## Parameters ##
 
 Rc = 11067 # Curve radius [mm]
 vigR = 613.2713
 d_plane = 1200 # Focal plane diameter [mm]
-module_width = 80 # Module width [mm]
-nb_modules = 8 #number of modules of one side of the axis
-tolerance_envelop_width = 0.1 # [mm] tolerance in positioning around nominal focal surface 
+module_width = param.module_width * np.sqrt(3)/2 #= triangle HEIGHT and NOT side
+# module_width = 74*np.sqrt(3)/2 # Module width [mm] = triangle HEIGHT and NOT side
+nb_modules = 9 #number of modules of one side of the axis
+tolerance_envelop_width = 0.1 # [mm] tolerance in positioning around nominal focal surface
+start_offset = 0
 
 t = Table.read('MM1536-cfg1-20210910.csv', comment='#')
 Z_data = -t['Z']
@@ -29,7 +32,7 @@ z = R2Z(r) # Calculate focal plane curve from csv data
 
 def calc_modules_pos(Rc, module_width, nb_modules, R2Z, BFS = False):
 
-    r_modules = np.array(range(0,nb_modules*module_width,module_width))
+    r_modules = np.arange(start_offset,nb_modules*module_width+start_offset,module_width)
     if BFS: # Calculate module pos on Best Fit Sphere
         z_modules = -np.sqrt(Rc**2-np.square(r_modules)) + Rc
     else: # Calcualte module pos on interpolation of values from Berkeley optical team (csv file)
@@ -83,6 +86,7 @@ def draw_normals(x_modules, y_modules, normal, length=10, draw=True):
             x0, y0 = x_modules[idx], y_modules[idx]
             nx, ny = normal[idx][0]*length, normal[idx][1]*length
             plt.plot((x0, x0+nx), (y0, y0+ny))
+            # plt.quiver(x0, y0,  y0-ny, x0+nx)
             # axs[0].plot((x0, x0), (y0, y0+1*length),'r--')
 
 def rotate_modules_tangent_2_surface(x_modules, y_modules, angles):
@@ -181,7 +185,7 @@ def draw_BFS(Rc,vigR, draw=False, full_curve = False):
 
     y = -np.sqrt(Rc**2-np.square(x)) + Rc
 
-    axs[0].plot(x,y,label='BFS',color='orange',linestyle='-.')
+    plt.plot(x,y,label='BFS',color='orange',linestyle='-.')
 
 def draw_R2CRD(r,R_data,CRD_data,R2CRD, draw=True):
     if not draw:
@@ -208,12 +212,13 @@ def draw_envelop(plot_axis = 0,draw = True, draw_legend=False):
 
     plt.plot(r_envelop_plus, z_envelop_plus, envelop_looks, linewidth = 0.75)
 
-def zoom_in_1module(module_number, xbound, ybound, plot_axis=1, draw=True):
+def zoom_in_1module(module_number, xbound, ybound, save_fig, draw=True):
 
     if not draw:
         return
     
-    fig = plt.figure('Zoomed in module',figsize=(15,5))
+    figtitle = 'Zoom in module #{} - {} robots'.format(module_number+1, param.nb_robots)
+    fig = plt.figure(figtitle,figsize=(15,5))
     x_center, y_center = x_modules[module_number], y_modules[module_number]
     xlim_min, xlim_max, ylim_min, ylim_max = x_center - xbound, x_center + xbound,  y_center - ybound, y_center + ybound
 
@@ -225,11 +230,12 @@ def zoom_in_1module(module_number, xbound, ybound, plot_axis=1, draw=True):
 
     plt.xlim(xlim_min, xlim_max)
     plt.ylim(ylim_min, ylim_max)
-    plt.title('Zoom in module #{}'.format(module_number+1))
-    plt.legend()
+    plt.title(figtitle)
+    plt.legend(shadow=True)
     plt.xlabel('R [mm]')
     plt.ylabel('Z [mm]')
     plt.grid()
+    param.save_figures_to_dir(save_fig, figtitle)
 
 
 x_modules, y_modules = calc_modules_pos(Rc, module_width, nb_modules, R2Z)
@@ -245,8 +251,10 @@ r_envelop_plus, z_envelop_plus, r_envelop_minus, z_envelop_minus = tolerance_env
 fig = plt.figure('Full focal surface',figsize=(15,5))
 # fig, ax = plt.subplots()
 
+draw = True
 plot_time = 20 #seconds
 is_timer = False
+save_fig = True
 
 draw_normals(x_modules,y_modules,normal,length=10)
 # plt.plot(x_radius, y_radius, '-.',label="BFS")
@@ -256,11 +264,13 @@ plt.plot(r,z,'--g',label="Focal surface")
 draw_BFS(Rc,vigR, draw=False)
 draw_envelop()
 plt.legend(shadow=True)
-plt.title('Focal surface and module arrangement')
+plt.title('Focal surface and module arrangement with normal vectors')
 plt.xlabel('R [mm]')
 plt.ylabel('Z [mm]')
 plt.grid()
-zoom_in_1module(module_number = 3, xbound=45, ybound=1, draw=True)
+param.save_figures_to_dir(save_fig, 'Focal surface and module arrangement with normal vectors')
+
+zoom_in_1module(module_number = 3, xbound=45, ybound=1, save_fig = save_fig, draw=True)
 draw_R2CRD(r,R_data,CRD_data,R2CRD, draw=False)
 
 

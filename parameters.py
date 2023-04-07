@@ -69,11 +69,11 @@ is_wall = True # flag for protective shields or not on modules
 
 """ Intermediate frame parameters """
 
-intermediate_frame_thick = 1 # [mm] spacing between modules inside intermediate frame
+intermediate_frame_thick = 0 # [mm] spacing between modules inside intermediate frame
 
 """ Global frame parameters """
 
-global_frame_thick = 1 # [mm] spacing between modules in global arrangement
+global_frame_thick = 0 # [mm] spacing between modules in global arrangement
 
 def remove_positioner(xx,yy, list_to_remove):
      """ Input:
@@ -160,3 +160,18 @@ def save_figures_to_dir(save, suffix_name):
           os.makedirs(results_dir)
 
      plt.savefig(results_dir + today_filename, bbox_inches = 'tight')
+
+def make_vigR_polygon(pizza_angle = 360):
+      
+     n_vigR = 100
+     vigR_lim_x = vigR * np.cos(np.deg2rad(np.linspace(0,pizza_angle,n_vigR)))
+     vigR_lim_y = vigR * np.sin(np.deg2rad(np.linspace(0,pizza_angle,n_vigR)))
+     if pizza_angle == 360:
+          end_point = [vigR_lim_x[0], vigR_lim_y[0]]
+     else:
+          end_point = [0, 0]
+     vigR_lim_x = np.insert(vigR_lim_x, 0, end_point[0])
+     vigR_lim_y = np.insert(vigR_lim_y, 0, end_point[1])
+     pizza = Polygon(to_polygon_format(vigR_lim_x, vigR_lim_y))
+
+     return pizza

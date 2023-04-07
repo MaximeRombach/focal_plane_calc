@@ -6,6 +6,7 @@ import random
 import array as array
 import math
 import json
+import updown_tri as tri
 
 from shapely.geometry import Polygon, Point
 from shapely.ops import unary_union
@@ -146,6 +147,7 @@ for idx, (rotate, dx, dy) in enumerate(zip(flip, x_grid_inter, y_grid_inter)):
      covered_area += transformed_all.geoms[2].area # add the net covered area of each module
 
 bounding_polygon_intermediate_frame = unary_union(MultiPolygon(boundaries)).convex_hull
+intermediate_collection.append(bounding_polygon_intermediate_frame)
 intermediate_collection = GeometryCollection(intermediate_collection)
 
 available_intermediate_area = round(bounding_polygon_intermediate_frame.area,1)
@@ -154,54 +156,86 @@ intermediate_coverage = round(covered_area/available_intermediate_area*100,1)
 
 """2)b) Start meshing the grid for the whole thing"""
 
-dist = 2*param.module_width*np.sqrt(3)/6 + param.intermediate_frame_thick
-# x_grid_inter = np.zeros(n_modules)
-# x_grid_inter[0:2]= np.linspace(reference_centroid.x, 2*reference_centroid.x, 2)
-# x_grid_inter[2]= np.linspace(reference_centroid.x , reference_centroid.x , 1)
-# y_grid_inter = np.zeros(n_modules)
-# y_grid_inter[0:2:2]+= np.sin(np.deg2rad(30))*dist
-# y_grid_inter[2]+= np.sin(np.deg2rad(30))*dist + 2*param.module_width*np.sqrt(3)/6
-# flip = np.zeros(n_modules)
-# flip[0:2:2] += 1
+inter_frame_width = 2*param.module_width + 2*param.intermediate_frame_thick*np.cos(np.deg2rad(30))
+dist_global = 2*inter_frame_width*np.sqrt(3)/6 + param.global_frame_thick
+inter_centroid = inter_frame_width*np.sqrt(3)/3*np.array([np.cos(np.deg2rad(30)), np.sin(np.deg2rad(30))])
 
+nb_max_modules = round(2*param.vigR / (inter_frame_width + param.global_frame_thick), 0)
+print(nb_max_modules)
 
-# x_grid_inter = np.zeros(n_row)
-# y_grid_inter = np.zeros(n_row)
-# flip = np.zeros(n_row)
+# center_coords = [(1, 0, 0), (1, 1, 0), (0, 1, 0), (0, 1, 1), (0, 0, 1), (1, 0, 1), (-1, 2, 0), (2, -1, 0)]
+center_coords = []
 
-# for idx in range(n_row):
+a_max = 6
+b_max = 6
+c_max = 6
+for a in np.arange(-a_max,a_max):
+     for b in np.arange(-b_max,b_max):
+          for c in np.arange(-c_max,c_max):
 
-#      offset_x = reference_centroid.x + dist * np.cos(np.deg2rad(30)) * idx
-#      offset_y_row = reference_centroid.y + dist * (np.sin(np.deg2rad(30)) + 1) * idx
-#      offset_y = dist * np.sin(np.deg2rad(30))
+               if a + b + c == 1 or a + b + c == 2:
+                    center_coords.append((a,b,c))
 
-#      new_row_x = np.linspace(offset_x, (n_row - idx ) * dist * np.cos(np.deg2rad(30)) + offset_x, n_row - idx + 1)
-#      new_row_y = offset_y_row * np.ones(len(new_row_x))
-#      new_row_y[1::2] += offset_y
-#      new_flip = np.zeros(len(new_row_x))
-     
-#      if idx == 0:
-#          x_grid_inter = new_row_x
-#          y_grid_inter = new_row_y
-#          new_flip[1::2] += 1
-#          flip = new_flip
-#      else: 
-#          x_grid_inter = np.hstack((x_grid_inter, new_row_x))
-#          y_grid_inter = np.hstack((y_grid_inter, new_row_y))
-#          new_flip[1::2] += 1
-#          flip = np.hstack((flip, new_flip))
+center_coords = list(dict.fromkeys(center_coords))
+print(center_coords)
+x_grid = []
+y_grid = []
+flip_global = []
 
-# x_grid_inter, y_grid_inter = param.remove_positioner(x_grid_inter, y_grid_inter, [-1])
+for a,b,c in center_coords:
+
+     x,y = tri.tri_center(a,b,c,inter_frame_width)
+     if tri.points_up(a,b,c):
+          flip_global.append(0)
+     else: 
+          flip_global.append(1)
+     x_grid.append(x)
+     y_grid.append(y)
+
+pizza = param.make_vigR_polygon()
+
+for idx, (x, y) in enumerate(zip(x_grid, y_grid)):
+
+     if not pizza.contains(Point(x,y)):
+          x_grid.pop(idx)
+          y_grid.pop(idx)
+          print(f'removing {idx}')
+
+grid = MultiPoint(param.to_polygon_format(x_grid, y_grid))
+
+plot_points(grid)
+plot_polygon(pizza, add_points = False, facecolor='None', edgecolor = 'black')
+
+plt.show()
+
+boundaries_global = []
+global_collection = []
+covered_area_global = 0
+
+for idx, (rotate, dx, dy) in enumerate(zip(flip_global, x_grid, y_grid)):
+
+     if rotate:
+          angle = 180
+     else:
+          angle = 0
+
+     transformed_all = param.rotate_and_translate(intermediate_collection, angle, dx, dy, origin = "centroid")
+     # boundaries.append(transformed_all.geoms[0])
+     global_collection.append(transformed_all)
+     plot_polygon(transformed_all.geoms[0].geoms[0], add_points = False, facecolor = 'None', edgecolor = 'black')
+     plot_polygon(transformed_all.geoms[4], add_points = False, facecolor = 'None', edgecolor = 'black')
+     # covered_area += transformed_all.geoms[2].area # add the net covered area of each module
+plt.scatter(x_grid,y_grid,color='red')
+
+# bounding_polygon_intermediate_frame = unary_union(MultiPolygon(boundaries)).convex_hull
+# global_collection = GeometryCollection(global_collection)
+
+# available_intermediate_area = round(bounding_polygon_intermediate_frame.area,1)
+# intermediate_coverage = round(covered_area/available_intermediate_area*100,1)
 
 # centroid_intermediate_frame = bounding_polygon_intermediate_frame.centroid
 ## Pizza of module
-pizza_angle = 360
-n_vigR = 100
-vigR_lim_x = param.vigR * np.cos(np.deg2rad(np.linspace(0,pizza_angle,n_vigR)))
-vigR_lim_x = np.insert(vigR_lim_x, 0, 0)
-vigR_lim_y = param.vigR * np.sin(np.deg2rad(np.linspace(0,pizza_angle,n_vigR)))
-vigR_lim_y = np.insert(vigR_lim_y, 0, 0)
-pizza = Polygon(param.to_polygon_format(vigR_lim_x, vigR_lim_y))
+
 # area_to_cover = pizza.area
 """ Plot plot time """ 
 
@@ -212,7 +246,7 @@ plot_time = 20 # [s] plotting time
 ignore_points = False
 
 fig = plt.figure(figsize=(8,8))
-figtitle = "Module_coverage_raw_" + str(param.nb_robots)
+figtitle = f"Module coverage raw - {param.nb_robots} robots per module"
 plt.title(figtitle)
 plot_polygon(module, facecolor='None', edgecolor='black', add_points=False)
 plot_polygon(module_w_beta_and_safety_dist, facecolor='None', edgecolor='red', linestyle = '--', add_points=False
@@ -231,7 +265,7 @@ plt.legend(shadow = True)
 param.save_figures_to_dir(save_plots, figtitle)
 
 plt.figure(figsize=(8,8))
-figtitle = "Module coverage with summed coverage & walls_" + str(param.nb_robots)
+figtitle = f"Module coverage with summed coverage & walls - {param.nb_robots} robots per module"
 plt.title(figtitle)
 plot_polygon(module, facecolor='None', edgecolor='black', add_points=False)
 plot_polygon(module_w_beta_and_safety_dist, facecolor='None', linestyle = '--', add_points=False
@@ -246,7 +280,7 @@ param.save_figures_to_dir(save_plots, figtitle)
 
 plt.figure(figsize=(10,10))
 # plt.figure()
-figtitle = "Intermediate frame coverage" + str(param.nb_robots)
+figtitle = f"Intermediate frame coverage - {param.nb_robots} per module"
 plt.title(figtitle)
 for idx, mod_collection in enumerate(intermediate_collection.geoms):
      if idx == 0:
@@ -269,7 +303,6 @@ for idx, mod_collection in enumerate(intermediate_collection.geoms):
           elif (isinstance (mod_collection.geoms[jdx], MultiPoint) and not ignore_points):
                plot_points(mod_collection.geoms[jdx], marker='.', color='k', label = label_robots)
 plt.scatter(x_grid_inter,y_grid_inter, marker='o', color='r')
-plot_polygon(pizza, add_points=False, facecolor='None', linestyle = '--', edgecolor = 'black')
 
 plot_polygon(bounding_polygon_intermediate_frame, add_points=False, facecolor='None', linestyle = '-.', color = 'green', label = 'Available area: {} mm$^2$'.format(available_intermediate_area))
 plt.xlabel('x position [mm]')
