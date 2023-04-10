@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import random
 import array as array
 import updown_tri as tri
-
+import time
 from shapely.geometry import Polygon, Point
 from shapely.ops import unary_union
 from shapely.plotting import plot_polygon, plot_points
@@ -28,7 +28,7 @@ The effective coverage shall be calculated as the usable positioner area vs the 
             # 0: bottom left
             # count a row then switch to left side of next one to continue
             # last positoner: top one
-
+start_time = time.time()
 """1)a) Define triangular meshgrid of positioners' centeral """
 
 module = param.chanfered_base(param.module_width, chanfer_length=7.5)
@@ -75,7 +75,6 @@ for idx in range(param.nb_rows):
 list_to_remove = [0, param.nb_rows, -1] # remove positioners at the edges of the triangle
 # list_to_remove = [] # remove no positioner
 xx1, yy1 = param.remove_positioner(xx1, yy1, list_to_remove)
-print(xx1)
 nb_robots = len(xx1)
 
 triang_meshgrid = MultiPoint(param.to_polygon_format(xx1, yy1)) # convert the meshgrid into shapely standard for later manipulation
@@ -166,35 +165,30 @@ nb_max_modules = round(2*param.vigR / (inter_frame_width + param.global_frame_th
 print(nb_max_modules)
 
 center_coords = []
-
+start = time.time()
 a_max = 6
 b_max = 6
 c_max = 6
-for a in np.arange(-a_max,a_max):
-     for b in np.arange(-b_max,b_max):
-          for c in np.arange(-c_max,c_max):
-
-               if a + b + c == 1 or a + b + c == 2:
-                    center_coords.append((a,b,c))
 
 x_grid = []
 y_grid = []
 flip_global = []
 vigR_tresh = 50
-
-for a,b,c in center_coords: # build total grid
-
-     x,y = tri.tri_center(a,b,c,inter_frame_width)
-     
-     if not np.sqrt(x**2 + y**2) < param.vigR - vigR_tresh: # check if module falls in vignetting radius
-          continue
-
-     if tri.points_up(a,b,c):
-          flip_global.append(0)
-     else: 
-          flip_global.append(1)
-     x_grid.append(x)
-     y_grid.append(y)
+for a in np.arange(-a_max,a_max):
+     for b in np.arange(-b_max,b_max):
+          for c in np.arange(-c_max,c_max):
+               valid = a + b + c
+               if valid == 1 or valid == 2:
+                    x,y = tri.tri_center(a,b,c,inter_frame_width)
+                    if np.sqrt(x**2 + y**2) < param.vigR - vigR_tresh: # check if module falls in vignetting radius
+                         center_coords.append((a,b,c))
+                         x_grid.append(x)
+                         y_grid.append(y)
+                         if tri.points_up(a,b,c):
+                              flip_global.append(0)
+                         else: 
+                              flip_global.append(1)
+                              
 
 pizza = param.make_vigR_polygon()
 
@@ -213,12 +207,10 @@ for idx, (rotate, dx, dy) in enumerate(zip(flip_global, x_grid, y_grid)):
           angle = 0
 
      transformed_all = param.rotate_and_translate(intermediate_collection, angle, dx, dy, origin = "centroid")
-     # boundaries.append(transformed_all.geoms[0])
      global_collection.append(transformed_all)
      global_boundaries.append(transformed_all.geoms[4])
-     print(transformed_all.geoms[4])
-     plot_polygon(transformed_all.geoms[0].geoms[0], add_points = False, facecolor = 'None', edgecolor = 'black')
-     plot_polygon(transformed_all.geoms[4], add_points = False, facecolor = 'None', linestyle = '--')
+     # plot_polygon(transformed_all.geoms[0].geoms[0], add_points = False, facecolor = 'None', edgecolor = 'black')
+     # plot_polygon(transformed_all.geoms[4], add_points = False, facecolor = 'None', linestyle = '--')
      # covered_area += transformed_all.geoms[2].area # add the net covered area of each module
 
 global_bounding_polygon = unary_union(MultiPolygon(global_boundaries)).convex_hull
@@ -277,35 +269,7 @@ plt.figure(figsize=(10,10))
 # plt.figure()
 figtitle = f"Intermediate frame coverage - {param.nb_robots} per module"
 plt.title(figtitle)
-for idx, mod_collection in enumerate(intermediate_collection.geoms):
-     if idx == 0:
-          label_coverage = 'Coverage: {} %'.format(intermediate_coverage)
-          # label_coverage = 'Coverage: {} %'.format(area_to_cover)
-          label_robots = "{} robots".format(nb_robots)
-     else: 
-          label_coverage = None
-          label_robots = None
-     if (isinstance (mod_collection, Polygon)):
-          print(mod_collection)
-          plot_polygon(mod_collection, add_points=False, facecolor='None', linestyle = '-.', color = 'green', label = 'Available area: {} mm$^2$'.format(available_intermediate_area))
-          continue
-
-     for jdx, geo in enumerate(mod_collection.geoms):
-          # plot_polygon(geometry[jdx], add_points=False, facecolor='None' , edgecolor='black')
-          if (isinstance (mod_collection.geoms[jdx], Polygon)) and jdx == 0:
-               plot_polygon(mod_collection.geoms[jdx], add_points=False, facecolor='None' , edgecolor='black')
-               print(module_collection.geoms[jdx])
-          elif (isinstance (mod_collection.geoms[jdx], Polygon)) and jdx == 1:
-               plot_polygon(mod_collection.geoms[jdx], add_points=False, facecolor='None', linestyle = '--')
-          elif (isinstance (mod_collection.geoms[jdx], Polygon)) and jdx == 2:
-               plot_polygon(mod_collection.geoms[jdx], add_points=False, alpha=0.2, edgecolor='black', label = label_coverage)
-               cent = mod_collection.geoms[jdx].centroid
-               plot_points(cent)
-          elif (isinstance (mod_collection.geoms[jdx], MultiPoint) and not ignore_points):
-               plot_points(mod_collection.geoms[jdx], marker='.', color='k', label = label_robots)
-plt.scatter(x_grid_inter,y_grid_inter, marker='o', color='r')
-
-# plot_polygon(bounding_polygon_intermediate_frame, add_points=False, facecolor='None', linestyle = '-.', color = 'green', label = 'Available area: {} mm$^2$'.format(available_intermediate_area))
+param.plot_intermediate(intermediate_collection, intermediate_coverage, available_intermediate_area, draw_legend = True)
 plt.xlabel('x position [mm]')
 plt.ylabel('y position [mm]')
 plt.legend(shadow = True)
@@ -320,8 +284,9 @@ else:
      figtitle = f"Framed - {param.nb_robots} per module"
 plt.title(figtitle)
 plot_polygon(pizza, add_points = False, facecolor = 'None', edgecolor = 'black', linestyle = '--')
-
-
+for idx, inter_collection in enumerate(global_collection):
+     param.plot_intermediate(inter_collection, ignore_points = True)
+param.save_figures_to_dir(save_plots, figtitle)
 
 if draw and is_timer:
      
@@ -333,4 +298,6 @@ if draw and is_timer:
 elif draw and not is_timer:
      
      plt.show()
-     
+end_time = time.time()
+
+print(f'Elapsed time: {end_time-start_time} s')

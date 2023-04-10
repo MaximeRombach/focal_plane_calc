@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import numpy as np
-from shapely import affinity, MultiPolygon
+from shapely import affinity, MultiPolygon, MultiPoint
 import matplotlib.pyplot as plt
 from shapely.geometry import Polygon
 from shapely.ops import unary_union
-from shapely.plotting import plot_polygon
+from shapely.plotting import plot_polygon, plot_points
 import os
 from datetime import datetime
 
@@ -175,3 +175,31 @@ def make_vigR_polygon(pizza_angle = 360):
      pizza = Polygon(to_polygon_format(vigR_lim_x, vigR_lim_y))
 
      return pizza
+
+def plot_module(module_collection, label_coverage, label_robots, ignore_points):
+     for jdx, geo in enumerate(module_collection.geoms):
+          # plot_polygon(geometry[jdx], add_points=False, facecolor='None' , edgecolor='black')
+          if (isinstance (module_collection.geoms[jdx], Polygon)) and jdx == 0:
+               plot_polygon(module_collection.geoms[jdx], add_points=False, facecolor='None' , edgecolor='black')
+          elif (isinstance (module_collection.geoms[jdx], Polygon)) and jdx == 1:
+               plot_polygon(module_collection.geoms[jdx], add_points=False, facecolor='None', linestyle = '--')
+          elif (isinstance (module_collection.geoms[jdx], Polygon)) and jdx == 2:
+               plot_polygon(module_collection.geoms[jdx], add_points=False, alpha=0.2, edgecolor='black', label = label_coverage)
+               cent = module_collection.geoms[jdx].centroid
+               plot_points(cent)
+          elif (isinstance (module_collection.geoms[jdx], MultiPoint) and not ignore_points):
+               plot_points(module_collection.geoms[jdx], marker='.', color='k', label = label_robots)
+
+def plot_intermediate(intermediate_collection, ignore_points, intermediate_coverage=None, available_intermediate_area=None, draw_legend = False):
+     for idx, mod_collection in enumerate(intermediate_collection.geoms):
+          if idx == 0 and draw_legend:
+               label_coverage = 'Coverage: {} %'.format(intermediate_coverage)
+               # label_coverage = 'Coverage: {} %'.format(area_to_cover)
+               label_robots = "{} robots".format(nb_robots)
+          else: 
+               label_coverage = None
+               label_robots = None
+          if (isinstance (mod_collection, Polygon)):
+               plot_polygon(mod_collection, add_points=False, facecolor='None', linestyle = '-.', color = 'green', label = 'Available area: {} mm$^2$'.format(available_intermediate_area))
+               continue
+          plot_module(mod_collection, label_coverage, label_robots, ignore_points)
