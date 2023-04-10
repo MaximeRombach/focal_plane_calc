@@ -4,7 +4,8 @@ import numpy as np
 from shapely import affinity, MultiPolygon, MultiPoint
 import matplotlib.pyplot as plt
 from shapely.geometry import Polygon
-from shapely.ops import unary_union
+
+import time
 from shapely.plotting import plot_polygon, plot_points
 import os
 from datetime import datetime
@@ -69,11 +70,11 @@ is_wall = True # flag for protective shields or not on modules
 
 """ Intermediate frame parameters """
 
-intermediate_frame_thick = 0 # [mm] spacing between modules inside intermediate frame
+intermediate_frame_thick =  2# [mm] spacing between modules inside intermediate frame
 
 """ Global frame parameters """
 
-global_frame_thick = 1 # [mm] spacing between modules in global arrangement
+global_frame_thick = 2 # [mm] spacing between modules in global arrangement
 
 def remove_positioner(xx,yy, list_to_remove):
      """ Input:
@@ -202,15 +203,18 @@ def plot_intermediate(intermediate_collection, ignore_points, intermediate_cover
                continue
           plot_module(mod_collection, label_coverage, label_robots, ignore_points)
 
-def plot_intermediate_speed(mod_collection):
-          if (isinstance (mod_collection.geoms[0], Polygon)):
-               plot_polygon(mod_collection.geoms[0], add_points=False, facecolor='None' , edgecolor='green', linestyle = '--')
+def plot_intermediate_speed(mod_collection, label_coverage):
+          s11=time.time()
+          if (isinstance (mod_collection.geoms[0], (Polygon, MultiPolygon))):
+               plot_polygon(mod_collection.geoms[0], add_points=False, facecolor='None' , linestyle = '--')
           else:
                print(f'mod_collection.geoms[0] is {type(mod_collection.geoms[1])}')
-          if (isinstance (mod_collection.geoms[1], Polygon)):
+          if (isinstance (mod_collection.geoms[1], MultiPolygon)):
                plot_polygon(mod_collection.geoms[1], add_points=False, facecolor='None' , edgecolor='black')
           else:
                print(f'mod_collection.geoms[1] is {type(mod_collection.geoms[2])}')
-          if (isinstance (mod_collection.geoms[2], Polygon)):
-               plot_polygon(mod_collection.geoms[2], add_points=False, alpha=0.2, edgecolor='black')
+          if (isinstance (mod_collection.geoms[2], MultiPolygon)):
+               plot_polygon(mod_collection.geoms[2], add_points=False, alpha=0.2, edgecolor='black', label = label_coverage)
+          s12=time.time()
+          # print(f"0: {s12-s11} s")
                

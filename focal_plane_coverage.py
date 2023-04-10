@@ -7,6 +7,7 @@ import random
 import array as array
 import updown_tri as tri
 import time
+from tqdm import tqdm
 from shapely.geometry import Polygon, Point
 from shapely.ops import unary_union
 from shapely.plotting import plot_polygon, plot_points
@@ -146,7 +147,7 @@ for idx, (rotate, dx, dy) in enumerate(zip(flip, x_grid_inter, y_grid_inter)):
      inter_coverage.append(transformed_all.geoms[2])
      intermediate_collection.append(transformed_all)
 
-modules_polygon_intermediate = unary_union(MultiPolygon(boundaries))
+modules_polygon_intermediate = MultiPolygon(boundaries)
 bounding_polygon_intermediate = modules_polygon_intermediate.convex_hull
 coverage_polygon_intermediate = unary_union(MultiPolygon(inter_coverage)) # save coverage as whole to speedup global calculation
 covered_area_inter = coverage_polygon_intermediate.area
@@ -157,9 +158,8 @@ intermediate_collection_speed = GeometryCollection([bounding_polygon_intermediat
 available_intermediate_area = round(bounding_polygon_intermediate.area,1)
 intermediate_coverage = round(covered_area_inter/available_intermediate_area*100,1)
 # intermediate_coverage = round(covered_area/area_to_cover*100,1)
-print(intermediate_collection_speed.length)
-param.plot_intermediate_speed(intermediate_collection_speed)
-plt.show()
+# param.plot_intermediate_speed(intermediate_collection_speed)
+# plt.show()
 
 # %% Global grid
 """2)b) Start meshing the grid for the whole thing"""
@@ -172,14 +172,15 @@ nb_max_modules = round(2*param.vigR / (inter_frame_width + param.global_frame_th
 print(nb_max_modules)
 
 center_coords = []
-a_max = 6
-b_max = 6
-c_max = 6
+a_max = 5
+b_max = 5
+c_max = 5
 
 x_grid = []
 y_grid = []
 flip_global = []
 vigR_tresh = 50
+
 for a in np.arange(-a_max,a_max):
      for b in np.arange(-b_max,b_max):
           for c in np.arange(-c_max,c_max):
@@ -190,16 +191,14 @@ for a in np.arange(-a_max,a_max):
                          center_coords.append((a,b,c))
                          x_grid.append(x)
                          y_grid.append(y)
-                         if tri.points_up(a,b,c):
+                         if tri.points_up(a,b,c): # flip the modules depending on there position on the grid
                               flip_global.append(0)
                          else: 
-                              flip_global.append(1)
-                              
+                              flip_global.append(1)                             
 
 pizza = param.make_vigR_polygon()
 
 grid = MultiPoint(param.to_polygon_format(x_grid, y_grid))
-plt.show()
 
 global_boundaries = []
 global_collection = []
@@ -213,18 +212,16 @@ for idx, (rotate, dx, dy) in enumerate(zip(flip_global, x_grid, y_grid)):
      else:
           angle = 0
 
-     transformed_all = param.rotate_and_translate(intermediate_collection, angle, dx, dy, origin = "centroid")
+     transformed_all = param.rotate_and_translate(intermediate_collection_speed, angle, dx, dy, origin = "centroid")
      global_collection.append(transformed_all)
-     global_boundaries.append(transformed_all.geoms[4])
+     global_boundaries.append(transformed_all.geoms[0])
      # plot_polygon(transformed_all.geoms[0].geoms[0], add_points = False, facecolor = 'None', edgecolor = 'black')
      # plot_polygon(transformed_all.geoms[4], add_points = False, facecolor = 'None', linestyle = '--')
-     # covered_area += transformed_all.geoms[2].area # add the net covered area of each module
+     covered_area += transformed_all.geoms[0].area # add the net covered area of each module
 
 global_bounding_polygon = unary_union(MultiPolygon(global_boundaries)).convex_hull
-# global_coverage_polygon = unary_union(MultiPolygon(global_coverage))
-# plot_polygon(global_bounding_polygon, add_points = False, facecolor = 'None', edgecolor = 'orange', linestyle = '--')
-# plot_polygon(global_coverage_polygon, add_points = False)
-# plt.scatter(x_grid,y_grid,color='red')
+instrumented_area = global_bounding_polygon.area
+global_coverage = round(covered_area/instrumented_area*100,1)
 
 total_modules = len(x_grid)*len(x_grid_inter)
 total_robots = total_modules*param.nb_robots
@@ -278,7 +275,7 @@ plt.figure(figsize=(10,10))
 # plt.figure()
 figtitle = f"Intermediate frame coverage - {param.nb_robots} per module"
 plt.title(figtitle)
-param.plot_intermediate(intermediate_collection, intermediate_coverage, available_intermediate_area, draw_legend = True)
+param.plot_intermediate(intermediate_collection, False, intermediate_coverage, available_intermediate_area, draw_legend = True)
 plt.xlabel('x position [mm]')
 plt.ylabel('y position [mm]')
 plt.legend(shadow = True)
@@ -293,9 +290,22 @@ else:
      figtitle = f"Framed - {param.nb_robots} per module"
 plt.title(figtitle)
 plot_polygon(pizza, add_points = False, facecolor = 'None', edgecolor = 'black', linestyle = '--')
-for idx, inter_collection in enumerate(global_collection):
-     param.plot_intermediate(inter_collection, ignore_points = True)
+start_bisous = time.time()
+for idx, inter_collection in enumerate(tqdm(global_collection)):
+     if idx == 0:
+          label_coverage = "Coverage: {} %".format(global_coverage)
+     else: 
+          label_coverage = None
+     param.plot_intermediate_speed(inter_collection, label_coverage)
+end_bisous = time.time()
+print(end_bisous-start_bisous)
+plot_polygon(global_bounding_polygon, add_points = False, facecolor = 'None', edgecolor ='orange', linestyle = '--')
+plt.xlabel('x position [mm]')
+plt.ylabel('y position [mm]')
+plt.legend(shadow = True)
+plt.legend()
 param.save_figures_to_dir(save_plots, figtitle)
+
 
 end_time = time.time()
 
