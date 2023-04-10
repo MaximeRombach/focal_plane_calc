@@ -131,6 +131,7 @@ y_grid_inter = np.insert(y_grid_inter, 0, 0)
 
 boundaries = []
 intermediate_collection = []
+inter_coverage = []
 covered_area = 0
 
 for idx, (rotate, dx, dy) in enumerate(zip(flip, x_grid_inter, y_grid_inter)):
@@ -142,17 +143,23 @@ for idx, (rotate, dx, dy) in enumerate(zip(flip, x_grid_inter, y_grid_inter)):
 
      transformed_all = param.rotate_and_translate(module_collection, angle, dx, dy, origin = "centroid")
      boundaries.append(transformed_all.geoms[0])
+     inter_coverage.append(transformed_all.geoms[2])
      intermediate_collection.append(transformed_all)
-     covered_area += transformed_all.geoms[2].area # add the net covered area of each module
 
-
-bounding_polygon_intermediate_frame = unary_union(MultiPolygon(boundaries)).convex_hull
-intermediate_collection.append(bounding_polygon_intermediate_frame)
+modules_polygon_intermediate = unary_union(MultiPolygon(boundaries))
+bounding_polygon_intermediate = modules_polygon_intermediate.convex_hull
+coverage_polygon_intermediate = unary_union(MultiPolygon(inter_coverage)) # save coverage as whole to speedup global calculation
+covered_area_inter = coverage_polygon_intermediate.area
+intermediate_collection.append(bounding_polygon_intermediate)
 intermediate_collection = GeometryCollection(intermediate_collection)
+intermediate_collection_speed = GeometryCollection([bounding_polygon_intermediate, modules_polygon_intermediate, coverage_polygon_intermediate])
 
-available_intermediate_area = round(bounding_polygon_intermediate_frame.area,1)
-intermediate_coverage = round(covered_area/available_intermediate_area*100,1)
+available_intermediate_area = round(bounding_polygon_intermediate.area,1)
+intermediate_coverage = round(covered_area_inter/available_intermediate_area*100,1)
 # intermediate_coverage = round(covered_area/area_to_cover*100,1)
+print(intermediate_collection_speed.length)
+param.plot_intermediate_speed(intermediate_collection_speed)
+plt.show()
 
 # %% Global grid
 """2)b) Start meshing the grid for the whole thing"""
@@ -165,7 +172,6 @@ nb_max_modules = round(2*param.vigR / (inter_frame_width + param.global_frame_th
 print(nb_max_modules)
 
 center_coords = []
-start = time.time()
 a_max = 6
 b_max = 6
 c_max = 6
@@ -197,6 +203,7 @@ plt.show()
 
 global_boundaries = []
 global_collection = []
+global_coverage = []
 covered_area_global = 0
 
 for idx, (rotate, dx, dy) in enumerate(zip(flip_global, x_grid, y_grid)):
@@ -214,8 +221,10 @@ for idx, (rotate, dx, dy) in enumerate(zip(flip_global, x_grid, y_grid)):
      # covered_area += transformed_all.geoms[2].area # add the net covered area of each module
 
 global_bounding_polygon = unary_union(MultiPolygon(global_boundaries)).convex_hull
-plot_polygon(global_bounding_polygon, add_points = False, facecolor = 'None', edgecolor = 'orange', linestyle = '--')
-plt.scatter(x_grid,y_grid,color='red')
+# global_coverage_polygon = unary_union(MultiPolygon(global_coverage))
+# plot_polygon(global_bounding_polygon, add_points = False, facecolor = 'None', edgecolor = 'orange', linestyle = '--')
+# plot_polygon(global_coverage_polygon, add_points = False)
+# plt.scatter(x_grid,y_grid,color='red')
 
 total_modules = len(x_grid)*len(x_grid_inter)
 total_robots = total_modules*param.nb_robots
@@ -288,6 +297,10 @@ for idx, inter_collection in enumerate(global_collection):
      param.plot_intermediate(inter_collection, ignore_points = True)
 param.save_figures_to_dir(save_plots, figtitle)
 
+end_time = time.time()
+
+print(f'Elapsed time: {end_time-start_time:0.3f} s')
+
 if draw and is_timer:
      
      plt.show(block=False)
@@ -298,6 +311,4 @@ if draw and is_timer:
 elif draw and not is_timer:
      
      plt.show()
-end_time = time.time()
 
-print(f'Elapsed time: {end_time-start_time} s')
