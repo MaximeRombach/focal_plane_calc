@@ -3,7 +3,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import matplotlib.pyplot as plt
-import random
+import geopandas as gpd
 import array as array
 import updown_tri as tri
 import time
@@ -14,14 +14,17 @@ from shapely.plotting import plot_polygon, plot_points
 from shapely import affinity, MultiPoint, MultiPolygon, GeometryCollection, BufferCapStyle
 
 import parameters as param
+R = param.curve_radius
+#%%
 
 """
 This code is a tool for calculating the coverage performed for different focal plane arrangements.
-It is split in 2 main steps:
+It is split in 3 main steps:
 1) Define the coverage of the positioners in 1 module unit
      a) Make the triangular meshgrid of the center position of each robot within a raft
      b) Derive their actual coverage 
-2) Pattern module units together and calculate the total effective coverage
+2) Pattern intermediate modul units (4 of them) together
+3) Derive the total grid coverage
 
 The effective coverage shall be calculated as the usable positioner area vs the actual reachable area of the positioners
 """
@@ -32,28 +35,24 @@ The effective coverage shall be calculated as the usable positioner area vs the 
 start_time = time.time()
 """1)a) Define triangular meshgrid of positioners' centeral """
 
-module = param.chanfered_base(param.module_width, chanfer_length=7.5)
-coords_module_x, coords_module_y = module.exterior.coords.xy
+module = param.chanfered_base(param.module_width, chanfer_length=7.5) # Create chamfered module shape as shapely Polygon
+# coords_module_x, coords_module_y = module.exterior.coords.xy
 reference_centroid = module.centroid
 
 
 # Their norm corresponds to the pitch defined in parameters
-xx = []
 xx1 = np.ones(param.nb_rows + 1)
-yy = []
 yy1 = np.ones(param.nb_rows + 1)
 
-for idx in range(param.nb_rows):
+for idx in range(param.nb_rows): # Create the grid of positioner's center points
     
-    start_offset_x = param.x_inc * idx 
-    start_offset_y = param.y_inc * idx 
+     # Place the first robot of each row
+    start_offset_x = param.x_inc * idx + param.x_first
+    start_offset_y = param.y_inc * idx + param.y_first
 
+     # Generate each row of robot: nb robots/row decreases as going upward in triangle
     xx_new = np.linspace(start_offset_x, (param.nb_rows - idx ) * param.pitch + start_offset_x, param.nb_rows - idx + 1)
-    xx_new += 5.9
     yy_new = start_offset_y * np.ones(len(xx_new))
-    yy_new += 3.41
-    xx.append(xx_new.tolist())
-    yy.append(yy_new.tolist())
 
     if idx == 0:
          xx1 = xx_new
@@ -65,11 +64,7 @@ for idx in range(param.nb_rows):
 
     if idx == param.nb_rows - 1:
         xx_new = np.array([param.x_inc * (idx + 1)])
-        xx_new += 5.9
         yy_new = param.y_inc * (idx + 1) * np.ones(len(xx_new))
-        yy_new += 3.41
-        xx.append(list(xx_new))
-        yy.append(list(yy_new))
         xx1 = np.hstack((xx1, xx_new))
         yy1 = np.hstack((yy1, yy_new))
 
@@ -79,7 +74,8 @@ xx1, yy1 = param.remove_positioner(xx1, yy1, list_to_remove)
 nb_robots = len(xx1)
 
 triang_meshgrid = MultiPoint(param.to_polygon_format(xx1, yy1)) # convert the meshgrid into shapely standard for later manipulation
-
+plot_points(triang_meshgrid)
+# %%
 
 """1)b) Define coverage for 1 modules"""
 
@@ -150,18 +146,16 @@ for idx, (rotate, dx, dy) in enumerate(zip(flip, x_grid_inter, y_grid_inter)):
 modules_polygon_intermediate = MultiPolygon(boundaries)
 bounding_polygon_intermediate = modules_polygon_intermediate.convex_hull
 coverage_polygon_intermediate = unary_union(MultiPolygon(inter_coverage)) # save coverage as whole to speedup global calculation
+plot_polygon(coverage_polygon_intermediate, add_points=False)
 covered_area_inter = coverage_polygon_intermediate.area
 intermediate_collection.append(bounding_polygon_intermediate)
 intermediate_collection = GeometryCollection(intermediate_collection)
 intermediate_collection_speed = GeometryCollection([bounding_polygon_intermediate, modules_polygon_intermediate, coverage_polygon_intermediate])
-
 available_intermediate_area = round(bounding_polygon_intermediate.area,1)
 intermediate_coverage = round(covered_area_inter/available_intermediate_area*100,1)
 # intermediate_coverage = round(covered_area/area_to_cover*100,1)
 # param.plot_intermediate_speed(intermediate_collection_speed)
-# plt.show()
 
-# %% Global grid
 """2)b) Start meshing the grid for the whole thing"""
 
 inter_frame_width = 2*param.module_width + 2*param.intermediate_frame_thick*np.cos(np.deg2rad(30))+2*param.global_frame_thick
@@ -179,7 +173,6 @@ c_max = 5
 x_grid = []
 y_grid = []
 flip_global = []
-vigR_tresh = 50
 
 for a in np.arange(-a_max,a_max):
      for b in np.arange(-b_max,b_max):
@@ -187,7 +180,7 @@ for a in np.arange(-a_max,a_max):
                valid = a + b + c
                if valid == 1 or valid == 2:
                     x,y = tri.tri_center(a,b,c,inter_frame_width)
-                    if np.sqrt(x**2 + y**2) < param.vigR - vigR_tresh: # check if module falls in vignetting radius
+                    if np.sqrt(x**2 + y**2) < param.vigR - param.vigR_tresh: # check if module falls in vignetting radius
                          center_coords.append((a,b,c))
                          x_grid.append(x)
                          y_grid.append(y)
@@ -197,14 +190,34 @@ for a in np.arange(-a_max,a_max):
                               flip_global.append(1)                             
 
 pizza = param.make_vigR_polygon()
+# fig = plt.figure()
+# ax = fig.add_subplot(projection='3d')
+# grid = MultiPoint(param.to_polygon_format(x_grid, y_grid))
 
-grid = MultiPoint(param.to_polygon_format(x_grid, y_grid))
+longitude = np.array(x_grid)/R
+latitude = 2 * np.arctan(np.exp(np.array(y_grid)/R))-np.pi/2
 
+x_sph = R * np.cos(latitude) * np.cos(longitude)
+y_sph = R * np.cos(latitude) * np.sin(longitude)
+z_sph = R * np.sin(latitude)
+
+# plt.scatter(y_sph, z_sph, color='red')
+# plt.figure()
+# plt.scatter(x_sph, z_sph, color='red', label=f'{max(x_sph)-min(x_sph)}mm')
+# plt.legend()
+# ax.plot_trisurf(x_sph, y_sph, z_sph)
+# ax.set_xlabel('X Label')
+# ax.set_ylabel('Y Label')
+# ax.set_zlabel('Z Label')
+#%%
 global_boundaries = []
 global_collection = []
 global_coverage = []
 covered_area_global = 0
-
+boundaries_df = {'geometry':[]}
+modules_df = {'geometry':[]}
+coverage_df ={'geometry':[]}
+# Create module arrangement from the global grid
 for idx, (rotate, dx, dy) in enumerate(zip(flip_global, x_grid, y_grid)):
 
      if rotate:
@@ -215,13 +228,29 @@ for idx, (rotate, dx, dy) in enumerate(zip(flip_global, x_grid, y_grid)):
      transformed_all = param.rotate_and_translate(intermediate_collection_speed, angle, dx, dy, origin = "centroid")
      global_collection.append(transformed_all)
      global_boundaries.append(transformed_all.geoms[0])
-     # plot_polygon(transformed_all.geoms[0].geoms[0], add_points = False, facecolor = 'None', edgecolor = 'black')
-     # plot_polygon(transformed_all.geoms[4], add_points = False, facecolor = 'None', linestyle = '--')
+     boundaries_df['geometry'].append(transformed_all.geoms[0])
+     modules_df['geometry'].append(transformed_all.geoms[1])
+     coverage_df['geometry'].append(transformed_all.geoms[2])
      covered_area += transformed_all.geoms[0].area # add the net covered area of each module
+
 
 global_bounding_polygon = unary_union(MultiPolygon(global_boundaries)).convex_hull
 instrumented_area = global_bounding_polygon.area
 global_coverage = round(covered_area/instrumented_area*100,1)
+gdf_bound = gpd.GeoDataFrame(boundaries_df)
+gdf_modules = gpd.GeoDataFrame(modules_df)
+gdf_coverage = gpd.GeoDataFrame(coverage_df)
+
+f, ax = plt.subplots()
+gdf_modules.plot(ax=ax, facecolor='None', label='coucou1')
+gdf_bound.plot(ax=ax,facecolor='None', edgecolor='green', label='coucou')
+gdf_coverage.plot(ax=ax, alpha=0.2, label='coucou')
+plot_polygon(pizza, add_points=False, edgecolor='black', facecolor='None', linestyle='--')
+plt.xlabel('x position [mm]')
+plt.ylabel('y position [mm]')
+plt.legend(loc='upper right')
+plt.show()
+
 
 total_modules = len(x_grid)*len(x_grid_inter)
 total_robots = total_modules*param.nb_robots
@@ -233,7 +262,7 @@ print(f"Total # modules: {total_modules} \n", f"Total # robots: {total_robots}")
 """ Plot plot time """ 
 
 draw = True
-is_timer = False
+is_timer = True
 save_plots = False
 plot_time = 20 # [s] plotting time
 ignore_points = False
@@ -290,7 +319,7 @@ else:
      figtitle = f"Framed - {param.nb_robots} per module"
 plt.title(figtitle)
 plot_polygon(pizza, add_points = False, facecolor = 'None', edgecolor = 'black', linestyle = '--')
-start_bisous = time.time()
+
 for idx, inter_collection in enumerate(tqdm(global_collection)):
      if idx == 0:
           label_coverage = "Coverage: {} %".format(global_coverage)
@@ -298,7 +327,7 @@ for idx, inter_collection in enumerate(tqdm(global_collection)):
           label_coverage = None
      param.plot_intermediate_speed(inter_collection, label_coverage)
 end_bisous = time.time()
-print(end_bisous-start_bisous)
+
 plot_polygon(global_bounding_polygon, add_points = False, facecolor = 'None', edgecolor ='orange', linestyle = '--')
 plt.xlabel('x position [mm]')
 plt.ylabel('y position [mm]')

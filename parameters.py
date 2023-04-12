@@ -26,9 +26,11 @@ alpha = np.linspace(-180,180,180) # [deg] rotational range of alpha arm
 beta = np.linspace(-180,180,180) # [deg] rotational range of beta arm (holding the fiber)
 beta2fibre = 1 # [mm] distance fiber center to edge of beta arm
 
-
+x_first = 5.9 # [mm] Horizontal pos of first robot (bottom left)
+y_first = 3.41 # [mm] Vertical pos of first robot (bottom left)
 x_inc = 3.1 # [mm] Horizontal increment at each row
 y_inc = 5.369 # [mm] Vertical increment at each row
+test_pitch = np.linalg.norm(np.array([x_inc,y_inc]))
 
 """ Module parameters """ 
 
@@ -70,11 +72,12 @@ is_wall = True # flag for protective shields or not on modules
 
 """ Intermediate frame parameters """
 
-intermediate_frame_thick =  2# [mm] spacing between modules inside intermediate frame
+intermediate_frame_thick =  0 # [mm] spacing between modules inside intermediate frame
 
 """ Global frame parameters """
 
-global_frame_thick = 2 # [mm] spacing between modules in global arrangement
+global_frame_thick = 3 # [mm] spacing between modules in global arrangement
+vigR_tresh = 50 # [mm] 
 
 def remove_positioner(xx,yy, list_to_remove):
      """ Input:
@@ -101,10 +104,10 @@ def to_polygon_format(x,y):
                
      return coords
 
-def rotate_and_translate(geom, angle, dx, dy, origin = 'centroid'):
+def rotate_and_translate(geom, angle, dx, dy, dz = None, origin = 'centroid'):
 
      rotated_geom = affinity.rotate(geom, angle, origin=origin)
-     transformed_geom = affinity.translate(rotated_geom, dx, dy)
+     transformed_geom = affinity.translate(rotated_geom, dx, dy, dz)
 
      return transformed_geom
 
