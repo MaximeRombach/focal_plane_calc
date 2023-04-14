@@ -3,6 +3,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatch
 import geopandas as gpd
 import array as array
 import updown_tri as tri
@@ -239,16 +240,21 @@ instrumented_area = global_bounding_polygon.area
 global_coverage = round(covered_area/instrumented_area*100,1)
 gdf_bound = gpd.GeoDataFrame(boundaries_df)
 gdf_modules = gpd.GeoDataFrame(modules_df)
+
 gdf_coverage = gpd.GeoDataFrame(coverage_df)
+gdf_coverage['label'] = f'Coverage: {global_coverage} %'
 
 f, ax = plt.subplots()
-gdf_modules.plot(ax=ax, facecolor='None', label='coucou1')
-gdf_bound.plot(ax=ax,facecolor='None', edgecolor='green', label='coucou')
-gdf_coverage.plot(ax=ax, alpha=0.2, label='coucou')
+gdf_modules.plot(ax=ax,facecolor='None')
+gdf_bound.plot(ax=ax,facecolor='None', edgecolor='green')
+gdf_coverage.plot(column='label',ax=ax, alpha=0.2, legend=True, label=gdf_coverage['label'])
+ax.get_legend_handles_labels()
+ax.legend()
 plot_polygon(pizza, add_points=False, edgecolor='black', facecolor='None', linestyle='--')
+plot_polygon(global_bounding_polygon, add_points=False, edgecolor='orange', facecolor='None', linestyle='--')
+
 plt.xlabel('x position [mm]')
 plt.ylabel('y position [mm]')
-plt.legend(loc='upper right')
 plt.show()
 
 
