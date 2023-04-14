@@ -77,7 +77,7 @@ intermediate_frame_thick =  0 # [mm] spacing between modules inside intermediate
 """ Global frame parameters """
 
 global_frame_thick = 3 # [mm] spacing between modules in global arrangement
-vigR_tresh = 50 # [mm] 
+vigR_tresh = 30 # [mm] 
 
 def remove_positioner(xx,yy, list_to_remove):
      """ Input:

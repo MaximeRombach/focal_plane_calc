@@ -174,14 +174,14 @@ c_max = 5
 x_grid = []
 y_grid = []
 flip_global = []
-
+vigR_tresh = 10
 for a in np.arange(-a_max,a_max):
      for b in np.arange(-b_max,b_max):
           for c in np.arange(-c_max,c_max):
                valid = a + b + c
                if valid == 1 or valid == 2:
                     x,y = tri.tri_center(a,b,c,inter_frame_width)
-                    if np.sqrt(x**2 + y**2) < param.vigR - param.vigR_tresh: # check if module falls in vignetting radius
+                    if np.sqrt(x**2 + y**2) < param.vigR - vigR_tresh: # check if module falls in vignetting radius
                          center_coords.append((a,b,c))
                          x_grid.append(x)
                          y_grid.append(y)
@@ -193,8 +193,9 @@ for a in np.arange(-a_max,a_max):
 pizza = param.make_vigR_polygon()
 # fig = plt.figure()
 # ax = fig.add_subplot(projection='3d')
-# grid = MultiPoint(param.to_polygon_format(x_grid, y_grid))
-
+grid = MultiPoint(param.to_polygon_format(x_grid, y_grid))
+plot_polygon(pizza, add_points = False, facecolor = 'None', edgecolor = 'black')
+plot_points(grid)
 longitude = np.array(x_grid)/R
 latitude = 2 * np.arctan(np.exp(np.array(y_grid)/R))-np.pi/2
 
@@ -211,6 +212,7 @@ z_sph = R * np.sin(latitude)
 # ax.set_ylabel('Y Label')
 # ax.set_zlabel('Z Label')
 #%%
+
 global_boundaries = []
 global_collection = []
 global_coverage = []
@@ -227,12 +229,24 @@ for idx, (rotate, dx, dy) in enumerate(zip(flip_global, x_grid, y_grid)):
           angle = 0
 
      transformed_all = param.rotate_and_translate(intermediate_collection_speed, angle, dx, dy, origin = "centroid")
+     new_boundary = transformed_all.geoms[0]
+     new_modules = transformed_all.geoms[1]
+     new_coverage = transformed_all.geoms[2]
+
+     if param.vigR - 80 <= np.sqrt(dx**2+dy**2) <= param.vigR:
+
+          plot_polygon(pizza, add_points = False, facecolor = 'None')
+          
+          if new_boundary.overlaps(pizza):
+               new_modules = MultiPolygon([coucou for coucou in new_modules.geoms if not coucou.overlaps(pizza)])
+               new_coverage = MultiPolygon([coucou for coucou in new_coverage.geoms if not coucou.overlaps(pizza)])
+               new_boundary = new_modules.convex_hull
      global_collection.append(transformed_all)
-     global_boundaries.append(transformed_all.geoms[0])
-     boundaries_df['geometry'].append(transformed_all.geoms[0])
-     modules_df['geometry'].append(transformed_all.geoms[1])
-     coverage_df['geometry'].append(transformed_all.geoms[2])
-     covered_area += transformed_all.geoms[0].area # add the net covered area of each module
+     global_boundaries.append(new_boundary)
+     boundaries_df['geometry'].append(new_boundary)
+     modules_df['geometry'].append(new_modules)
+     coverage_df['geometry'].append(new_coverage)
+     covered_area += new_boundary.area # add the net covered area of each module
 
 bound_bound = MultiPolygon(global_boundaries)
 global_bounding_polygon = unary_union(bound_bound).convex_hull
@@ -245,9 +259,10 @@ gdf_modules = gpd.GeoDataFrame(modules_df)
 gdf_coverage = gpd.GeoDataFrame(coverage_df)
 gdf_coverage['label'] = f'Coverage: {global_coverage} %'
 
-ax=gdf_modules.plot(facecolor='None')
+f,ax = plt.subplots(figsize=(10, 10))
+gdf_modules.plot(ax=ax,facecolor='None')
 gdf_bound.plot(ax=ax,facecolor='None', edgecolor='green')
-gdf_coverage.plot(column='label',ax=ax, alpha=0.2, legend=True, categorical=True, label=gdf_coverage['label'])
+gdf_coverage.plot(column='label',ax=ax, alpha=0.2, legend=True)
 
 plot_polygon(pizza, add_points=False, edgecolor='black', facecolor='None', linestyle='--')
 plot_polygon(global_bounding_polygon, add_points=False, edgecolor='orange', facecolor='None', linestyle='--')
@@ -260,7 +275,7 @@ total_modules = len(x_grid)*len(x_grid_inter)
 total_robots = total_modules*param.nb_robots
 
 print(f"Total # modules: {total_modules} \n", f"Total # robots: {total_robots}")
-
+plt.show()
 # %% 
 
 """ Plot plot time """ 
