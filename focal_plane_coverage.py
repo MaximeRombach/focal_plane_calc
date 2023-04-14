@@ -234,8 +234,9 @@ for idx, (rotate, dx, dy) in enumerate(zip(flip_global, x_grid, y_grid)):
      coverage_df['geometry'].append(transformed_all.geoms[2])
      covered_area += transformed_all.geoms[0].area # add the net covered area of each module
 
-
-global_bounding_polygon = unary_union(MultiPolygon(global_boundaries)).convex_hull
+bound_bound = MultiPolygon(global_boundaries)
+global_bounding_polygon = unary_union(bound_bound).convex_hull
+frame=pizza.difference(GeometryCollection(list(coverage_df['geometry'])))
 instrumented_area = global_bounding_polygon.area
 global_coverage = round(covered_area/instrumented_area*100,1)
 gdf_bound = gpd.GeoDataFrame(boundaries_df)
@@ -244,18 +245,15 @@ gdf_modules = gpd.GeoDataFrame(modules_df)
 gdf_coverage = gpd.GeoDataFrame(coverage_df)
 gdf_coverage['label'] = f'Coverage: {global_coverage} %'
 
-f, ax = plt.subplots()
-gdf_modules.plot(ax=ax,facecolor='None')
+ax=gdf_modules.plot(facecolor='None')
 gdf_bound.plot(ax=ax,facecolor='None', edgecolor='green')
-gdf_coverage.plot(column='label',ax=ax, alpha=0.2, legend=True, label=gdf_coverage['label'])
-ax.get_legend_handles_labels()
-ax.legend()
+gdf_coverage.plot(column='label',ax=ax, alpha=0.2, legend=True, categorical=True, label=gdf_coverage['label'])
+
 plot_polygon(pizza, add_points=False, edgecolor='black', facecolor='None', linestyle='--')
 plot_polygon(global_bounding_polygon, add_points=False, edgecolor='orange', facecolor='None', linestyle='--')
 
 plt.xlabel('x position [mm]')
 plt.ylabel('y position [mm]')
-plt.show()
 
 
 total_modules = len(x_grid)*len(x_grid_inter)
@@ -324,7 +322,7 @@ elif param.intermediate_frame_thick == param.global_frame_thick and param.global
 else:
      figtitle = f"Framed - {param.nb_robots} per module"
 plt.title(figtitle)
-plot_polygon(pizza, add_points = False, facecolor = 'None', edgecolor = 'black', linestyle = '--')
+# plot_polygon(pizza, add_points = False, facecolor = 'None', edgecolor = 'black', linestyle = '--')
 
 for idx, inter_collection in enumerate(tqdm(global_collection)):
      if idx == 0:
@@ -335,6 +333,7 @@ for idx, inter_collection in enumerate(tqdm(global_collection)):
 end_bisous = time.time()
 
 plot_polygon(global_bounding_polygon, add_points = False, facecolor = 'None', edgecolor ='orange', linestyle = '--')
+plot_polygon(frame, add_points=False, facecolor='red', alpha = 0.2, edgecolor = 'black')
 plt.xlabel('x position [mm]')
 plt.ylabel('y position [mm]')
 plt.legend(shadow = True)
