@@ -167,14 +167,15 @@ nb_max_modules = round(2*param.vigR / (inter_frame_width + param.global_frame_th
 print(nb_max_modules)
 
 center_coords = []
-a_max = 5
-b_max = 5
-c_max = 5
+n = 6
+a_max = n
+b_max = n
+c_max = n
 
 x_grid = []
 y_grid = []
 flip_global = []
-vigR_tresh = 10
+vigR_tresh = 40
 for a in np.arange(-a_max,a_max):
      for b in np.arange(-b_max,b_max):
           for c in np.arange(-c_max,c_max):
@@ -203,6 +204,10 @@ x_sph = R * np.cos(latitude) * np.cos(longitude)
 y_sph = R * np.cos(latitude) * np.sin(longitude)
 z_sph = R * np.sin(latitude)
 
+# x_grid = y_sph
+# y_grid = z_sph
+# grid = MultiPoint(param.to_polygon_format(x_grid, y_grid))
+
 # plt.scatter(y_sph, z_sph, color='red')
 # plt.figure()
 # plt.scatter(x_sph, z_sph, color='red', label=f'{max(x_sph)-min(x_sph)}mm')
@@ -212,15 +217,16 @@ z_sph = R * np.sin(latitude)
 # ax.set_ylabel('Y Label')
 # ax.set_zlabel('Z Label')
 #%%
-
+fill_empty = False
 global_boundaries = []
 global_collection = []
 global_coverage = []
 covered_area_global = 0
-boundaries_df = {'geometry':[]}
+boundaries_df = {'geometry':[], 'color': []}
 modules_df = {'geometry':[]}
 coverage_df ={'geometry':[]}
 # Create module arrangement from the global grid
+start = time.time()
 for idx, (rotate, dx, dy) in enumerate(zip(flip_global, x_grid, y_grid)):
 
      if rotate:
@@ -230,24 +236,28 @@ for idx, (rotate, dx, dy) in enumerate(zip(flip_global, x_grid, y_grid)):
 
      transformed_all = param.rotate_and_translate(intermediate_collection_speed, angle, dx, dy, origin = "centroid")
      new_boundary = transformed_all.geoms[0]
+     color_boundary = 'green'
      new_modules = transformed_all.geoms[1]
      new_coverage = transformed_all.geoms[2]
-
-     if param.vigR - 80 <= np.sqrt(dx**2+dy**2) <= param.vigR:
-
-          plot_polygon(pizza, add_points = False, facecolor = 'None')
-          
-          if new_boundary.overlaps(pizza):
+     
+     
+     # Check if module goes out from vigR; only check the last layers of modules
+     if fill_empty and param.vigR - 80 <= np.sqrt(dx**2+dy**2) <= param.vigR and new_boundary.overlaps(pizza):
+               
                new_modules = MultiPolygon([coucou for coucou in new_modules.geoms if not coucou.overlaps(pizza)])
                new_coverage = MultiPolygon([coucou for coucou in new_coverage.geoms if not coucou.overlaps(pizza)])
                new_boundary = new_modules.convex_hull
+               color_boundary = 'blue'
+     
      global_collection.append(transformed_all)
      global_boundaries.append(new_boundary)
      boundaries_df['geometry'].append(new_boundary)
+     boundaries_df['color'].append(color_boundary)
      modules_df['geometry'].append(new_modules)
      coverage_df['geometry'].append(new_coverage)
      covered_area += new_boundary.area # add the net covered area of each module
-
+end = time.time()
+print(f'Time {end- start}')
 bound_bound = MultiPolygon(global_boundaries)
 global_bounding_polygon = unary_union(bound_bound).convex_hull
 frame=pizza.difference(GeometryCollection(list(coverage_df['geometry'])))
@@ -261,11 +271,11 @@ gdf_coverage['label'] = f'Coverage: {global_coverage} %'
 
 f,ax = plt.subplots(figsize=(10, 10))
 gdf_modules.plot(ax=ax,facecolor='None')
-gdf_bound.plot(ax=ax,facecolor='None', edgecolor='green')
+gdf_bound.plot(ax=ax,facecolor='None', edgecolor=gdf_bound['color'])
 gdf_coverage.plot(column='label',ax=ax, alpha=0.2, legend=True)
 
 plot_polygon(pizza, add_points=False, edgecolor='black', facecolor='None', linestyle='--')
-plot_polygon(global_bounding_polygon, add_points=False, edgecolor='orange', facecolor='None', linestyle='--')
+plot_polygon(global_bounding_polygon, add_points=False, edgecolor='orange', facecolor='None', linestyle='--',label='Instrumented area')
 
 plt.xlabel('x position [mm]')
 plt.ylabel('y position [mm]')

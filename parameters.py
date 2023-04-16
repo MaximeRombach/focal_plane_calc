@@ -36,6 +36,7 @@ test_pitch = np.linalg.norm(np.array([x_inc,y_inc]))
 
 nb_robots = 75
 
+
 if nb_robots == 75:
 
      module_width = 80 # [mm] triangle side length
