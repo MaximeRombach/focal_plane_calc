@@ -45,87 +45,14 @@ The effective coverage is calculated as the usable positioner area vs total area
 
 
 start_time = time.time()
-nb_robots = 75
-mod_param = param.module_param(nb_robots)
+nb_robots = 102
+mod_param = param.Module(nb_robots)
 module_width = mod_param.module_width
 nb_rows = mod_param.nb_rows
+module_collection, wks_list, coverages = mod_param.create_module()
+module, module_w_beta_and_safety_dist, effective_wks, triang_meshgrid = module_collection.geoms
+coverage_with_walls, coverage_no_walls = coverages
 
-module = param.chanfered_base(module_width, chanfer_length=7.5) # Create chamfered module shape as shapely Polygon
-# coords_module_x, coords_module_y = module.exterior.coords.xy
-reference_centroid = module.centroid
-
-# Their norm corresponds to the pitch defined in parameters
-xx1 = np.ones(nb_rows + 1)
-yy1 = np.ones(nb_rows + 1)
-
-for idx in range(nb_rows): # Create the grid of positioner's center points
-    
-     # Place the first robot of each row
-    start_offset_x = param.x_inc * idx + param.x_first
-    start_offset_y = param.y_inc * idx + param.y_first
-
-     # Generate each row of robot: nb robots/row decreases as going upward in triangle
-    xx_new = np.linspace(start_offset_x, (nb_rows - idx ) * param.pitch + start_offset_x, nb_rows - idx + 1)
-    yy_new = start_offset_y * np.ones(len(xx_new))
-
-    if idx == 0:
-         xx1 = xx_new
-         yy1 = yy_new
-    else: 
-         xx1 = np.hstack((xx1, xx_new))
-         yy1 = np.hstack((yy1, yy_new))
-
-
-    if idx == nb_rows - 1:
-        xx_new = np.array([param.x_inc * (idx + 1)])
-        yy_new = param.y_inc * (idx + 1) * np.ones(len(xx_new))
-        xx1 = np.hstack((xx1, xx_new))
-        yy1 = np.hstack((yy1, yy_new))
-
-list_to_remove = [0, nb_rows, -1] # remove positioners at the edges of the triangle
-# list_to_remove = [] # remove no positioner
-xx1, yy1 = param.remove_positioner(xx1, yy1, list_to_remove)
-nb_robots = len(xx1)
-
-triang_meshgrid = MultiPoint(param.to_polygon_format(xx1, yy1)) # convert the meshgrid into shapely standard for later manipulation
-
-""" 1)b) Define coverage for 1 modules """
-
-c1 = np.cos(np.deg2rad(param.alpha))
-s1 = np.sin(np.deg2rad(param.alpha))
-
-c2 = np.cos(np.deg2rad(param.beta))
-s2 = np.sin(np.deg2rad(param.beta))
-
-xa, ya, xab, yab = (param.lb-param.la)*c1, (param.lb-param.la)*s1, (param.lb+param.la)*c2, (param.la+param.lb)*s2
-
-wks_list = []
-
-for idx, (dx, dy) in enumerate(zip(xx1, yy1)):
-
-        xa1, ya1, xab1, yab1 = xa + dx, ya + dy, xab + dx, yab + dy
-
-        coords_int = param.to_polygon_format(xa1, ya1)
-        coords_ext = param.to_polygon_format(xab1, yab1)
-
-        interior = coords_int[::-1]
-        poly_c1 = Polygon(coords_ext, [interior])
-        wks_list.append(poly_c1)
-
-multi_wks = MultiPolygon(wks_list)
-total_positioners_workspace = unary_union(wks_list)
-module_w_beta_and_safety_dist = module.buffer(-param.offset_from_module_edges)
-
-if param.is_wall:
-     effective_wks = module_w_beta_and_safety_dist.intersection(total_positioners_workspace)
-else:
-     effective_wks = total_positioners_workspace
-
-
-module_collection = GeometryCollection([module, module_w_beta_and_safety_dist, effective_wks, triang_meshgrid])
-module_collection = affinity.translate(module_collection, xoff = -reference_centroid.x, yoff = -reference_centroid.y)
-coverage_with_walls = round(effective_wks.area/module.area * 100,1)
-coverage_no_walls = round(total_positioners_workspace.area/module.area * 100,1)
 
 # %% 2)a) Meshing the grid for intermediate frame (4 triangles: 3 upwards + 1 downwards)
 
@@ -303,10 +230,10 @@ figtitle = f"Module coverage raw - {nb_robots} robots per module"
 plt.title(figtitle)
 plot_polygon(module, facecolor='None', edgecolor='black', add_points=False)
 plot_polygon(module_w_beta_and_safety_dist, facecolor='None', edgecolor='red', linestyle = '--', add_points=False
-             , label = "Safety dist = {} mm".format(param.offset_from_module_edges))
-plt.scatter(xx1,yy1, marker='.', color='k', label = "{} robots".format(nb_robots))
+             , label = "Safety dist = {} mm".format(mod_param.offset_from_module_edges))
+plot_points(triang_meshgrid, marker='.', color='k', label = "{} robots".format(nb_robots))
 
-for idx, wks in enumerate(wks_list):
+for idx, wks in enumerate(wks_list.geoms):
     if idx == 0:
          label_cov = "Coverage w/o walls: {} %".format(coverage_no_walls)
     else:
@@ -322,8 +249,8 @@ figtitle = f"Module coverage with summed coverage & walls \n {nb_robots} robots 
 plt.title(figtitle)
 plot_polygon(module, facecolor='None', edgecolor='black', add_points=False)
 plot_polygon(module_w_beta_and_safety_dist, facecolor='None', linestyle = '--', add_points=False
-             , label = "Safety dist = {} mm".format(param.offset_from_module_edges))
-plt.scatter(xx1,yy1, marker='.', color='k', label = "{} robots".format(nb_robots))
+             , label = "Safety dist = {} mm".format(mod_param.offset_from_module_edges))
+plot_points(triang_meshgrid, marker='.', color='k', label = "{} robots".format(nb_robots))
 plot_polygon(effective_wks, add_points=False, alpha=0.2, edgecolor='black', label = "Coverage with walls: {} %".format(coverage_with_walls))
 
 plt.xlabel('x position [mm]')
