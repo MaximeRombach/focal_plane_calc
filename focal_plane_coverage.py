@@ -42,25 +42,30 @@ The effective coverage is calculated as the usable positioner area vs total area
             # 0: bottom left
             # count a row then switch to left side of next one to continue
             # last positoner: top one
-start_time = time.time()
 
-module = param.chanfered_base(param.module_width, chanfer_length=7.5) # Create chamfered module shape as shapely Polygon
+
+start_time = time.time()
+nb_robots = 75
+mod_param = param.module_param(nb_robots)
+module_width = mod_param.module_width
+nb_rows = mod_param.nb_rows
+
+module = param.chanfered_base(module_width, chanfer_length=7.5) # Create chamfered module shape as shapely Polygon
 # coords_module_x, coords_module_y = module.exterior.coords.xy
 reference_centroid = module.centroid
 
-
 # Their norm corresponds to the pitch defined in parameters
-xx1 = np.ones(param.nb_rows + 1)
-yy1 = np.ones(param.nb_rows + 1)
+xx1 = np.ones(nb_rows + 1)
+yy1 = np.ones(nb_rows + 1)
 
-for idx in range(param.nb_rows): # Create the grid of positioner's center points
+for idx in range(nb_rows): # Create the grid of positioner's center points
     
      # Place the first robot of each row
     start_offset_x = param.x_inc * idx + param.x_first
     start_offset_y = param.y_inc * idx + param.y_first
 
      # Generate each row of robot: nb robots/row decreases as going upward in triangle
-    xx_new = np.linspace(start_offset_x, (param.nb_rows - idx ) * param.pitch + start_offset_x, param.nb_rows - idx + 1)
+    xx_new = np.linspace(start_offset_x, (nb_rows - idx ) * param.pitch + start_offset_x, nb_rows - idx + 1)
     yy_new = start_offset_y * np.ones(len(xx_new))
 
     if idx == 0:
@@ -71,20 +76,20 @@ for idx in range(param.nb_rows): # Create the grid of positioner's center points
          yy1 = np.hstack((yy1, yy_new))
 
 
-    if idx == param.nb_rows - 1:
+    if idx == nb_rows - 1:
         xx_new = np.array([param.x_inc * (idx + 1)])
         yy_new = param.y_inc * (idx + 1) * np.ones(len(xx_new))
         xx1 = np.hstack((xx1, xx_new))
         yy1 = np.hstack((yy1, yy_new))
 
-list_to_remove = [0, param.nb_rows, -1] # remove positioners at the edges of the triangle
+list_to_remove = [0, nb_rows, -1] # remove positioners at the edges of the triangle
 # list_to_remove = [] # remove no positioner
 xx1, yy1 = param.remove_positioner(xx1, yy1, list_to_remove)
 nb_robots = len(xx1)
 
 triang_meshgrid = MultiPoint(param.to_polygon_format(xx1, yy1)) # convert the meshgrid into shapely standard for later manipulation
 
-# %% 1)b) Define coverage for 1 modules
+""" 1)b) Define coverage for 1 modules """
 
 c1 = np.cos(np.deg2rad(param.alpha))
 s1 = np.sin(np.deg2rad(param.alpha))
@@ -122,9 +127,9 @@ module_collection = affinity.translate(module_collection, xoff = -reference_cent
 coverage_with_walls = round(effective_wks.area/module.area * 100,1)
 coverage_no_walls = round(total_positioners_workspace.area/module.area * 100,1)
 
-""" 2)a) Start meshing the grid for intermediate frame (4 triangles: 3 upwards + 1 downwards) """
+# %% 2)a) Meshing the grid for intermediate frame (4 triangles: 3 upwards + 1 downwards)
 
-dist_inter = 2*param.module_width*np.sqrt(3)/6 + param.intermediate_frame_thick # distance between each neighbor from center module
+dist_inter = 2*module_width*np.sqrt(3)/6 + param.intermediate_frame_thick # distance between each neighbor from center module
 angles = np.array([-30, 90, 210]) # angular positions of neighbors
 flip = [True,False,False,False]
 
@@ -166,9 +171,9 @@ intermediate_coverage = round(covered_area_inter/available_intermediate_area*100
 # intermediate_coverage = round(covered_area/area_to_cover*100,1)
 # param.plot_intermediate_speed(intermediate_collection_speed)
 
-"""2)b) Start meshing the grid for the whole thing"""
+# %% 2)b) Start meshing the grid for the whole thing
 
-inter_frame_width = 2*param.module_width + 2*param.intermediate_frame_thick*np.cos(np.deg2rad(30))+2*param.global_frame_thick
+inter_frame_width = 2*module_width + 2*param.intermediate_frame_thick*np.cos(np.deg2rad(30))+2*param.global_frame_thick
 rho = inter_frame_width * np.sqrt(3)/6
 dist_global = 2*rho + param.global_frame_thick
 inter_centroid = inter_frame_width*np.sqrt(3)/3*np.array([np.cos(np.deg2rad(30)), np.sin(np.deg2rad(30))])
@@ -202,8 +207,7 @@ for a in np.arange(-a_max,a_max):
                               flip_global.append(1)                             
 
 pizza = param.make_vigR_polygon()
-# fig = plt.figure()
-# ax = fig.add_subplot(projection='3d')
+
 grid = MultiPoint(param.to_polygon_format(x_grid, y_grid))
 plot_polygon(pizza, add_points = False, facecolor = 'None', edgecolor = 'black')
 plot_points(grid)
@@ -223,34 +227,30 @@ max_pizz = param.make_vigR_polygon(r = vigR+rho)
 plot_polygon(min_pizz, add_points =False, edgecolor = 'red', linestyle='--', facecolor='None')
 plot_polygon(max_pizz, add_points =False, edgecolor = 'blue', linestyle='--', facecolor='None')
 
-# plt.scatter(y_sph, z_sph, color='red')
-# plt.figure()
-# plt.scatter(x_sph, z_sph, color='red', label=f'{max(x_sph)-min(x_sph)}mm')
-# plt.legend()
-# ax.plot_trisurf(x_sph, y_sph, z_sph)
-# ax.set_xlabel('X Label')
-# ax.set_ylabel('Y Label')
-# ax.set_zlabel('Z Label')
+fig = plt.figure()
+ax = fig.add_subplot(projection='3d')
+ax.scatter(x_sph, y_sph, z_sph , label=f'{max(x_sph)-min(x_sph)}mm')
+ax.set_box_aspect((1, 1, 1))
+plt.legend()
+ax.set_xlabel('X Label')
+ax.set_ylabel('Y Label')
+ax.set_zlabel('Z Label')
 #%% 2)c) Place the intermediate triangles accordingly on the grid
 
 fill_empty = True
-global_boundaries = []
-global_collection = []
-global_coverage = []
 covered_area_global = 0 
 total_modules = 0
 boundaries_df = {'geometry':[], 'color': []}
 modules_df = {'geometry':[]}
 coverage_df ={'geometry':[]}
 # Create module arrangement from the global grid
-start = time.time()
 for idx, (rotate, dx, dy) in enumerate(zip(flip_global, x_grid, y_grid)):
 
      if rotate:
           angle = 180
      else:
           angle = 0
-
+     # Apply rotation around the inter module centroid and translation to its corresponding position on the grid
      transformed_all = param.rotate_and_translate(intermediate_collection_speed, angle, dx, dy, origin = "centroid")
 
      new_boundary = transformed_all.geoms[0]
@@ -262,7 +262,6 @@ for idx, (rotate, dx, dy) in enumerate(zip(flip_global, x_grid, y_grid)):
      new_modules = transformed_all.geoms[1]
      new_coverage = transformed_all.geoms[2]
      
-     
      # Check if intermediate module goes out from vigR
      if fill_empty and sticks_out:
      # if new_boundary.overlaps(pizza) and fill_empty:
@@ -272,35 +271,26 @@ for idx, (rotate, dx, dy) in enumerate(zip(flip_global, x_grid, y_grid)):
                new_boundary = new_modules.convex_hull
                color_boundary = 'blue'
      
-     global_collection.append(transformed_all)
-     global_boundaries.append(new_boundary)
      boundaries_df['geometry'].append(new_boundary)
      boundaries_df['color'].append(color_boundary)
      modules_df['geometry'].append(new_modules)
      coverage_df['geometry'].append(new_coverage)
      # print(len(list(new_modules.geoms)))
      total_modules += len(list(new_modules.geoms))
-     print(new_coverage.area)
      covered_area += new_coverage.area # add the net covered area of each module
-end = time.time()
-print(f'Time {end- start}')
-bound_bound = MultiPolygon(global_boundaries)
-global_bounding_polygon = unary_union(bound_bound).convex_hull
+global_bounding_polygon = MultiPolygon(boundaries_df['geometry']).convex_hull
 instrumented_area = global_bounding_polygon.area
 # global_coverage = round(covered_area/instrumented_area*100,1)
 global_coverage = round(covered_area/pizza.area*100,1)
 gdf_bound = gpd.GeoDataFrame(boundaries_df)
 gdf_modules = gpd.GeoDataFrame(modules_df)
-
 gdf_coverage = gpd.GeoDataFrame(coverage_df)
-gdf_coverage['label'] = f'Coverage black: {global_coverage} %'
+gdf_coverage['label'] = f'Coverage vigR: {global_coverage} %'
 
-total_robots = total_modules*param.nb_robots
+total_robots = total_modules*nb_robots
 
 print(f"Total # modules: {total_modules} \n", f"Total # robots: {total_robots} \n")
-# %% 
-
-""" Plot plot time """ 
+# %% Plot plot time 
 
 draw = True
 is_timer = False
@@ -309,7 +299,7 @@ plot_time = 20 # [s] plotting time
 ignore_points = False
 
 fig = plt.figure(figsize=(8,8))
-figtitle = f"Module coverage raw - {param.nb_robots} robots per module"
+figtitle = f"Module coverage raw - {nb_robots} robots per module"
 plt.title(figtitle)
 plot_polygon(module, facecolor='None', edgecolor='black', add_points=False)
 plot_polygon(module_w_beta_and_safety_dist, facecolor='None', edgecolor='red', linestyle = '--', add_points=False
@@ -328,7 +318,7 @@ plt.legend(shadow = True)
 param.save_figures_to_dir(save_plots, figtitle)
 
 plt.figure(figsize=(8,8))
-figtitle = f"Module coverage with summed coverage & walls - {param.nb_robots} robots per module"
+figtitle = f"Module coverage with summed coverage & walls \n {nb_robots} robots per module"
 plt.title(figtitle)
 plot_polygon(module, facecolor='None', edgecolor='black', add_points=False)
 plot_polygon(module_w_beta_and_safety_dist, facecolor='None', linestyle = '--', add_points=False
@@ -342,9 +332,9 @@ plt.legend(shadow = True)
 param.save_figures_to_dir(save_plots, figtitle)
 
 plt.figure(figsize=(10,10))
-figtitle = f"Intermediate frame - {param.nb_robots} robots per module \n Inner gap: {param.intermediate_frame_thick} mm \n Total # modules: 4 - Total # robots: {param.nb_robots*4}"
+figtitle = f"Intermediate frame - {nb_robots} robots per module \n Inner gap: {param.intermediate_frame_thick} mm \n Total # modules: 4 - Total # robots: {nb_robots*4}"
 plt.title(figtitle)
-param.plot_intermediate(intermediate_collection, False, intermediate_coverage, available_intermediate_area, draw_legend = True)
+param.plot_intermediate(intermediate_collection, nb_robots, False, intermediate_coverage, available_intermediate_area, draw_legend = True)
 plt.xlabel('x position [mm]')
 plt.ylabel('y position [mm]')
 plt.legend(shadow = True)
@@ -353,7 +343,7 @@ param.save_figures_to_dir(save_plots, figtitle)
 if param.global_frame_thick > 0:
      frame=pizza.difference(GeometryCollection(list(boundaries_df['geometry'])))
      plt.figure(figsize=(10,10))   
-     figtitle = f'Frame to manufacture - {param.nb_robots} per module'
+     figtitle = f'Frame to manufacture - {nb_robots} per module'
      plt.title(figtitle)
      plot_polygon(global_bounding_polygon, add_points = False, facecolor = 'None', edgecolor ='orange', linestyle = '--')
      plot_polygon(frame, add_points=False, facecolor='red', alpha = 0.2, edgecolor = 'black', label=f'Wall thickness = {param.global_frame_thick} mm')
@@ -365,23 +355,41 @@ if param.global_frame_thick > 0:
 
 
 if param.intermediate_frame_thick != param.global_frame_thick:
-     figtitle = f"Semi frameless - {param.nb_robots} robots per module \n Inner gap: {param.intermediate_frame_thick} mm - Global gap: {param.global_frame_thick} mm \n Total # modules: {total_modules} - Total # robots: {total_robots}"
+     figtitle = f"Semi frameless - {nb_robots} robots per module \n Inner gap: {param.intermediate_frame_thick} mm - Global gap: {param.global_frame_thick} mm \n Total # modules: {total_modules} - Total # robots: {total_robots}"
 elif param.intermediate_frame_thick == param.global_frame_thick and param.global_frame_thick == 0:
-     figtitle = f"Frameless - {param.nb_robots} robots per module"
+     figtitle = f"Frameless - {nb_robots} robots per module"
 else:
-     figtitle = f"Framed - {param.nb_robots} robots per module \n Gap: {param.intermediate_frame_thick} mm \n Total # modules: {total_modules} - Total # robots: {total_robots}"
-f,ax = plt.subplots(figsize=(10, 10))
-ax.set_title(figtitle)
+     figtitle = f"Framed - {nb_robots} robots per module \n Gap: {param.intermediate_frame_thick} mm \n Total # modules: {total_modules} - Total # robots: {total_robots}"
+f, ax= plt.subplots(figsize=(10, 10), sharex = True, sharey=True)
+f.suptitle(figtitle)
 gdf_modules.plot(ax=ax,facecolor='None')
 gdf_bound.plot(ax=ax,facecolor='None', edgecolor=gdf_bound['color'])
 gdf_coverage.plot(column='label',ax=ax, alpha=0.2, legend=True, legend_kwds={'loc': 'upper right'})
 
-plot_polygon(pizza, add_points=False, edgecolor='black', facecolor='None', linestyle='--')
-plot_polygon(global_bounding_polygon, add_points=False, edgecolor='orange', facecolor='None', linestyle='--',label='Instrumented area')
+plot_polygon(pizza, ax=ax, add_points=False, edgecolor='black', facecolor='None', linestyle='--')
+plot_polygon(global_bounding_polygon, ax=ax, add_points=False, edgecolor='orange', facecolor='None', linestyle='--',label='Instrumented area')
 
-plt.xlabel('x position [mm]')
-plt.ylabel('y position [mm]')
 param.save_figures_to_dir(save_plots, figtitle)
+
+if param.intermediate_frame_thick != param.global_frame_thick:
+     figtitle = f"Semi frameless - {nb_robots} robots per module \n Inner gap: {param.intermediate_frame_thick} mm - Global gap: {param.global_frame_thick} mm \n Total # modules: {total_modules} - Total # robots: {total_robots}"
+elif param.intermediate_frame_thick == param.global_frame_thick and param.global_frame_thick == 0:
+     figtitle = f"Frameless - {nb_robots} robots per module"
+else:
+     figtitle = f"Framed - {nb_robots} robots per module \n Gap: {param.intermediate_frame_thick} mm \n Total # modules: {total_modules} - Total # robots: {total_robots}"
+f, axes= plt.subplots(nrows=2,ncols=2, figsize=(10, 10), sharex = True, sharey=True)
+ax63, ax2, ax3, ax4 = axes.flatten()
+f.suptitle(figtitle)
+[ax.grid() for ax in axes.flatten()]
+gdf_modules.plot(ax=ax63,facecolor='None')
+gdf_bound.plot(ax=ax63,facecolor='None', edgecolor=gdf_bound['color'])
+gdf_coverage.plot(column='label',ax=ax63, alpha=0.2, legend=True, legend_kwds={'loc': 'upper right'})
+
+plot_polygon(pizza, ax=ax63, add_points=False, edgecolor='black', facecolor='None', linestyle='--')
+plot_polygon(global_bounding_polygon, ax=ax63, add_points=False, edgecolor='orange', facecolor='None', linestyle='--',label='Instrumented area')
+
+[ax.set_xlabel('x position [mm]') for ax in axes.flatten()]
+[ax.set_ylabel('y position [mm]') for ax in axes.flatten()]
 end_time = time.time()
 
 print(f'Elapsed time: {end_time-start_time:0.3f} s')

@@ -34,25 +34,29 @@ test_pitch = np.linalg.norm(np.array([x_inc,y_inc]))
 
 """ Module parameters """ 
 
-nb_robots = 102
+class module_param:
 
-if nb_robots == 75:
+     def __init__(self, nb_robots):
+          
+          self.nb_robots = nb_robots
 
-     module_width = 80 # [mm] triangle side length
-     nb_rows = 11 # number of rows of positioners
+          if self.nb_robots == 75:
 
-elif nb_robots == 63:
-      
-     module_width = 73.8# [mm] triangle side length
-     nb_rows = 10 # number of rows of positioners
+               self.module_width = 80 # [mm] triangle side length
+               self.nb_rows = 11 # number of rows of positioners
 
-elif nb_robots == 102:
-      
-     module_width = 92.4 # [mm] triangle side length
-     nb_rows = 13 # number of rows of positioners
+          elif self.nb_robots == 63:
+               
+               self.module_width = 73.8# [mm] triangle side length
+               self.nb_rows = 10 # number of rows of positioners
 
-else:
-      raise Exception('Invalid number of robots or number of robots not supported')
+          elif self.nb_robots == 102:
+               
+               self.module_width = 92.4 # [mm] triangle side length
+               self.nb_rows = 13 # number of rows of positioners
+
+          else:
+               raise Exception('Error: only 63, 75, 102 robots per module supported')
 
 
 # Raw triangle
@@ -191,7 +195,7 @@ def plot_module(module_collection, label_coverage, label_robots, ignore_points):
           elif (isinstance (module_collection.geoms[jdx], MultiPoint) and not ignore_points):
                plot_points(module_collection.geoms[jdx], marker='.', color='k', label = label_robots)
 
-def plot_intermediate(intermediate_collection, ignore_points, intermediate_coverage=None, available_intermediate_area=None, draw_legend = False):
+def plot_intermediate(intermediate_collection, nb_robots, ignore_points, intermediate_coverage=None, available_intermediate_area=None, draw_legend = False):
      for idx, mod_collection in enumerate(intermediate_collection.geoms):
           if idx == 0 and draw_legend:
                label_coverage = 'Coverage: {} %'.format(intermediate_coverage)
