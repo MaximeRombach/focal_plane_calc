@@ -1,22 +1,22 @@
-# %%
+# %% For further information contact Maxime Rombach (EPFL - LASTRO) at maxime.rombach@epfl.ch
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import numpy as np
+from numpy.linalg import norm
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatch
 import geopandas as gpd
 import array as array
 import updown_tri as tri
 import time
 from tqdm import tqdm
-from shapely.geometry import Polygon, Point
+from shapely.geometry import Polygon
 from shapely.ops import unary_union
-from shapely.plotting import plot_polygon, plot_points
+from shapely.plotting import plot_polygon, plot_points, plot_line
 from shapely import affinity, MultiPoint, MultiPolygon, GeometryCollection, BufferCapStyle
 
 import parameters as param
 R = param.curve_radius
-#%%
+vigR = param.vigR
 
 """
 This code is a tool for calculating the coverage performed for different focal plane arrangements.
@@ -27,14 +27,22 @@ It is split in 3 main steps:
 2) Pattern intermediate modul units (4 of them) together
 3) Derive the total grid coverage
 
-The effective coverage shall be calculated as the usable positioner area vs the actual reachable area of the positioners
+Main focal plane parameters that can be tuned in parameters.py:
+
+- nb_robots : 63, 75, 102 (per module), all automatically associated to an adapted module size
+- intermediate_frame_thick [mm]: gap between modules inside intermediate triangle
+- global_frame_thick [mm]: gap between intermediate triangles in global frame (if inter = global, equivalent to framed cas)
+
+The effective coverage is calculated as the usable positioner area vs total area of vigR (for comparison purposes
+)
 """
+#%% 1)a) Define triangular meshgrid of positioners' centeral
+
 ## Positioners numbering:
             # 0: bottom left
             # count a row then switch to left side of next one to continue
             # last positoner: top one
 start_time = time.time()
-"""1)a) Define triangular meshgrid of positioners' centeral """
 
 module = param.chanfered_base(param.module_width, chanfer_length=7.5) # Create chamfered module shape as shapely Polygon
 # coords_module_x, coords_module_y = module.exterior.coords.xy
@@ -75,10 +83,8 @@ xx1, yy1 = param.remove_positioner(xx1, yy1, list_to_remove)
 nb_robots = len(xx1)
 
 triang_meshgrid = MultiPoint(param.to_polygon_format(xx1, yy1)) # convert the meshgrid into shapely standard for later manipulation
-plot_points(triang_meshgrid)
-# %%
 
-"""1)b) Define coverage for 1 modules"""
+# %% 1)b) Define coverage for 1 modules
 
 c1 = np.cos(np.deg2rad(param.alpha))
 s1 = np.sin(np.deg2rad(param.alpha))
@@ -120,7 +126,7 @@ coverage_no_walls = round(total_positioners_workspace.area/module.area * 100,1)
 
 dist_inter = 2*param.module_width*np.sqrt(3)/6 + param.intermediate_frame_thick # distance between each neighbor from center module
 angles = np.array([-30, 90, 210]) # angular positions of neighbors
-flip = [True,False,False,False] # 
+flip = [True,False,False,False]
 
 x_grid_inter = np.cos(np.deg2rad(angles))*dist_inter
 x_grid_inter = np.insert(x_grid_inter, 0, 0)
@@ -146,25 +152,28 @@ for idx, (rotate, dx, dy) in enumerate(zip(flip, x_grid_inter, y_grid_inter)):
 
 modules_polygon_intermediate = MultiPolygon(boundaries)
 bounding_polygon_intermediate = modules_polygon_intermediate.convex_hull
+better_bound = unary_union(modules_polygon_intermediate).boundary
+plot_line(better_bound)
 coverage_polygon_intermediate = unary_union(MultiPolygon(inter_coverage)) # save coverage as whole to speedup global calculation
-plot_polygon(coverage_polygon_intermediate, add_points=False)
+# plot_polygon(coverage_polygon_intermediate, add_points=False)
 covered_area_inter = coverage_polygon_intermediate.area
 intermediate_collection.append(bounding_polygon_intermediate)
 intermediate_collection = GeometryCollection(intermediate_collection)
 intermediate_collection_speed = GeometryCollection([bounding_polygon_intermediate, modules_polygon_intermediate, coverage_polygon_intermediate])
 available_intermediate_area = round(bounding_polygon_intermediate.area,1)
 intermediate_coverage = round(covered_area_inter/available_intermediate_area*100,1)
+# plot_polygon(modules_polygon_intermediate.boundary)
 # intermediate_coverage = round(covered_area/area_to_cover*100,1)
 # param.plot_intermediate_speed(intermediate_collection_speed)
 
 """2)b) Start meshing the grid for the whole thing"""
 
 inter_frame_width = 2*param.module_width + 2*param.intermediate_frame_thick*np.cos(np.deg2rad(30))+2*param.global_frame_thick
-dist_global = 2*inter_frame_width*np.sqrt(3)/6 + param.global_frame_thick
+rho = inter_frame_width * np.sqrt(3)/6
+dist_global = 2*rho + param.global_frame_thick
 inter_centroid = inter_frame_width*np.sqrt(3)/3*np.array([np.cos(np.deg2rad(30)), np.sin(np.deg2rad(30))])
 
-nb_max_modules = round(2*param.vigR / (inter_frame_width + param.global_frame_thick), 0)
-print(nb_max_modules)
+nb_max_modules = round(2*vigR / (inter_frame_width + param.global_frame_thick), 0)
 
 center_coords = []
 n = 6
@@ -175,14 +184,15 @@ c_max = n
 x_grid = []
 y_grid = []
 flip_global = []
-vigR_tresh = 40
+vigR_tresh = 20
+# Make global grid out of triangular grid method credited in updown_tri.py
 for a in np.arange(-a_max,a_max):
      for b in np.arange(-b_max,b_max):
           for c in np.arange(-c_max,c_max):
                valid = a + b + c
                if valid == 1 or valid == 2:
                     x,y = tri.tri_center(a,b,c,inter_frame_width)
-                    if np.sqrt(x**2 + y**2) < param.vigR - vigR_tresh: # check if module falls in vignetting radius
+                    if np.sqrt(x**2 + y**2) < vigR + vigR_tresh: # allow centroid of inter modules to go out of vigR for further filling purpose
                          center_coords.append((a,b,c))
                          x_grid.append(x)
                          y_grid.append(y)
@@ -204,9 +214,14 @@ x_sph = R * np.cos(latitude) * np.cos(longitude)
 y_sph = R * np.cos(latitude) * np.sin(longitude)
 z_sph = R * np.sin(latitude)
 
-# x_grid = y_sph
-# y_grid = z_sph
-# grid = MultiPoint(param.to_polygon_format(x_grid, y_grid))
+x_grid = y_sph
+y_grid = z_sph
+grid_sph = MultiPoint(param.to_polygon_format(x_grid, y_grid))
+plot_points(grid_sph, color='red')
+min_pizz = param.make_vigR_polygon(r = vigR-rho)
+max_pizz = param.make_vigR_polygon(r = vigR+rho)
+plot_polygon(min_pizz, add_points =False, edgecolor = 'red', linestyle='--', facecolor='None')
+plot_polygon(max_pizz, add_points =False, edgecolor = 'blue', linestyle='--', facecolor='None')
 
 # plt.scatter(y_sph, z_sph, color='red')
 # plt.figure()
@@ -216,12 +231,14 @@ z_sph = R * np.sin(latitude)
 # ax.set_xlabel('X Label')
 # ax.set_ylabel('Y Label')
 # ax.set_zlabel('Z Label')
-#%%
-fill_empty = False
+#%% 2)c) Place the intermediate triangles accordingly on the grid
+
+fill_empty = True
 global_boundaries = []
 global_collection = []
 global_coverage = []
-covered_area_global = 0
+covered_area_global = 0 
+total_modules = 0
 boundaries_df = {'geometry':[], 'color': []}
 modules_df = {'geometry':[]}
 coverage_df ={'geometry':[]}
@@ -235,17 +252,23 @@ for idx, (rotate, dx, dy) in enumerate(zip(flip_global, x_grid, y_grid)):
           angle = 0
 
      transformed_all = param.rotate_and_translate(intermediate_collection_speed, angle, dx, dy, origin = "centroid")
+
      new_boundary = transformed_all.geoms[0]
      color_boundary = 'green'
+     sticks_out = new_boundary.overlaps(pizza)
+     if sticks_out and not fill_empty:
+          color_boundary = 'red'
+          # continue
      new_modules = transformed_all.geoms[1]
      new_coverage = transformed_all.geoms[2]
      
      
-     # Check if module goes out from vigR; only check the last layers of modules
-     if fill_empty and param.vigR - 80 <= np.sqrt(dx**2+dy**2) <= param.vigR and new_boundary.overlaps(pizza):
-               
-               new_modules = MultiPolygon([coucou for coucou in new_modules.geoms if not coucou.overlaps(pizza)])
-               new_coverage = MultiPolygon([coucou for coucou in new_coverage.geoms if not coucou.overlaps(pizza)])
+     # Check if intermediate module goes out from vigR
+     if fill_empty and sticks_out:
+     # if new_boundary.overlaps(pizza) and fill_empty:
+          # Keep the indiv triangle that are within vigR     
+               new_modules = MultiPolygon([coucou for coucou in new_modules.geoms if not coucou.overlaps(pizza) and norm(coucou.centroid.xy)<vigR-10])
+               new_coverage = MultiPolygon([coucou for coucou in new_coverage.geoms if not coucou.overlaps(pizza) and norm(coucou.centroid.xy)<vigR-10])
                new_boundary = new_modules.convex_hull
                color_boundary = 'blue'
      
@@ -255,43 +278,32 @@ for idx, (rotate, dx, dy) in enumerate(zip(flip_global, x_grid, y_grid)):
      boundaries_df['color'].append(color_boundary)
      modules_df['geometry'].append(new_modules)
      coverage_df['geometry'].append(new_coverage)
-     covered_area += new_boundary.area # add the net covered area of each module
+     # print(len(list(new_modules.geoms)))
+     total_modules += len(list(new_modules.geoms))
+     print(new_coverage.area)
+     covered_area += new_coverage.area # add the net covered area of each module
 end = time.time()
 print(f'Time {end- start}')
 bound_bound = MultiPolygon(global_boundaries)
 global_bounding_polygon = unary_union(bound_bound).convex_hull
-frame=pizza.difference(GeometryCollection(list(coverage_df['geometry'])))
 instrumented_area = global_bounding_polygon.area
-global_coverage = round(covered_area/instrumented_area*100,1)
+# global_coverage = round(covered_area/instrumented_area*100,1)
+global_coverage = round(covered_area/pizza.area*100,1)
 gdf_bound = gpd.GeoDataFrame(boundaries_df)
 gdf_modules = gpd.GeoDataFrame(modules_df)
 
 gdf_coverage = gpd.GeoDataFrame(coverage_df)
-gdf_coverage['label'] = f'Coverage: {global_coverage} %'
+gdf_coverage['label'] = f'Coverage black: {global_coverage} %'
 
-f,ax = plt.subplots(figsize=(10, 10))
-gdf_modules.plot(ax=ax,facecolor='None')
-gdf_bound.plot(ax=ax,facecolor='None', edgecolor=gdf_bound['color'])
-gdf_coverage.plot(column='label',ax=ax, alpha=0.2, legend=True)
-
-plot_polygon(pizza, add_points=False, edgecolor='black', facecolor='None', linestyle='--')
-plot_polygon(global_bounding_polygon, add_points=False, edgecolor='orange', facecolor='None', linestyle='--',label='Instrumented area')
-
-plt.xlabel('x position [mm]')
-plt.ylabel('y position [mm]')
-
-
-total_modules = len(x_grid)*len(x_grid_inter)
 total_robots = total_modules*param.nb_robots
 
-print(f"Total # modules: {total_modules} \n", f"Total # robots: {total_robots}")
-plt.show()
+print(f"Total # modules: {total_modules} \n", f"Total # robots: {total_robots} \n")
 # %% 
 
 """ Plot plot time """ 
 
 draw = True
-is_timer = True
+is_timer = False
 save_plots = False
 plot_time = 20 # [s] plotting time
 ignore_points = False
@@ -330,8 +342,7 @@ plt.legend(shadow = True)
 param.save_figures_to_dir(save_plots, figtitle)
 
 plt.figure(figsize=(10,10))
-# plt.figure()
-figtitle = f"Intermediate frame coverage - {param.nb_robots} per module"
+figtitle = f"Intermediate frame - {param.nb_robots} robots per module \n Inner gap: {param.intermediate_frame_thick} mm \n Total # modules: 4 - Total # robots: {param.nb_robots*4}"
 plt.title(figtitle)
 param.plot_intermediate(intermediate_collection, False, intermediate_coverage, available_intermediate_area, draw_legend = True)
 plt.xlabel('x position [mm]')
@@ -339,33 +350,38 @@ plt.ylabel('y position [mm]')
 plt.legend(shadow = True)
 param.save_figures_to_dir(save_plots, figtitle)
 
-plt.figure(figsize=(10,10))
+if param.global_frame_thick > 0:
+     frame=pizza.difference(GeometryCollection(list(boundaries_df['geometry'])))
+     plt.figure(figsize=(10,10))   
+     figtitle = f'Frame to manufacture - {param.nb_robots} per module'
+     plt.title(figtitle)
+     plot_polygon(global_bounding_polygon, add_points = False, facecolor = 'None', edgecolor ='orange', linestyle = '--')
+     plot_polygon(frame, add_points=False, facecolor='red', alpha = 0.2, edgecolor = 'black', label=f'Wall thickness = {param.global_frame_thick} mm')
+     plt.xlabel('x position [mm]')
+     plt.ylabel('y position [mm]')
+     plt.legend(shadow = True)
+     plt.legend()
+     param.save_figures_to_dir(save_plots, figtitle)
+
+
 if param.intermediate_frame_thick != param.global_frame_thick:
-     figtitle = f"Semi frameless - {param.nb_robots} per module"
+     figtitle = f"Semi frameless - {param.nb_robots} robots per module \n Inner gap: {param.intermediate_frame_thick} mm - Global gap: {param.global_frame_thick} mm \n Total # modules: {total_modules} - Total # robots: {total_robots}"
 elif param.intermediate_frame_thick == param.global_frame_thick and param.global_frame_thick == 0:
-     figtitle = f"Frameless - {param.nb_robots} per module"
+     figtitle = f"Frameless - {param.nb_robots} robots per module"
 else:
-     figtitle = f"Framed - {param.nb_robots} per module"
-plt.title(figtitle)
-# plot_polygon(pizza, add_points = False, facecolor = 'None', edgecolor = 'black', linestyle = '--')
+     figtitle = f"Framed - {param.nb_robots} robots per module \n Gap: {param.intermediate_frame_thick} mm \n Total # modules: {total_modules} - Total # robots: {total_robots}"
+f,ax = plt.subplots(figsize=(10, 10))
+ax.set_title(figtitle)
+gdf_modules.plot(ax=ax,facecolor='None')
+gdf_bound.plot(ax=ax,facecolor='None', edgecolor=gdf_bound['color'])
+gdf_coverage.plot(column='label',ax=ax, alpha=0.2, legend=True, legend_kwds={'loc': 'upper right'})
 
-for idx, inter_collection in enumerate(tqdm(global_collection)):
-     if idx == 0:
-          label_coverage = "Coverage: {} %".format(global_coverage)
-     else: 
-          label_coverage = None
-     param.plot_intermediate_speed(inter_collection, label_coverage)
-end_bisous = time.time()
+plot_polygon(pizza, add_points=False, edgecolor='black', facecolor='None', linestyle='--')
+plot_polygon(global_bounding_polygon, add_points=False, edgecolor='orange', facecolor='None', linestyle='--',label='Instrumented area')
 
-plot_polygon(global_bounding_polygon, add_points = False, facecolor = 'None', edgecolor ='orange', linestyle = '--')
-plot_polygon(frame, add_points=False, facecolor='red', alpha = 0.2, edgecolor = 'black')
 plt.xlabel('x position [mm]')
 plt.ylabel('y position [mm]')
-plt.legend(shadow = True)
-plt.legend()
 param.save_figures_to_dir(save_plots, figtitle)
-
-
 end_time = time.time()
 
 print(f'Elapsed time: {end_time-start_time:0.3f} s')

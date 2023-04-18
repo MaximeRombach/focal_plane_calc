@@ -34,8 +34,7 @@ test_pitch = np.linalg.norm(np.array([x_inc,y_inc]))
 
 """ Module parameters """ 
 
-nb_robots = 75
-
+nb_robots = 102
 
 if nb_robots == 75:
 
@@ -73,12 +72,11 @@ is_wall = True # flag for protective shields or not on modules
 
 """ Intermediate frame parameters """
 
-intermediate_frame_thick =  0 # [mm] spacing between modules inside intermediate frame
+intermediate_frame_thick =  3 # [mm] spacing between modules inside intermediate frame
 
 """ Global frame parameters """
 
 global_frame_thick = 3 # [mm] spacing between modules in global arrangement
-vigR_tresh = 30 # [mm] 
 
 def remove_positioner(xx,yy, list_to_remove):
      """ Input:
@@ -166,11 +164,11 @@ def save_figures_to_dir(save, suffix_name):
 
      plt.savefig(results_dir + today_filename, bbox_inches = 'tight')
 
-def make_vigR_polygon(pizza_angle = 360):
+def make_vigR_polygon(pizza_angle = 360, r = vigR):
       
      n_vigR = 500
-     vigR_lim_x = vigR * np.cos(np.deg2rad(np.linspace(0,pizza_angle,n_vigR)))
-     vigR_lim_y = vigR * np.sin(np.deg2rad(np.linspace(0,pizza_angle,n_vigR)))
+     vigR_lim_x = r * np.cos(np.deg2rad(np.linspace(0,pizza_angle,n_vigR)))
+     vigR_lim_y = r * np.sin(np.deg2rad(np.linspace(0,pizza_angle,n_vigR)))
      if pizza_angle == 360:
           end_point = [vigR_lim_x[0], vigR_lim_y[0]]
      else:
