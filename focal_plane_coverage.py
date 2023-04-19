@@ -45,7 +45,22 @@ The effective coverage is calculated as the usable positioner area vs total area
 
 
 start_time = time.time()
-nb_robots = 102
+nbots = [63, 75, 102]
+
+draw = True
+is_timer = False
+save_plots = False
+plot_time = 20 # [s] plotting time
+ignore_points = False
+keys = ['n63', 'n75', 'n102']
+
+# Intermediate things
+
+intermediate_df = {}
+
+# Global things
+
+nb_robots = 75
 mod_param = param.Module(nb_robots)
 module_width = mod_param.module_width
 nb_rows = mod_param.nb_rows
@@ -216,29 +231,23 @@ gdf_coverage['label'] = f'Coverage vigR: {global_coverage} %'
 
 total_robots = total_modules*nb_robots
 
-print(f"Total # modules: {total_modules} \n", f"Total # robots: {total_robots} \n")
+print(f"Total # modules: {total_modules} \n", f"Total # robots: {total_robots}")
 # %% Plot plot time 
-
-draw = True
-is_timer = False
-save_plots = False
-plot_time = 20 # [s] plotting time
-ignore_points = False
 
 fig = plt.figure(figsize=(8,8))
 figtitle = f"Module coverage raw - {nb_robots} robots per module"
 plt.title(figtitle)
 plot_polygon(module, facecolor='None', edgecolor='black', add_points=False)
 plot_polygon(module_w_beta_and_safety_dist, facecolor='None', edgecolor='red', linestyle = '--', add_points=False
-             , label = "Safety dist = {} mm".format(mod_param.offset_from_module_edges))
+          , label = "Safety dist = {} mm".format(mod_param.offset_from_module_edges))
 plot_points(triang_meshgrid, marker='.', color='k', label = "{} robots".format(nb_robots))
 
 for idx, wks in enumerate(wks_list.geoms):
-    if idx == 0:
-         label_cov = "Coverage w/o walls: {} %".format(coverage_no_walls)
-    else:
-         label_cov = None
-    plot_polygon(wks, add_points=False, alpha=0.2, facecolor='red', edgecolor='black', label = label_cov)
+     if idx == 0:
+          label_cov = "Coverage w/o walls: {} %".format(coverage_no_walls)
+     else:
+          label_cov = None
+plot_polygon(wks, add_points=False, alpha=0.2, facecolor='red', edgecolor='black', label = label_cov)
 plt.xlabel('x position [mm]')
 plt.ylabel('y position [mm]')
 plt.legend(shadow = True)
@@ -249,7 +258,7 @@ figtitle = f"Module coverage with summed coverage & walls \n {nb_robots} robots 
 plt.title(figtitle)
 plot_polygon(module, facecolor='None', edgecolor='black', add_points=False)
 plot_polygon(module_w_beta_and_safety_dist, facecolor='None', linestyle = '--', add_points=False
-             , label = "Safety dist = {} mm".format(mod_param.offset_from_module_edges))
+          , label = "Safety dist = {} mm".format(mod_param.offset_from_module_edges))
 plot_points(triang_meshgrid, marker='.', color='k', label = "{} robots".format(nb_robots))
 plot_polygon(effective_wks, add_points=False, alpha=0.2, edgecolor='black', label = "Coverage with walls: {} %".format(coverage_with_walls))
 
@@ -305,15 +314,14 @@ elif param.intermediate_frame_thick == param.global_frame_thick and param.global
 else:
      figtitle = f"Framed - {nb_robots} robots per module \n Gap: {param.intermediate_frame_thick} mm \n Total # modules: {total_modules} - Total # robots: {total_robots}"
 f, axes= plt.subplots(nrows=2,ncols=2, figsize=(10, 10), sharex = True, sharey=True)
-ax63, ax2, ax3, ax4 = axes.flatten()
 f.suptitle(figtitle)
 [ax.grid() for ax in axes.flatten()]
-gdf_modules.plot(ax=ax63,facecolor='None')
-gdf_bound.plot(ax=ax63,facecolor='None', edgecolor=gdf_bound['color'])
-gdf_coverage.plot(column='label',ax=ax63, alpha=0.2, legend=True, legend_kwds={'loc': 'upper right'})
+gdf_modules.plot(ax=axes[0,0],facecolor='None')
+gdf_bound.plot(ax=axes[0,0],facecolor='None', edgecolor=gdf_bound['color'])
+gdf_coverage.plot(column='label',ax=axes[0,0], alpha=0.2, legend=True, legend_kwds={'loc': 'upper right'})
 
-plot_polygon(pizza, ax=ax63, add_points=False, edgecolor='black', facecolor='None', linestyle='--')
-plot_polygon(global_bounding_polygon, ax=ax63, add_points=False, edgecolor='orange', facecolor='None', linestyle='--',label='Instrumented area')
+plot_polygon(pizza, ax=axes[0,0], add_points=False, edgecolor='black', facecolor='None', linestyle='--')
+plot_polygon(global_bounding_polygon, ax=axes[0,0], add_points=False, edgecolor='orange', facecolor='None', linestyle='--',label='Instrumented area')
 
 [ax.set_xlabel('x position [mm]') for ax in axes.flatten()]
 [ax.set_ylabel('y position [mm]') for ax in axes.flatten()]
