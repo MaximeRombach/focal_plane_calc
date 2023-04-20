@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import numpy as np
+import logging
 from shapely import affinity, MultiPolygon, MultiPoint, GeometryCollection
 import matplotlib.pyplot as plt
 from shapely.geometry import Polygon
@@ -9,6 +10,8 @@ import time
 from shapely.plotting import plot_polygon, plot_points
 import os
 from datetime import datetime
+
+logging.basicConfig(level=logging.INFO)
 
 ## Parameters ##
 
@@ -32,12 +35,20 @@ x_inc = 3.1 # [mm] Horizontal increment at each row
 y_inc = 5.369 # [mm] Vertical increment at each row
 test_pitch = np.linalg.norm(np.array([x_inc,y_inc]))
 
+""" Intermediate frame parameters """
+
+intermediate_frame_thick =  3 # [mm] spacing between modules inside intermediate frame
+
+""" Global frame parameters """
+
+global_frame_thick = 5 # [mm] spacing between modules in global arrangement
+
 """ Module parameters """ 
 
 class Module:
 
      def __init__(self, nb_robots):
-          
+
           self.nb_robots = nb_robots
           self.la = 1.8 # alpha arm length [mm] /!\ lb > la /!\
           self.lb = 1.8 # beta arm length [mm]
@@ -59,23 +70,37 @@ class Module:
 
           self.is_wall = True # flag for protective shields or not on modules
 
-          if self.nb_robots == 75:
+          if self.nb_robots == 52:
 
-               self.module_width = 80 # [mm] triangle side length
-               self.nb_rows = 11 # number of rows of positioners
+               self.module_width = 67.6 # [mm] triangle side length
+               self.nb_rows = 9 # number of rows of positioners
+               self.key = 'n52'
 
           elif self.nb_robots == 63:
                
                self.module_width = 73.8# [mm] triangle side length
                self.nb_rows = 10 # number of rows of positioners
+               self.key = 'n63'
+
+          elif self.nb_robots == 75:
+
+               self.module_width = 80 # [mm] triangle side length
+               self.nb_rows = 11 # number of rows of positioners
+               self.key = 'n75'
+
+          elif self.nb_robots == 88:
+               self.module_width = 86.2 # [mm] triangle side length
+               self.nb_rows = 12 # number of rows of positioners
+               self.key = 'n88'
 
           elif self.nb_robots == 102:
                
                self.module_width = 92.4 # [mm] triangle side length
                self.nb_rows = 13 # number of rows of positioners
+               self.key = 'n102'
 
           else:
-               raise Exception('Error: only 63, 75, 102 robots per module supported')
+               raise Exception('Error: only 52, 63, 75, 88, 102 robots per module supported')
           
      def equilateral_vertices(self, triangle_width, xoff = 0, yoff = 0):
           
@@ -110,7 +135,7 @@ class Module:
           module_centroid = module_triangle.centroid
           
           for angle in angles:
-               rot_chanfer_triangle = self.rotate_and_translate(chanfer_triangle, angle, 0, 0, origin = module_centroid)
+               rot_chanfer_triangle = rotate_and_translate(chanfer_triangle, angle, 0, 0, origin = module_centroid)
                chanfers.append(rot_chanfer_triangle)
                chanfered_base = module_triangle.difference(rot_chanfer_triangle)
                
@@ -121,13 +146,6 @@ class Module:
           chanfered_base = module_triangle.difference(multi_chanfers)
           
           return chanfered_base
-     
-     def rotate_and_translate(self, geom, angle, dx, dy, dz = None, origin = 'centroid'):
-
-          rotated_geom = affinity.rotate(geom, angle, origin=origin)
-          transformed_geom = affinity.translate(rotated_geom, dx, dy, dz)
-
-          return transformed_geom
      
      def remove_positioner(self, xx, yy, list_to_remove):
           """ Input:
@@ -141,18 +159,6 @@ class Module:
           yy_sliced = np.delete(yy,list_to_remove)
 
           return xx_sliced, yy_sliced
-     
-     def to_polygon_format(self, x,y):
-          """ Input:
-               - x,y: 2 sets of coordinates for polygon creation
-
-               Output:
-               - coords: list of tuples for each polygon vertices (just for convenience) """
-          coords = []
-          for (i,j) in zip(x,y):
-                    coords.append((i,j))
-                    
-          return coords
      
      def create_module(self):
           
@@ -191,7 +197,8 @@ class Module:
           list_to_remove = [0, self.nb_rows, -1] # remove positioners at the edges of the triangle
           # list_to_remove = [] # remove no positioner
           xx1, yy1 = self.remove_positioner(xx1, yy1, list_to_remove)
-          nb_robots = len(xx1)
+          nbots = len(xx1)
+
 
           triang_meshgrid = MultiPoint(to_polygon_format(xx1, yy1)) # convert the meshgrid into shapely standard for later manipulation
 
@@ -211,8 +218,8 @@ class Module:
 
                xa1, ya1, xab1, yab1 = xa + dx, ya + dy, xab + dx, yab + dy
 
-               coords_int = self.to_polygon_format(xa1, ya1)
-               coords_ext = self.to_polygon_format(xab1, yab1)
+               coords_int = to_polygon_format(xa1, ya1)
+               coords_ext = to_polygon_format(xab1, yab1)
 
                interior = coords_int[::-1]
                poly_c1 = Polygon(coords_ext, [interior])
@@ -230,13 +237,63 @@ class Module:
 
           module_collection = GeometryCollection([module, module_w_beta_and_safety_dist, effective_wks, triang_meshgrid])
           module_collection = affinity.translate(module_collection, xoff = -reference_centroid.x, yoff = -reference_centroid.y)
-          wks_list = affinity.translate(multi_wks, xoff = -reference_centroid.x, yoff = -reference_centroid.y)
+          multi_wks_list = affinity.translate(multi_wks, xoff = -reference_centroid.x, yoff = -reference_centroid.y)
           coverage_with_walls = round(effective_wks.area/module.area * 100,1)
           coverage_no_walls = round(total_positioners_workspace.area/module.area * 100,1)
           coverages = [coverage_with_walls, coverage_no_walls]
 
-          return module_collection, wks_list, coverages
+          logging.info(f'Module object created with {nbots} robots')
+          return module_collection, multi_wks_list, coverages
 
+class IntermediateTriangle: 
+
+     def __init__(self, module_collection, dist_inter, angles, flip):
+
+          self.module_collection = module_collection
+          self.dist_inter = dist_inter
+          self.angles = angles
+          self.flip = flip
+
+          self.x_grid_inter = np.cos(np.deg2rad(angles))*dist_inter
+          self.x_grid_inter = np.insert(self.x_grid_inter, 0, 0)
+          self.y_grid_inter = np.sin(np.deg2rad(angles))*dist_inter
+          self.y_grid_inter = np.insert(self.y_grid_inter, 0, 0)
+
+     def create_intermediate_triangle(self):
+          
+          boundaries = []
+          intermediate_collection = []
+          inter_coverage = []
+          covered_area = 0
+          inter_boundaries_df = {'geometry':[], 'color': []}
+          inter_modules_df = {'geometry':[]}
+          inter_coverage_df = {'geometry':[]}
+          inter_robots_df = {'geometry':[]}
+
+          for idx, (rotate, dx, dy) in enumerate(zip(self.flip, self.x_grid_inter, self.y_grid_inter)):
+
+               if rotate:
+                    angle = 180
+               else:
+                    angle = 0
+
+               transformed_all = rotate_and_translate(self.module_collection, angle, dx, dy, origin = "centroid")
+               boundaries.append(transformed_all.geoms[0])
+               inter_coverage.append(transformed_all.geoms[2])
+               intermediate_collection.append(transformed_all)
+
+          modules_polygon_intermediate = MultiPolygon(boundaries)
+          bounding_polygon_intermediate = modules_polygon_intermediate.convex_hull
+          coverage_polygon_intermediate = unary_union(MultiPolygon(inter_coverage)) # save coverage as whole to speedup global calculation
+          # plot_polygon(coverage_polygon_intermediate, add_points=False)
+          covered_area_inter = coverage_polygon_intermediate.area
+          intermediate_collection.append(bounding_polygon_intermediate)
+          intermediate_collection = GeometryCollection(intermediate_collection)
+          intermediate_collection_speed = GeometryCollection([bounding_polygon_intermediate, modules_polygon_intermediate, coverage_polygon_intermediate])
+          available_intermediate_area = round(bounding_polygon_intermediate.area,1)
+          intermediate_coverage = round(covered_area_inter/available_intermediate_area*100,1)
+
+          return intermediate_collection, intermediate_collection_speed, intermediate_coverage
 
 # Raw triangle
 module_vertices_x = np.array([0,80,40,0])
@@ -248,13 +305,7 @@ module_vertices_y = np.array([0, 0, 6.5, 62.8, 62.8, 6.5, 0]) # [mm]
 
 
 
-""" Intermediate frame parameters """
 
-intermediate_frame_thick =  3 # [mm] spacing between modules inside intermediate frame
-
-""" Global frame parameters """
-
-global_frame_thick = 3 # [mm] spacing between modules in global arrangement
 
 
 def to_polygon_format(x,y):
@@ -350,3 +401,19 @@ def plot_intermediate_speed(mod_collection, label_coverage):
           s12=time.time()
           # print(f"0: {s12-s11} s")
                
+def final_title(nb_robots, total_modules, total_robots, inter_frame_thick, global_frame_thick, disp_robots_info = True):
+
+     if disp_robots_info:
+          robots_info = f"\n Total # modules: {total_modules} - Total # robots: {total_robots}"
+          modules_info = f"- {nb_robots} robots per module"
+     else:
+          robots_info = ''
+          modules_info = ''
+     if inter_frame_thick != global_frame_thick:
+          figtitle = f"Semi frameless {modules_info} \n Inner gap: {inter_frame_thick} mm - Global gap: {global_frame_thick} mm {robots_info}"
+     elif inter_frame_thick == global_frame_thick and global_frame_thick == 0:
+          figtitle = f"Frameless - {modules_info} {robots_info}"
+     else:
+          figtitle = f"Framed - {modules_info} \n Gap: {inter_frame_thick} mm {robots_info}"
+
+     return figtitle
