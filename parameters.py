@@ -37,11 +37,11 @@ test_pitch = np.linalg.norm(np.array([x_inc,y_inc]))
 
 """ Intermediate frame parameters """
 
-intermediate_frame_thick =  3 # [mm] spacing between modules inside intermediate frame
+intermediate_frame_thick =  1 # [mm] spacing between modules inside intermediate frame
 
 """ Global frame parameters """
 
-global_frame_thick = 5 # [mm] spacing between modules in global arrangement
+global_frame_thick = 4 # [mm] spacing between modules in global arrangement
 
 """ Module parameters """ 
 
@@ -284,7 +284,7 @@ class IntermediateTriangle:
 
           modules_polygon_intermediate = MultiPolygon(boundaries)
           bounding_polygon_intermediate = modules_polygon_intermediate.convex_hull
-          coverage_polygon_intermediate = unary_union(MultiPolygon(inter_coverage)) # save coverage as whole to speedup global calculation
+          coverage_polygon_intermediate = MultiPolygon(inter_coverage) # save coverage as whole to speedup global calculation
           # plot_polygon(coverage_polygon_intermediate, add_points=False)
           covered_area_inter = coverage_polygon_intermediate.area
           intermediate_collection.append(bounding_polygon_intermediate)
@@ -414,6 +414,9 @@ def final_title(nb_robots, total_modules, total_robots, inter_frame_thick, globa
      elif inter_frame_thick == global_frame_thick and global_frame_thick == 0:
           figtitle = f"Frameless - {modules_info} {robots_info}"
      else:
-          figtitle = f"Framed - {modules_info} \n Gap: {inter_frame_thick} mm {robots_info}"
+          figtitle = f"Framed - {modules_info} Gap: {inter_frame_thick} mm {robots_info}"
 
      return figtitle
+
+def intlist2str(list):
+     return [str(x) for x in list]

@@ -53,10 +53,12 @@ start_time = time.time()
 keys = ['n52', 'n63', 'n75', 'n88', 'n102']
 nbots = [52, 63, 75, 88, 102]
 
-keys = ['n88']
-nbots = [88]
+# keys = ['n88']
+# nbots = [88]
 
-global_dict = {'n52': {}, 'n63': {}, 'n75': {}, 'n88': {}, 'n102': {}}
+global_dict = {'n52': {}, 'n63': {}, 'n75': {}, 'n88': {}, 'n102': {},
+               'Overall_results': {'nb_robots_list':[], 'total_robots_list' : [],
+                                    'total_modules_list':[], 'coverages_list':[]}}
 
 draw = True
 is_timer = False
@@ -153,7 +155,9 @@ for nb_robots in nbots:
      # ax.set_zlabel('Z Label')
      #%% 2)c) Place the intermediate triangles accordingly on the grid
 
-     fill_empty = False
+     fill_empty = True # Fill empty spaces by individual modules
+     allow_small_out = True # allow covered area of module to stick out of vigR (i.e. useless covered area because does not receive light)
+     out_allowance = 0.1 # percentage of the covered area of a module authorized to stick out of vigR
      covered_area = 0 
      total_modules = 0
      boundaries_df = {'geometry':[], 'color': []}
@@ -170,23 +174,57 @@ for nb_robots in nbots:
           transformed_all = param.rotate_and_translate(intermediate_collection_speed, angle, dx, dy, origin = "centroid")
 
           new_boundary = transformed_all.geoms[0]
-          color_boundary = 'green'
-          sticks_out = new_boundary.overlaps(pizza)
-          if sticks_out and not fill_empty:
-               color_boundary = 'red'
-               # continue
+          print(dx,dy)
+          print(new_boundary)
           new_modules = transformed_all.geoms[1]
           new_coverage = transformed_all.geoms[2]
+          color_boundary = 'green'
+
+          sticks_out = new_boundary.overlaps(pizza) # a portion of the int triangle sticks out
+          int_centroid_out = np.sqrt(dx**2 + dy**2) > vigR
+          if not fill_empty and sticks_out:
+               color_boundary = 'red'
+               # continue
+          
           
           # Check if intermediate module goes out from vigR
-          if fill_empty and sticks_out:
+          elif fill_empty and sticks_out:
           # if new_boundary.overlaps(pizza) and fill_empty:
                # Keep the indiv triangle that are within vigR     
-                    new_modules = MultiPolygon([coucou for coucou in new_modules.geoms if not coucou.overlaps(pizza) and norm(coucou.centroid.xy)<vigR-10])
-                    new_coverage = MultiPolygon([coucou for coucou in new_coverage.geoms if not coucou.overlaps(pizza) and norm(coucou.centroid.xy)<vigR-10])
-                    new_boundary = new_modules.convex_hull
-                    color_boundary = 'blue'
-          
+                    # new_modules = MultiPolygon([coucou for coucou in new_modules.geoms if not coucou.overlaps(pizza) and norm(coucou.centroid.xy)<vigR-10])
+                    # new_coverage = MultiPolygon([coucou for coucou in new_coverage.geoms if not coucou.overlaps(pizza) and norm(coucou.centroid.xy)<vigR-10])
+                    # new_boundary = new_modules.convex_hull
+                    # color_boundary = 'blue'
+               temp_mod = []
+               temp_cov = []
+               
+               for mod, cov in zip(new_modules.geoms, new_coverage.geoms):
+                    # plot_polygon(pizza,add_points=False,facecolor='None')
+                    # plot_polygon(mod)
+                    cent = np.array(cov.centroid.xy)
+                    cov_out = cov.difference(pizza)
+                    centroid_out = np.sqrt(cent[0]**2 + cent[1]**2) > vigR
+                    if not cov.overlaps(pizza) and not centroid_out:
+                    # if np.sqrt(cent[0]**2 + cent[1]**2)<vigR+10:
+                         temp_mod.append(mod)
+                         temp_cov.append(cov)
+                         color_boundary = 'blue'
+                    elif allow_small_out and cov_out.area/cov.area < 0.07 and not centroid_out:
+                         temp_mod.append(mod)
+                         temp_cov.append(cov)
+                         color_boundary = 'blue'
+
+               if not temp_mod: #check if empty list; skip case if True (corrects huge bug)
+                    continue          
+               new_modules = MultiPolygon(temp_mod)
+               new_coverage = MultiPolygon(temp_cov)
+               new_boundary = new_modules.convex_hull
+               
+
+          elif int_centroid_out and not sticks_out:
+               # If int_triangle is not in vigR AND does not overlap with it, no point keeping it
+               continue  
+
           boundaries_df['geometry'].append(new_boundary)
           boundaries_df['color'].append(color_boundary)
           modules_df['geometry'].append(new_modules)
@@ -216,7 +254,13 @@ for nb_robots in nbots:
      global_dict[key]['total_modules'] = total_modules
      global_dict[key]['total_robots'] = total_robots
 
+     global_dict['Overall_results']['nb_robots_list'].append(nb_robots)
+     global_dict['Overall_results']['total_robots_list'].append(total_robots)
+     global_dict['Overall_results']['total_modules_list'].append(total_modules) 
+     global_dict['Overall_results']['coverages_list'].append(global_coverage)
      print(f"Total # modules: {total_modules} \n", f"Total # robots: {total_robots}")
+
+     
 # %% Plot plot time 
 
 fig = plt.figure(figsize=(8,8))
@@ -300,6 +344,7 @@ axes = [ax1, ax2, ax3, ax4, ax5]
 for idx, (k,ax) in tqdm(enumerate(zip(keys, axes))):
 
      gdf_bound = gpd.GeoDataFrame(global_dict[k]['boundaries_df'])
+     # print(gdf_bound)
      gdf_modules = gpd.GeoDataFrame(global_dict[k]['modules_df'])
      gdf_coverage = gpd.GeoDataFrame(global_dict[k]['coverage_df'])
      
@@ -309,9 +354,27 @@ for idx, (k,ax) in tqdm(enumerate(zip(keys, axes))):
 
      plot_polygon(pizza, ax=ax, add_points=False, edgecolor='black', facecolor='None', linestyle='--')
      plot_polygon(global_dict[k]['global_bounding_polygon'], ax=ax, add_points=False, edgecolor='orange', facecolor='None', linestyle='--',label='Instrumented area')
-     ax.set_title(f"{global_dict[k]['nb_robots']} robots per module \n Total # modules: {global_dict[k]['total_modules']} \n Total # robots: {global_dict[k]['total_robots']}")
+     ax.set_title(f"{global_dict[k]['nb_robots']} robots / module \n # modules: {global_dict[k]['total_modules']} - # robots: {global_dict[k]['total_robots']}")
      ax.set_xlabel('x position [mm]')
      ax.set_ylabel('y position [mm]')
+
+# create figure and axis objects with subplots()
+fig,ax = plt.subplots()
+# make a plot
+ax.plot(param.intlist2str(nbots), global_dict['Overall_results']['coverages_list'],
+        color="red", marker="o")
+# set x-axis label
+ax.set_xlabel("# robots/module")
+# set y-axis label
+ax.set_ylabel("Coverage [% of vigR area]",
+              color="red")
+# twin object for two different y-axis on the sample plot
+ax2=ax.twinx()
+# make a plot with different y-axis using second axis object
+ax2.plot(param.intlist2str(nbots), global_dict['Overall_results']['total_robots_list'],
+         color="blue",marker="o")
+ax2.set_ylabel("Total # robots",color="blue")
+plt.grid()
 
 end_time = time.time()
 
