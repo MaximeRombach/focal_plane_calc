@@ -174,8 +174,6 @@ for nb_robots in nbots:
           transformed_all = param.rotate_and_translate(intermediate_collection_speed, angle, dx, dy, origin = "centroid")
 
           new_boundary = transformed_all.geoms[0]
-          print(dx,dy)
-          print(new_boundary)
           new_modules = transformed_all.geoms[1]
           new_coverage = transformed_all.geoms[2]
           color_boundary = 'green'
@@ -319,7 +317,7 @@ if param.global_frame_thick > 0:
      param.save_figures_to_dir(save_plots, figtitle)
 
 
-figtitle = param.final_title(nb_robots, total_modules, total_robots, param.intermediate_frame_thick, param.global_frame_thick)
+figtitle = param.final_title(nb_robots, total_modules, total_robots, param.intermediate_frame_thick, param.global_frame_thick, allow_small_out, out_allowance)
 f, ax= plt.subplots(figsize=(10, 10), sharex = True, sharey=True)
 f.suptitle(figtitle)
 gdf_modules.plot(ax=ax,facecolor='None')
@@ -331,7 +329,7 @@ plot_polygon(global_bounding_polygon, ax=ax, add_points=False, edgecolor='orange
 
 param.save_figures_to_dir(save_plots, figtitle)
 
-figtitle = param.final_title(nb_robots, total_modules, total_robots, param.intermediate_frame_thick, param.global_frame_thick, disp_robots_info=False)
+figtitle = param.final_title(nb_robots, total_modules, total_robots, param.intermediate_frame_thick, param.global_frame_thick, allow_small_out, out_allowance, disp_robots_info=False)
 f, axes= plt.subplots(nrows=2,ncols=3, figsize=(17, 17), sharex = True, sharey=True)
 f.suptitle(figtitle)
 axes = axes.flatten()
@@ -344,7 +342,6 @@ axes = [ax1, ax2, ax3, ax4, ax5]
 for idx, (k,ax) in tqdm(enumerate(zip(keys, axes))):
 
      gdf_bound = gpd.GeoDataFrame(global_dict[k]['boundaries_df'])
-     # print(gdf_bound)
      gdf_modules = gpd.GeoDataFrame(global_dict[k]['modules_df'])
      gdf_coverage = gpd.GeoDataFrame(global_dict[k]['coverage_df'])
      
@@ -359,9 +356,9 @@ for idx, (k,ax) in tqdm(enumerate(zip(keys, axes))):
      ax.set_ylabel('y position [mm]')
 
 # create figure and axis objects with subplots()
-fig,ax = plt.subplots()
+fig,ax = plt.subplots(figsize = (8,8))
 # make a plot
-ax.plot(param.intlist2str(nbots), global_dict['Overall_results']['coverages_list'],
+ax.plot(nbots, global_dict['Overall_results']['coverages_list'],
         color="red", marker="o")
 # set x-axis label
 ax.set_xlabel("# robots/module")
@@ -371,10 +368,10 @@ ax.set_ylabel("Coverage [% of vigR area]",
 # twin object for two different y-axis on the sample plot
 ax2=ax.twinx()
 # make a plot with different y-axis using second axis object
-ax2.plot(param.intlist2str(nbots), global_dict['Overall_results']['total_robots_list'],
+ax2.plot(nbots, global_dict['Overall_results']['total_robots_list'],
          color="blue",marker="o")
 ax2.set_ylabel("Total # robots",color="blue")
-plt.grid()
+ax.grid()
 
 end_time = time.time()
 

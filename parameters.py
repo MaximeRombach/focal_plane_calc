@@ -41,7 +41,7 @@ intermediate_frame_thick =  1 # [mm] spacing between modules inside intermediate
 
 """ Global frame parameters """
 
-global_frame_thick = 4 # [mm] spacing between modules in global arrangement
+global_frame_thick = 3 # [mm] spacing between modules in global arrangement
 
 """ Module parameters """ 
 
@@ -303,11 +303,6 @@ module_vertices_y = np.array([0,0,69.3,0])
 module_vertices_x = np.array([7.5, 72.5, 76.25, 43.75, 36.25, 3.75, 7.5]) # [mm]
 module_vertices_y = np.array([0, 0, 6.5, 62.8, 62.8, 6.5, 0]) # [mm]
 
-
-
-
-
-
 def to_polygon_format(x,y):
      """ Input:
           - x,y: 2 sets of coordinates for polygon creation
@@ -401,20 +396,24 @@ def plot_intermediate_speed(mod_collection, label_coverage):
           s12=time.time()
           # print(f"0: {s12-s11} s")
                
-def final_title(nb_robots, total_modules, total_robots, inter_frame_thick, global_frame_thick, disp_robots_info = True):
+def final_title(nb_robots, total_modules, total_robots, inter_frame_thick, global_frame_thick, allow_small_out, out_allowance, disp_robots_info = True):
+
+
+     if allow_small_out:
+          small_out_info = f"Out allowance: {out_allowance * 100} %"
 
      if disp_robots_info:
           robots_info = f"\n Total # modules: {total_modules} - Total # robots: {total_robots}"
-          modules_info = f"- {nb_robots} robots per module"
+          modules_info = f" {nb_robots} robots per module"
      else:
           robots_info = ''
           modules_info = ''
      if inter_frame_thick != global_frame_thick:
-          figtitle = f"Semi frameless {modules_info} \n Inner gap: {inter_frame_thick} mm - Global gap: {global_frame_thick} mm {robots_info}"
+          figtitle = f"Semi frameless - {modules_info} \n Inner gap: {inter_frame_thick} mm - Global gap: {global_frame_thick} mm {robots_info} \n {small_out_info} \n"
      elif inter_frame_thick == global_frame_thick and global_frame_thick == 0:
-          figtitle = f"Frameless - {modules_info} {robots_info}"
+          figtitle = f"Frameless - {modules_info} {robots_info} \n {small_out_info} \n"
      else:
-          figtitle = f"Framed - {modules_info} Gap: {inter_frame_thick} mm {robots_info}"
+          figtitle = f"Framed - {modules_info} Gap: {inter_frame_thick} mm {robots_info} \n {small_out_info} \n"
 
      return figtitle
 
