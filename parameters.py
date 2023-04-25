@@ -10,6 +10,7 @@ import time
 from shapely.plotting import plot_polygon, plot_points
 import os
 from datetime import datetime
+import alphashape # WARNING: check this git issue to solve compatibility problem between shapely 2.0 and alphashape: https://github.com/bellockk/alphashape/issues/36 
 
 logging.basicConfig(level=logging.INFO)
 
@@ -262,13 +263,16 @@ class IntermediateTriangle:
      def create_intermediate_triangle(self):
           
           boundaries = []
+          boundary_xx = []
+          boundary_yy = []
           intermediate_collection = []
           inter_coverage = []
           covered_area = 0
-          inter_boundaries_df = {'geometry':[], 'color': []}
+          inter_boundaries_df = {'name':[],'geometry':[], 'color': []}
           inter_modules_df = {'geometry':[]}
           inter_coverage_df = {'geometry':[]}
           inter_robots_df = {'geometry':[]}
+          
 
           for idx, (rotate, dx, dy) in enumerate(zip(self.flip, self.x_grid_inter, self.y_grid_inter)):
 
@@ -277,23 +281,46 @@ class IntermediateTriangle:
                else:
                     angle = 0
 
-               transformed_all = rotate_and_translate(self.module_collection, angle, dx, dy, origin = "centroid")
-               boundaries.append(transformed_all.geoms[0])
+               transformed_all = rotate_and_translate(self.module_collection, angle, dx, dy, origin = "centroid") # place module at the correct pos and orientation
+               boundaries.append(transformed_all.geoms[0]) # log the exterior boundary points of the transformed module
+               inter_modules_df['geometry'].append(transformed_all.geoms[0])
                inter_coverage.append(transformed_all.geoms[2])
+               inter_coverage_df['geometry'].append(transformed_all.geoms[2])
                intermediate_collection.append(transformed_all)
+               inter_robots_df['geometry'].append(transformed_all.geoms[3])
+               
+               xx,yy = transformed_all.geoms[0].exterior.coords.xy
+               boundary_xx.append(xx.tolist())
+               boundary_yy.append(yy.tolist())
+
 
           modules_polygon_intermediate = MultiPolygon(boundaries)
+          # Convex hull of boundaries
           bounding_polygon_intermediate = modules_polygon_intermediate.convex_hull
+          inter_boundaries_df['name'].append('Inter_convex_hull')
+          inter_boundaries_df['geometry'].append(modules_polygon_intermediate.convex_hull)
+          inter_boundaries_df['color'].append('green')
+          # Concave hull of boundaries
+          int_cent = np.array(bounding_polygon_intermediate.centroid.xy).reshape((1,2))
+          boundary_xx = flatten_list(boundary_xx)
+          boundary_yy = flatten_list(boundary_yy)
+          pol_points = sort_points_for_polygon_format(boundary_xx,boundary_yy, int_cent)
+          concave_hull = Polygon(pol_points)
+          inter_boundaries_df['name'].append('Inter_concave_hull')
+          inter_boundaries_df['geometry'].append(concave_hull)
+          inter_boundaries_df['color'].append('orange')
           coverage_polygon_intermediate = MultiPolygon(inter_coverage) # save coverage as whole to speedup global calculation
           # plot_polygon(coverage_polygon_intermediate, add_points=False)
           covered_area_inter = coverage_polygon_intermediate.area
           intermediate_collection.append(bounding_polygon_intermediate)
           intermediate_collection = GeometryCollection(intermediate_collection)
-          intermediate_collection_speed = GeometryCollection([bounding_polygon_intermediate, modules_polygon_intermediate, coverage_polygon_intermediate])
+          intermediate_collection_speed = GeometryCollection([bounding_polygon_intermediate, modules_polygon_intermediate, coverage_polygon_intermediate, concave_hull])
           available_intermediate_area = round(bounding_polygon_intermediate.area,1)
           intermediate_coverage = round(covered_area_inter/available_intermediate_area*100,1)
+          inter_df = {'inter_boundaries': inter_boundaries_df, 'inter_modules': inter_modules_df, 'inter_coverage': inter_coverage_df, 'inter_robots': inter_robots_df, 'intermediate_coverage': intermediate_coverage}
 
-          return intermediate_collection, intermediate_collection_speed, intermediate_coverage
+          return intermediate_collection, intermediate_collection_speed, intermediate_coverage, inter_df
+     
 
 # Raw triangle
 module_vertices_x = np.array([0,80,40,0])
@@ -355,6 +382,9 @@ def make_vigR_polygon(pizza_angle = 360, r = vigR):
 
      return pizza
 
+def plot_vigR_poly(pizza, label = None):
+     plot_polygon(pizza, add_points = False, edgecolor = 'black', linestyle = '--', facecolor= 'None', label = label)
+
 def plot_module(module_collection, label_coverage, label_robots, ignore_points):
      for jdx, geo in enumerate(module_collection.geoms):
           # plot_polygon(geometry[jdx], add_points=False, facecolor='None' , edgecolor='black')
@@ -377,7 +407,9 @@ def plot_intermediate(intermediate_collection, nb_robots, ignore_points, interme
                label_coverage = None
                label_robots = None
           if (isinstance (mod_collection, Polygon)):
-               plot_polygon(mod_collection, add_points=False, facecolor='None', linestyle = '-.', color = 'green', label = 'Available area: {} mm$^2$'.format(available_intermediate_area))
+               plot_polygon(mod_collection, add_points=False, facecolor='None', linestyle = '-.', color = 'green')
+
+               # plot_polygon(mod_collection, add_points=False, facecolor='None', linestyle = '-.', color = 'green', label = 'Available area: {} mm$^2$'.format(available_intermediate_area))
                continue
           plot_module(mod_collection, label_coverage, label_robots, ignore_points)
 
@@ -401,6 +433,8 @@ def final_title(nb_robots, total_modules, total_robots, inter_frame_thick, globa
 
      if allow_small_out:
           small_out_info = f"Out allowance: {out_allowance * 100} %"
+     else:
+          small_out_info = ''
 
      if disp_robots_info:
           robots_info = f"\n Total # modules: {total_modules} - Total # robots: {total_robots}"
@@ -419,3 +453,27 @@ def final_title(nb_robots, total_modules, total_robots, inter_frame_thick, globa
 
 def intlist2str(list):
      return [str(x) for x in list]
+
+def flatten_list(l):
+     return [item for sublist in l for item in sublist]
+
+def makeKey(key_int):
+     return f'n{key_int}'
+
+def sort_points_for_polygon_format(x,y, centroid):
+     """
+     Sort points (np array) counterclockwise for later polygon creation
+     """
+     points = []
+     for (xi,yi) in zip(x, y):
+          points.append([xi,yi])
+     points = np.array(points)
+     vec = points - centroid # get vector connecting centroid of points to them
+     angles = np.arctan2(vec[:,1],vec[:,0]) # calculate angle of each vector
+     d = np.hstack((vec, angles.reshape(len(angles),1))) # put everything in one array
+     d = d[d[:, 2].argsort()] # sort the points by ascending order array
+ 
+     return to_polygon_format(d[:,0], d[:,1])
+
+
+
