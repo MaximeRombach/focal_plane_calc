@@ -69,8 +69,9 @@ ignore_points = False
 # Global things
 
 for nb_robots in nbots:
-
-     mod_param = param.Module(nb_robots)
+     width_increase = 1 # [mm] How much we want to increase the base length of a module
+     chanfer_length = 7.5 # [mm] Size of chanfers of module vertices (base value: 7.5)
+     mod_param = param.Module(nb_robots, width_increase, chanfer_length)
      key = mod_param.key
      keys.append(key)
      module_width = mod_param.module_width
@@ -78,6 +79,12 @@ for nb_robots in nbots:
      module_collection, wks_list, coverages = mod_param.create_module()
      module, module_w_beta_and_safety_dist, effective_wks, triang_meshgrid = module_collection.geoms
      coverage_with_walls, coverage_no_walls = coverages
+
+     # plot_polygon(module, add_points= False, facecolor='None', edgecolor='black')
+     # plot_polygon(effective_wks, add_points= False, alpha = 0.2, edgecolor='black', label=f'Coverage = {coverage_with_walls} %')
+     # plot_points(triang_meshgrid, color='black')
+     # plt.legend()
+     # plt.show()
 
      # %% 2)a) Meshing the grid for intermediate frame (4 triangles: 3 upwards + 1 downwards)
 
@@ -87,8 +94,6 @@ for nb_robots in nbots:
 
      inter_param = param.IntermediateTriangle(module_collection, dist_inter, angles, flip)
      intermediate_collection, intermediate_collection_speed, intermediate_coverage, inter_df = inter_param.create_intermediate_triangle()
-     
-
 
 
      # %% 2)b) Start meshing the grid for the whole thing
@@ -147,7 +152,7 @@ for nb_robots in nbots:
      x_grid = y_sph
      y_grid = z_sph
      grid_sph = MultiPoint(param.to_polygon_format(x_grid, y_grid))
-     
+     logging.info(f'Grid created for {nb_robots} robots case')
      # plot_points(grid_sph, color='red')
      # min_pizz = param.make_vigR_polygon(r = vigR-rho)
      # max_pizz = param.make_vigR_polygon(r = vigR+rho)
@@ -165,14 +170,15 @@ for nb_robots in nbots:
      #%% 2)c) Place the intermediate triangles accordingly on the grid
 
      fill_empty = True # Fill empty spaces by individual modules
-     allow_small_out = False # allow covered area of module to stick out of vigR (i.e. useless covered area because does not receive light)
-     out_allowance = 0.1 # percentage of the covered area of a module authorized to stick out of vigR
+     allow_small_out = True # allow covered area of module to stick out of vigR (i.e. useless covered area because does not receive light)
+     out_allowance = 0.07 # percentage of the covered area of a module authorized to stick out of vigR
      covered_area = 0 
      total_modules = 0
      boundaries_df = {'geometry':[], 'color': []}
      modules_df = {'geometry':[]}
      coverage_df ={'geometry':[]}
      # Create module arrangement from the global grid
+     logging.info(f'Arranging focal plane for {nb_robots} robot case')
      for idx, (rotate, dx, dy) in enumerate(zip(flip_global, x_grid, y_grid)):
 
           if rotate:
@@ -194,7 +200,8 @@ for nb_robots in nbots:
                continue
           
           
-          # Check if intermediate module goes out from vigR
+          # Check if intermediate module goes out from vigR and keep the modules that are either right inside and, if allowed,
+          # the ones that only stick out of a certain amount
           elif fill_empty and sticks_out:
 
                temp_mod = []
@@ -207,19 +214,23 @@ for nb_robots in nbots:
                     # plot_polygon(mod)
                     cent = np.array(cov.centroid.xy)
                     cov_out = cov.difference(pizza)
+
                     centroid_out = np.sqrt(cent[0]**2 + cent[1]**2) > vigR
                     if not cov.overlaps(pizza) and not centroid_out:
-                    # if np.sqrt(cent[0]**2 + cent[1]**2)<vigR+10:
+                    # If the coverage area of a single module does not stick out of vigR and is within vigR, we keep it
                          temp_mod.append(mod)
                          temp_cov.append(cov)
                          color_boundary = 'blue'
 
-                    elif allow_small_out and cov_out.area/cov.area < 0.07 and not centroid_out:
+                    elif allow_small_out and cov_out.area/cov.area < out_allowance and not centroid_out:
+                         # If the coverage area of a module sticks out by less than the authorized amount, we keep it
+                         remaining_cov = cov.intersection(pizza)
                          temp_mod.append(mod)
-                         temp_cov.append(cov)
+                         temp_cov.append(remaining_cov)
                          color_boundary = 'blue'
 
-               if not temp_mod: #check if empty list; skip case if True (corrects huge bug)
+               if not temp_mod: 
+                    #check if empty list; skip case if True (corrects huge bug)
                     continue
                if len(temp_mod) == 4:
                     color_boundary = 'green'          
@@ -266,7 +277,6 @@ for nb_robots in nbots:
      global_dict['Overall_results']['total_modules_list'].append(total_modules) 
      global_dict['Overall_results']['coverages_list'].append(global_coverage)
      print(f"Total # modules: {total_modules} \n", f"Total # robots: {total_robots}")
-
      
 # %% Plot plot time 
 
@@ -291,6 +301,7 @@ param.save_figures_to_dir(save_plots, figtitle)
 
 plt.figure(figsize=(8,8))
 figtitle = f"Module coverage with summed coverage + walls \n {nb_robots} robots per module"
+filename = f"Module cov w walls - {nb_robots} robots per mod"
 plt.title(figtitle)
 plot_polygon(module, facecolor='None', edgecolor='black', add_points=False)
 plot_polygon(module_w_beta_and_safety_dist, facecolor='None', linestyle = '--', add_points=False
@@ -301,37 +312,38 @@ plot_polygon(effective_wks, add_points=False, alpha=0.2, edgecolor='black', labe
 plt.xlabel('x position [mm]')
 plt.ylabel('y position [mm]')
 plt.legend(shadow = True)
-figtitle="1"
-param.save_figures_to_dir(save_plots, figtitle)
+param.save_figures_to_dir(save_plots, filename)
 
 plt.figure(figsize=(10,10))
 figtitle = f"Intermediate frame - {nb_robots} robots per module \n Inner gap: {param.intermediate_frame_thick} mm \n Total # modules: 4 - Total # robots: {nb_robots*4}"
+filename = f"Intermediate plot - {nb_robots} robots per mod"
 plt.title(figtitle)
 param.plot_intermediate(intermediate_collection, nb_robots, False, intermediate_coverage, draw_legend = True)
-
+gdf_inter_bound = gpd.GeoDataFrame(inter_df)
 plt.xlabel('x position [mm]')
 plt.ylabel('y position [mm]')
 plt.legend(shadow = True)
-figtitle="2"
-param.save_figures_to_dir(save_plots, figtitle)
+param.save_figures_to_dir(save_plots, filename)
 
-if param.global_frame_thick > 0:
-     frame=pizza.difference(GeometryCollection(list(global_dict['n75']['boundaries_df']['geometry'])))
-     plt.figure(figsize=(10,10))   
-     figtitle = f'Frame to manufacture - {nb_robots} per module'
-     plt.title(figtitle)
-     # plot_polygon(global_bounding_polygon, add_points = False, facecolor = 'None', edgecolor ='orange', linestyle = '--')
-     plot_polygon(frame, add_points=False, facecolor='red', alpha = 0.2, edgecolor = 'black', label=f'Wall thickness = {param.global_frame_thick} mm')
-     plot_polygon(pizza.exterior.buffer(-20, single_sided = True), add_points=False, facecolor='red', alpha = 0.2, edgecolor = 'black')
-     param.plot_vigR_poly(pizza, label = 'vigR')
-     plt.xlabel('x position [mm]')
-     plt.ylabel('y position [mm]')
-     plt.legend(shadow = True)
-     plt.legend()
-     param.save_figures_to_dir(save_plots, figtitle)
+# if param.global_frame_thick > 0:
+#      frame=pizza.difference(GeometryCollection(list(global_dict['n63']['boundaries_df']['geometry'])))
+#      plt.figure(figsize=(10,10))   
+#      figtitle = f'Frame to manufacture - {nb_robots} per module'
+#      filename = figtitle
+#      plt.title(figtitle)
+#      # plot_polygon(global_bounding_polygon, add_points = False, facecolor = 'None', edgecolor ='orange', linestyle = '--')
+#      plot_polygon(frame, add_points=False, facecolor='red', alpha = 0.2, edgecolor = 'black', label=f'Wall thickness = {param.global_frame_thick} mm')
+#      plot_polygon(pizza.exterior.buffer(-20, single_sided = True), add_points=False, facecolor='red', alpha = 0.2, edgecolor = 'black')
+#      param.plot_vigR_poly(pizza, label = 'vigR')
+#      plt.xlabel('x position [mm]')
+#      plt.ylabel('y position [mm]')
+#      plt.legend(shadow = True)
+#      plt.legend()
+#      param.save_figures_to_dir(save_plots, filename)
 
 
 figtitle = param.final_title(nb_robots, total_modules, total_robots, param.intermediate_frame_thick, param.global_frame_thick, allow_small_out, out_allowance)
+filename = f"Coverage global - {nb_robots} rob - Inner {param.intermediate_frame_thick} mm - Global {param.global_frame_thick} mm"
 f, ax= plt.subplots(figsize=(10, 10), sharex = True, sharey=True)
 f.suptitle(figtitle)
 gdf_modules.plot(ax=ax,facecolor='None')
@@ -340,8 +352,7 @@ gdf_coverage.plot(column='label',ax=ax, alpha=0.2, legend=True, legend_kwds={'lo
 
 plot_polygon(pizza, ax=ax, add_points=False, edgecolor='black', facecolor='None', linestyle='--')
 plot_polygon(global_bounding_polygon, ax=ax, add_points=False, edgecolor='orange', facecolor='None', linestyle='--',label='Instrumented area')
-figtitle="3"
-param.save_figures_to_dir(save_plots, figtitle)
+param.save_figures_to_dir(save_plots, filename)
 
 figtitle = param.final_title(nb_robots, total_modules, total_robots, param.intermediate_frame_thick, param.global_frame_thick, allow_small_out, out_allowance, disp_robots_info=False)
 f, axes= plt.subplots(nrows=2,ncols=2, figsize=(12, 12), sharex = True, sharey=True)
@@ -368,7 +379,6 @@ for idx, (k,ax) in tqdm(enumerate(zip(keys, axes))):
      ax.set_title(f"{global_dict[k]['nb_robots']} robots / module \n # modules: {global_dict[k]['total_modules']} - # robots: {global_dict[k]['total_robots']}")
      ax.set_xlabel('x position [mm]')
      ax.set_ylabel('y position [mm]')
-figtitle="4"
 param.save_figures_to_dir(save_plots, figtitle)
 
 fig,ax = plt.subplots(figsize = (8,8))

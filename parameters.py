@@ -13,6 +13,7 @@ from datetime import datetime
 import alphashape # WARNING: check this git issue to solve compatibility problem between shapely 2.0 and alphashape: https://github.com/bellockk/alphashape/issues/36 
 
 logging.basicConfig(level=logging.INFO)
+tan30 = np.tan(np.deg2rad(30))
 
 ## Parameters ##
 
@@ -21,20 +22,6 @@ logging.basicConfig(level=logging.INFO)
 vigR = 613.27 # [mm] radius of the instrument
 curve_radius = 11067 # [mm] curvature of the focal plane
 
-"""Positioner parameters""" 
-
-la = 1.8 # alpha arm length [mm] /!\ lb > la /!\
-lb = 1.8 # beta arm length [mm]
-pitch = 6.2 # pitch [mm]
-alpha = np.linspace(-180,180,180) # [deg] rotational range of alpha arm
-beta = np.linspace(-180,180,180) # [deg] rotational range of beta arm (holding the fiber)
-beta2fibre = 1 # [mm] distance fiber center to edge of beta arm
-
-x_first = 5.9 # [mm] Horizontal pos of first robot (bottom left)
-y_first = 3.41 # [mm] Vertical pos of first robot (bottom left)
-x_inc = 3.1 # [mm] Horizontal increment at each row
-y_inc = 5.369 # [mm] Vertical increment at each row
-test_pitch = np.linalg.norm(np.array([x_inc,y_inc]))
 
 """ Intermediate frame parameters """
 
@@ -48,7 +35,9 @@ global_frame_thick = 3 # [mm] spacing between modules in global arrangement
 
 class Module:
 
-     def __init__(self, nb_robots):
+     def __init__(self, nb_robots, width_increase = 0, chanfer_length = 7.5):
+
+          """Robot parameters""" 
 
           self.nb_robots = nb_robots
           self.la = 1.8 # alpha arm length [mm] /!\ lb > la /!\
@@ -58,14 +47,20 @@ class Module:
           self.beta = np.linspace(-180,180,180) # [deg] rotational range of beta arm (holding the fiber)
           self.beta2fibre = 1 # [mm] distance fiber center to edge of beta arm
 
-          self.x_first = 5.9 # [mm] Horizontal pos of first robot (bottom left)
-          self.y_first = 3.41 # [mm] Vertical pos of first robot (bottom left)
+          """Module parameters"""
+
+          self.chanfer_length = chanfer_length # [mm] Length of chanfer on module vertices
+          self.width_increase = width_increase # [mm] Increase module side length w/o changing nb of pos
+          
+          self.x_first = 5.9 + self.width_increase/2 # [mm] Horizontal pos of first robot (bottom left)
+          self.y_first = 3.41 + self.width_increase/2 * tan30 # [mm] Vertical pos of first robot (bottom left)
+          
           self.x_inc = 3.1 # [mm] Horizontal increment at each row
           self.y_inc = 5.369 # [mm] Vertical increment at each row
-          self.test_pitch = np.linalg.norm(np.array([x_inc,y_inc]))
+          self.test_pitch = np.linalg.norm(np.array([self.x_inc,self.y_inc]))
 
-          self.safety_distance = 0.5 # [mm] physical distance kept between shields and edge of beta arm
-          self.offset_from_module_edges = self.safety_distance + beta2fibre
+          self.safety_distance = 0.4 # [mm] physical distance kept between shields and edge of beta arm
+          self.offset_from_module_edges = self.safety_distance + self.beta2fibre
           self.start_offset_x = 6.2 # [mm]
           self.start_offset_y = 3.41 # [mm]
 
@@ -73,30 +68,30 @@ class Module:
 
           if self.nb_robots == 52:
 
-               self.module_width = 67.6 # [mm] triangle side length
+               self.module_width = 67.6 + self.width_increase # [mm] triangle side length
                self.nb_rows = 9 # number of rows of positioners
                self.key = 'n52'
 
           elif self.nb_robots == 63:
                
-               self.module_width = 73.8# [mm] triangle side length
+               self.module_width = 73.8 + self.width_increase# [mm] triangle side length
                self.nb_rows = 10 # number of rows of positioners
                self.key = 'n63'
 
           elif self.nb_robots == 75:
 
-               self.module_width = 80 # [mm] triangle side length
+               self.module_width = 80 + self.width_increase # [mm] triangle side length
                self.nb_rows = 11 # number of rows of positioners
                self.key = 'n75'
 
           elif self.nb_robots == 88:
-               self.module_width = 86.2 # [mm] triangle side length
+               self.module_width = 86.2 + self.width_increase # [mm] triangle side length
                self.nb_rows = 12 # number of rows of positioners
                self.key = 'n88'
 
           elif self.nb_robots == 102:
                
-               self.module_width = 92.4 # [mm] triangle side length
+               self.module_width = 92.4 + self.width_increase # [mm] triangle side length
                self.nb_rows = 13 # number of rows of positioners
                self.key = 'n102'
 
@@ -121,13 +116,12 @@ class Module:
 
           return x_vertices,y_vertices
 
-     def chanfered_base(self, chanfer_length = 7.5):
+     def chanfered_base(self):
           
           x_vertices,y_vertices = self.equilateral_vertices(self.module_width)
           module_triangle = Polygon(to_polygon_format(x_vertices,y_vertices))
 
-          x_chanfer,y_chanfer = self.equilateral_vertices(chanfer_length)
-
+          x_chanfer,y_chanfer = self.equilateral_vertices(self.chanfer_length)
 
           chanfer_triangle = Polygon(to_polygon_format(x_chanfer-0.0001,y_chanfer-0.0001)) # tiny diff for geometry to intersect in one point rather tha infinite points (there is a better solution)
 
@@ -243,7 +237,7 @@ class Module:
           coverage_no_walls = round(total_positioners_workspace.area/module.area * 100,1)
           coverages = [coverage_with_walls, coverage_no_walls]
 
-          logging.info(f'Module object created with {nbots} robots')
+          logging.info(f'Module object created with width {self.module_width} & {nbots} robots')
           return module_collection, multi_wks_list, coverages
 
 class IntermediateTriangle: 
@@ -319,6 +313,7 @@ class IntermediateTriangle:
           intermediate_coverage = round(covered_area_inter/available_intermediate_area*100,1)
           inter_df = {'inter_boundaries': inter_boundaries_df, 'inter_modules': inter_modules_df, 'inter_coverage': inter_coverage_df, 'inter_robots': inter_robots_df, 'intermediate_coverage': intermediate_coverage}
 
+          logging.info(f'Inter triangle object created')
           return intermediate_collection, intermediate_collection_speed, intermediate_coverage, inter_df
      
 
@@ -432,7 +427,7 @@ def final_title(nb_robots, total_modules, total_robots, inter_frame_thick, globa
 
 
      if allow_small_out:
-          small_out_info = f"Out allowance: {out_allowance * 100} %"
+          small_out_info = f"Out allowance: {out_allowance * 100:0.1f} %"
      else:
           small_out_info = ''
 
