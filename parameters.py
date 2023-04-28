@@ -66,6 +66,7 @@ class Module:
 
           self.is_wall = True # flag for protective shields or not on modules
 
+          # 1 row addition from one case to another 
           if self.nb_robots == 52:
 
                self.module_width = 67.6 + self.width_increase # [mm] triangle side length
@@ -99,7 +100,11 @@ class Module:
                raise Exception('Error: only 52, 63, 75, 88, 102 robots per module supported')
           
      def equilateral_vertices(self, triangle_width, xoff = 0, yoff = 0):
-          
+          """
+          Create the raw triangular base of a module w/ the correct width
+
+          Output: sets of x,y coords of the triangle's vertices
+          """
           x_vertices = np.ones(4)
           offset = [xoff, yoff]
           x_vertices[0] = offset[0]
@@ -117,12 +122,19 @@ class Module:
           return x_vertices,y_vertices
 
      def chanfered_base(self):
+          """
+          1) Creation of small triangles that will serve to cut the raw triangle for chanfering
+          2) Cuts triangular base with small triangles to create the chanfers
+          
+          Output: sets of x,y coords of the chanfered module's vertices
+          """
           
           x_vertices,y_vertices = self.equilateral_vertices(self.module_width)
           module_triangle = Polygon(to_polygon_format(x_vertices,y_vertices))
 
           x_chanfer,y_chanfer = self.equilateral_vertices(self.chanfer_length)
 
+          # First chanfer created from the origin
           chanfer_triangle = Polygon(to_polygon_format(x_chanfer-0.0001,y_chanfer-0.0001)) # tiny diff for geometry to intersect in one point rather tha infinite points (there is a better solution)
 
           chanfers = [chanfer_triangle]
@@ -130,14 +142,14 @@ class Module:
           module_centroid = module_triangle.centroid
           
           for angle in angles:
+               # Move the 2 remaining triangles to their corresponding location at the triangle's edges
                rot_chanfer_triangle = rotate_and_translate(chanfer_triangle, angle, 0, 0, origin = module_centroid)
                chanfers.append(rot_chanfer_triangle)
                chanfered_base = module_triangle.difference(rot_chanfer_triangle)
                
 
           multi_chanfers = MultiPolygon(chanfers)
-
-          plt.show()
+          # Apply cut on triangular base
           chanfered_base = module_triangle.difference(multi_chanfers)
           
           return chanfered_base
@@ -313,18 +325,8 @@ class IntermediateTriangle:
           intermediate_coverage = round(covered_area_inter/available_intermediate_area*100,1)
           inter_df = {'inter_boundaries': inter_boundaries_df, 'inter_modules': inter_modules_df, 'inter_coverage': inter_coverage_df, 'inter_robots': inter_robots_df, 'intermediate_coverage': intermediate_coverage}
 
-          logging.info(f'Inter triangle object created')
           return intermediate_collection, intermediate_collection_speed, intermediate_coverage, inter_df
      
-
-# Raw triangle
-module_vertices_x = np.array([0,80,40,0])
-module_vertices_y = np.array([0,0,69.3,0])
-
-# Edge cut module
-module_vertices_x = np.array([7.5, 72.5, 76.25, 43.75, 36.25, 3.75, 7.5]) # [mm]
-module_vertices_y = np.array([0, 0, 6.5, 62.8, 62.8, 6.5, 0]) # [mm]
-
 def to_polygon_format(x,y):
      """ Input:
           - x,y: 2 sets of coordinates for polygon creation
@@ -360,7 +362,7 @@ def save_figures_to_dir(save, suffix_name):
      if not os.path.isdir(results_dir):
           os.makedirs(results_dir)
 
-     plt.savefig(results_dir + today_filename, bbox_inches = 'tight')
+     plt.savefig(results_dir + today_filename, bbox_inches = 'tight', format='png', dpi = 1200)
 
 def make_vigR_polygon(pizza_angle = 360, r = vigR):
       
@@ -442,20 +444,17 @@ def final_title(nb_robots, total_modules, total_robots, inter_frame_thick, globa
      elif inter_frame_thick == global_frame_thick and global_frame_thick == 0:
           figtitle = f"Frameless - {modules_info} {robots_info} \n {small_out_info} \n"
      else:
-          figtitle = f"Framed - {modules_info} Gap: {inter_frame_thick} mm {robots_info} \n {small_out_info} \n"
+          figtitle = f"Framed - {modules_info} \n Gap: {inter_frame_thick} mm {robots_info} \n {small_out_info} \n"
 
      return figtitle
 
-def intlist2str(list):
-     return [str(x) for x in list]
-
-def flatten_list(l):
+def flatten_list(l:list):
      return [item for sublist in l for item in sublist]
 
-def makeKey(key_int):
+def makeKey(key_int: int):
      return f'n{key_int}'
 
-def sort_points_for_polygon_format(x,y, centroid):
+def sort_points_for_polygon_format(x: list, y: list, centroid):
      """
      Sort points (np array) counterclockwise for later polygon creation
      """
@@ -467,8 +466,4 @@ def sort_points_for_polygon_format(x,y, centroid):
      angles = np.arctan2(vec[:,1],vec[:,0]) # calculate angle of each vector
      d = np.hstack((vec, angles.reshape(len(angles),1))) # put everything in one array
      d = d[d[:, 2].argsort()] # sort the points by ascending order array
- 
-     return to_polygon_format(d[:,0], d[:,1])
-
-
-
+     return to_polygon_format(d[:,0] + centroid[0,0], d[:,1]+ centroid[0,1])

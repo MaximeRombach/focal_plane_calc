@@ -19,6 +19,15 @@
 
 # To find the neighbours of a down triangle, add 1 to a co-ordinate, and subtract one for neighbours of an up triangle.
 
+"""
+Note by @Maxime Rombach:
+In my case, I am also interested in studying "triangle centered" grid insted of a "vertices centered" one
+- Triangle centered: a + b + c = 0 or 1 for "valid" triangle
+- Vertices centered:  a + b + c = 1 or 2 for "valid" triangle
+
+The following functions suppose a "vertices centered" grid by default
+"""
+
 from math import floor, ceil, sqrt
 # from common import mod
 
@@ -38,9 +47,14 @@ def tri_center(a, b, c, edge_length):
     return ((       0.5 * a +                      -0.5 * c) * edge_length,
             (-sqrt3 / 6 * a + sqrt3 / 3 * b - sqrt3 / 6 * c) * edge_length)
 
-def points_up(a, b, c):
+def points_up(a, b, c, origin = 'vertex'):
     """Returns True if this is an upwards pointing triangle, otherwise False"""
-    return a + b + c == 2
+    if origin == 'vertex':
+        return a + b + c == 2
+    elif origin == 'triangle':
+        return a + b + c == 1
+    else:
+        raise Exception('Origin can either be "vertex" or "triangle"')
 
 def tri_corners(a, b, c):
     """Returns the three corners of a given triangle in cartesian co-ordinates"""
