@@ -23,13 +23,13 @@ vigR = 613.27 # [mm] radius of the instrument
 curve_radius = 11067 # [mm] curvature of the focal plane
 
 
-""" Intermediate frame parameters """
+# """ Intermediate frame parameters """
 
-intermediate_frame_thick =  1 # [mm] spacing between modules inside intermediate frame
+# intermediate_frame_thick =  1 # [mm] spacing between modules inside intermediate frame
 
-""" Global frame parameters """
+# """ Global frame parameters """
 
-global_frame_thick = 3 # [mm] spacing between modules in global arrangement
+# global_frame_thick = 3 # [mm] spacing between modules in global arrangement
 
 """ Module parameters """ 
 
@@ -254,16 +254,16 @@ class Module:
 
 class IntermediateTriangle: 
 
-     def __init__(self, module_collection, dist_inter, angles, flip):
+     def __init__(self, module_collection, module_width, intermediate_frame_thick):
 
           self.module_collection = module_collection
-          self.dist_inter = dist_inter
-          self.angles = angles
-          self.flip = flip
+          self.dist_inter = 2*module_width*np.sqrt(3)/6 + intermediate_frame_thick # distance between each neighbor from center module
+          self.angles = np.array([-30, 90, 210])
+          self.flip = [True,False,False,False]
 
-          self.x_grid_inter = np.cos(np.deg2rad(angles))*dist_inter
+          self.x_grid_inter = np.cos(np.deg2rad(self.angles))*self.dist_inter
           self.x_grid_inter = np.insert(self.x_grid_inter, 0, 0)
-          self.y_grid_inter = np.sin(np.deg2rad(angles))*dist_inter
+          self.y_grid_inter = np.sin(np.deg2rad(self.angles))*self.dist_inter
           self.y_grid_inter = np.insert(self.y_grid_inter, 0, 0)
 
      def create_intermediate_triangle(self):

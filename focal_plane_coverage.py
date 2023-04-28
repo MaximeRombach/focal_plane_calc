@@ -49,23 +49,34 @@ The effective coverage is calculated as the usable positioner area vs total area
 
 start_time = time.time()
 
-# Global variables
+""" Global variables """
 nbots = [63, 75, 88, 102]
 # nbots = [63]
 width_increase = 1 # [mm] How much we want to increase the base length of a module
 chanfer_length = 8.2 # [mm] Size of chanfers of module vertices (base value: 7.5)
 centered_on_triangle = False
-keys = []
-global_dict = {'n52': {}, 'n63': {}, 'n75': {}, 'n88': {}, 'n102': {},
-               'Overall_results': {'nb_robots_list':[], 'total_robots_list' : [],
-                                    'total_modules_list':[], 'coverages_list':[]}}
 
-# Drawing parameters
+""" Intermediate frame parameters """
+
+intermediate_frame_thick =  1 # [mm] spacing between modules inside intermediate frame
+
+""" Global frame parameters """
+
+global_frame_thick = 3 # [mm] spacing between modules in global arrangement
+
+""" Drawing parameters """
 draw = True
 is_timer = False
 save_plots = False
 plot_time = 20 # [s] plotting time
 ignore_points = False
+
+""" Data storage """
+keys = []
+global_dict = {'n52': {}, 'n63': {}, 'n75': {}, 'n88': {}, 'n102': {},
+               'Overall_results': {'nb_robots_list':[], 'total_robots_list' : [],
+                                    'total_modules_list':[], 'coverages_list':[]}}
+
 
 for nb_robots in nbots:
      
@@ -86,22 +97,17 @@ for nb_robots in nbots:
 
      # %% 2)a) Meshing the grid for intermediate frame (4 triangles: 3 upwards + 1 downwards)
 
-     dist_inter = 2*module_width*np.sqrt(3)/6 + param.intermediate_frame_thick # distance between each neighbor from center module
-     angles = np.array([-30, 90, 210]) # angular positions of neighbors
-     flip = [True,False,False,False]
-
-     inter_param = param.IntermediateTriangle(module_collection, dist_inter, angles, flip)
+     inter_param = param.IntermediateTriangle(module_collection, mod_param.module_width, intermediate_frame_thick)
      intermediate_collection, intermediate_collection_speed, intermediate_coverage, inter_df = inter_param.create_intermediate_triangle()
-
 
      # %% 2)b) Start meshing the grid for the whole thing
 
-     inter_frame_width = 2*module_width + 2*param.intermediate_frame_thick*np.cos(np.deg2rad(30))+2*param.global_frame_thick
+     inter_frame_width = 2*module_width + 2*intermediate_frame_thick*np.cos(np.deg2rad(30))+2*global_frame_thick
      rho = inter_frame_width * np.sqrt(3)/6
-     dist_global = 2*rho + param.global_frame_thick
+     dist_global = 2*rho + global_frame_thick
      inter_centroid = inter_frame_width*np.sqrt(3)/3*np.array([np.cos(np.deg2rad(30)), np.sin(np.deg2rad(30))])
 
-     nb_max_modules = round(2*vigR / (inter_frame_width + param.global_frame_thick), 0)
+     nb_max_modules = round(2*vigR / (inter_frame_width + global_frame_thick), 0)
      
      n = 6
      center_coords = []
@@ -332,7 +338,7 @@ plt.legend(shadow = True)
 param.save_figures_to_dir(save_plots, filename)
 
 plt.figure(figsize=(10,10))
-figtitle = f"Intermediate frame - {nb_robots} robots per module \n Inner gap: {param.intermediate_frame_thick} mm \n Total # modules: 4 - Total # robots: {nb_robots*4}"
+figtitle = f"Intermediate frame - {nb_robots} robots per module \n Inner gap: {intermediate_frame_thick} mm \n Total # modules: 4 - Total # robots: {nb_robots*4}"
 filename = f"Intermediate plot - {nb_robots} robots per mod"
 plt.title(figtitle)
 param.plot_intermediate(intermediate_collection, nb_robots, False, intermediate_coverage, draw_legend = True)
@@ -342,14 +348,14 @@ plt.ylabel('y position [mm]')
 plt.legend(shadow = True)
 param.save_figures_to_dir(save_plots, filename)
 
-if param.global_frame_thick > 0:
+if global_frame_thick > 0:
      frame=pizza.buffer(20).difference(GeometryCollection(list(global_dict['n63']['boundaries_df']['geometry'])))
      plt.figure(figsize=(10,10))   
      figtitle = f'Frame to manufacture - {nb_robots} per module'
      filename = figtitle
      plt.title(figtitle)
      # plot_polygon(global_bounding_polygon, add_points = False, facecolor = 'None', edgecolor ='orange', linestyle = '--')
-     plot_polygon(frame, add_points=False, facecolor='red', alpha = 0.2, edgecolor = 'black', label=f'Wall thickness = {param.global_frame_thick} mm')
+     plot_polygon(frame, add_points=False, facecolor='red', alpha = 0.2, edgecolor = 'black', label=f'Wall thickness = {global_frame_thick} mm')
      param.plot_vigR_poly(pizza, label = 'vigR')
      plt.xlabel('x position [mm]')
      plt.ylabel('y position [mm]')
@@ -357,8 +363,8 @@ if param.global_frame_thick > 0:
      plt.legend()
      param.save_figures_to_dir(save_plots, filename)
 
-figtitle = param.final_title(nb_robots, total_modules, total_robots, param.intermediate_frame_thick, param.global_frame_thick, allow_small_out, out_allowance)
-filename = f"Coverage global - {nb_robots} rob - Inner {param.intermediate_frame_thick} mm - Global {param.global_frame_thick} mm"
+figtitle = param.final_title(nb_robots, total_modules, total_robots, intermediate_frame_thick, global_frame_thick, allow_small_out, out_allowance)
+filename = f"Coverage global - {nb_robots} rob - Inner {intermediate_frame_thick} mm - Global {global_frame_thick} mm"
 f, ax= plt.subplots(figsize=(10, 10), sharex = True, sharey=True)
 f.suptitle(figtitle)
 gdf_modules.plot(ax=ax,facecolor='None')
@@ -369,8 +375,8 @@ plot_polygon(pizza, ax=ax, add_points=False, edgecolor='black', facecolor='None'
 plot_polygon(global_bounding_polygon, ax=ax, add_points=False, edgecolor='orange', facecolor='None', linestyle='--',label='Instrumented area')
 param.save_figures_to_dir(save_plots, filename)
 
-figtitle = param.final_title(nb_robots, total_modules, total_robots, param.intermediate_frame_thick, param.global_frame_thick, allow_small_out, out_allowance, disp_robots_info=False)
-filename = f"Summary of coverages for inner {param.intermediate_frame_thick} and global {param.global_frame_thick}"
+figtitle = param.final_title(nb_robots, total_modules, total_robots, intermediate_frame_thick, global_frame_thick, allow_small_out, out_allowance, disp_robots_info=False)
+filename = f"Summary of coverages for inner {intermediate_frame_thick} and global {global_frame_thick}"
 f, axes= plt.subplots(nrows=2,ncols=2, figsize=(12, 12), sharex = True, sharey=True)
 f.suptitle(figtitle)
 axes = axes.flatten()
