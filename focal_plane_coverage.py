@@ -11,9 +11,8 @@ import updown_tri as tri
 import time
 from tqdm import tqdm
 from shapely.geometry import Polygon
-from shapely.ops import unary_union, polygonize
 from shapely.plotting import plot_polygon, plot_points, plot_line
-from shapely import affinity, MultiPoint, MultiPolygon, GeometryCollection, BufferCapStyle
+from shapely import MultiPoint, MultiPolygon, GeometryCollection
 import logging
 import warnings
 from shapely.errors import ShapelyDeprecationWarning
@@ -55,6 +54,9 @@ nbots = [63, 75, 88, 102]
 width_increase = 1 # [mm] How much we want to increase the base length of a module
 chanfer_length = 8.2 # [mm] Size of chanfers of module vertices (base value: 7.5)
 centered_on_triangle = False
+
+gfa = param.GFA(length = 150, width = 150, nb_gfa = 6)
+gfa_gdf = gfa.make_GFA_array()
 
 """ Intermediate frame parameters """
 
@@ -108,33 +110,34 @@ for nb_robots in nbots:
      inter_centroid = inter_frame_width*np.sqrt(3)/3*np.array([np.cos(np.deg2rad(30)), np.sin(np.deg2rad(30))])
 
      nb_max_modules = round(2*vigR / (inter_frame_width + global_frame_thick), 0)
-     
+
+     # Make global grid out of triangular grid method credited in updown_tri.py
+     # Its logic is also explained in updown_tri.py
      n = 6
      center_coords = []
-     # if centered_on_triangle:
-     #      n+= 2  
      a_max = n
      b_max = n
      c_max = n
 
      x_grid = []
      y_grid = []
-     flip_global = []
+     flip_global = [] # stores the orientation of each triangle (either up or downward)
+
      if centered_on_triangle:
           origin = 'triangle'
           valid = [0,1]
      else:
           origin = 'vertex'
           valid = [1,2]
+     
      vigR_tresh = 150
-     # Make global grid out of triangular grid method credited in updown_tri.py
-     # It's logic is also explained in updown_tri.py
+
      for a in np.arange(-a_max,a_max):
           for b in np.arange(-b_max,b_max):
                for c in np.arange(-c_max,c_max):
                     sum_abc = a + b + c
                     # if valid == 1 or valid == 2: 
-                    if valid.count(sum_abc): # x,y "valid" if sum(a,b,c) == 1 or 2 for origin == 'vertice'
+                    if valid.count(sum_abc): # check if sum abc corresponds to a valid triangle depending on the centering case
                          x,y = tri.tri_center(a,b,c,inter_frame_width) 
                          if np.sqrt(x**2 + y**2) < vigR + vigR_tresh: # allow centroid of inter modules to go out of vigR for further filling purpose
                               center_coords.append((a,b,c))
@@ -145,17 +148,14 @@ for nb_robots in nbots:
                               else: 
                                    flip_global.append(1)                             
 
+     # g,g_ax = plt.subplots()
      pizza = param.make_vigR_polygon()
-
-     # if centered_on_triangle:
-     #      x_grid -= inter_centroid[0]
-     #      y_grid -= inter_centroid[1]
      grid = MultiPoint(param.to_polygon_format(x_grid, y_grid))
-
-     param.plot_vigR_poly(pizza)
-     plot_points(grid, label=f"{nb_robots}")
-     plt.legend()
+     # param.plot_vigR_poly(pizza)
+     # plot_points(grid, label=f"{nb_robots}")
+     # plt.legend()
      # plt.show()
+     """ Project grid on BFS surface """
      longitude = np.array(x_grid)/R
      latitude = 2 * np.arctan(np.exp(np.array(y_grid)/R))-np.pi/2
 
@@ -208,6 +208,8 @@ for nb_robots in nbots:
 
           sticks_out = new_boundary.overlaps(pizza) # a portion of the int triangle sticks out
           int_centroid_out = np.sqrt(dx**2 + dy**2) > vigR
+          
+
           if not fill_empty and sticks_out:
                color_boundary = 'red'
                continue
@@ -264,7 +266,13 @@ for nb_robots in nbots:
 
           elif int_centroid_out and not sticks_out:
                # If int_triangle is not in vigR AND does not overlap with it, no point keeping it
-               continue  
+               continue
+
+          overlap_gfa = new_modules.overlaps(gfa_gdf['geometry'])
+          if any(overlap_gfa):
+               color_boundary = 'red'
+               # print(overlap_gfa[overlap_gfa == True].index())
+               # continue
 
           boundaries_df['geometry'].append(new_boundary)
           boundaries_df['color'].append(color_boundary)
@@ -372,7 +380,11 @@ gdf_bound.plot(ax=ax,facecolor='None', edgecolor=gdf_bound['color'])
 gdf_coverage.plot(column='label',ax=ax, alpha=0.2, legend=True, legend_kwds={'loc': 'upper right'})
 ax.scatter(0,0,s=7,color='red')
 plot_polygon(pizza, ax=ax, add_points=False, edgecolor='black', facecolor='None', linestyle='--')
-plot_polygon(global_bounding_polygon, ax=ax, add_points=False, edgecolor='orange', facecolor='None', linestyle='--',label='Instrumented area')
+# plot_polygon(global_bounding_polygon, ax=ax, add_points=False, edgecolor='orange', facecolor='None', linestyle='--',label='Instrumented area')
+
+
+gfa_gdf.plot(ax=ax,facecolor = 'None', edgecolor=gfa_gdf['color'], linestyle='--')
+
 param.save_figures_to_dir(save_plots, filename)
 
 figtitle = param.final_title(nb_robots, total_modules, total_robots, intermediate_frame_thick, global_frame_thick, allow_small_out, out_allowance, disp_robots_info=False)
@@ -395,9 +407,10 @@ for idx, (k,ax) in tqdm(enumerate(zip(keys, axes))):
      gdf_modules.plot(ax=ax,facecolor='None')
      gdf_bound.plot(ax=ax,facecolor='None', edgecolor=gdf_bound['color'])
      gdf_coverage.plot(column='label',ax=ax, alpha=0.2, legend=True, legend_kwds={'loc': 'upper right'})
+     gfa_gdf.plot(ax=ax,facecolor = 'None', edgecolor=gfa_gdf['color'], linestyle='--')
 
      plot_polygon(pizza, ax=ax, add_points=False, edgecolor='black', facecolor='None', linestyle='--')
-     plot_polygon(global_dict[k]['global_bounding_polygon'], ax=ax, add_points=False, edgecolor='orange', facecolor='None', linestyle='--',label='Instrumented area')
+     # plot_polygon(global_dict[k]['global_bounding_polygon'], ax=ax, add_points=False, edgecolor='orange', facecolor='None', linestyle='--',label='Instrumented area')
 
      ax.scatter(0,0,s=7,color='red')
      ax.set_title(f"{global_dict[k]['nb_robots']} robots / module \n # modules: {global_dict[k]['total_modules']} - # robots: {global_dict[k]['total_robots']}")
@@ -422,6 +435,7 @@ ax2.plot(nbots, global_dict['Overall_results']['total_robots_list'],
 ax2.set_ylabel("Total # robots",color="blue")
 ax.grid()
 param.save_figures_to_dir(save_plots, filename)
+
 
 end_time = time.time()
 

@@ -4,12 +4,13 @@ import numpy as np
 import logging
 from shapely import affinity, MultiPolygon, MultiPoint, GeometryCollection
 import matplotlib.pyplot as plt
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, box
 from shapely.ops import unary_union
 import time
 from shapely.plotting import plot_polygon, plot_points
 import os
 from datetime import datetime
+import geopandas as gpd
 import alphashape # WARNING: check this git issue to solve compatibility problem between shapely 2.0 and alphashape: https://github.com/bellockk/alphashape/issues/36 
 
 logging.basicConfig(level=logging.INFO)
@@ -326,7 +327,49 @@ class IntermediateTriangle:
           inter_df = {'inter_boundaries': inter_boundaries_df, 'inter_modules': inter_modules_df, 'inter_coverage': inter_coverage_df, 'inter_robots': inter_robots_df, 'intermediate_coverage': intermediate_coverage}
 
           return intermediate_collection, intermediate_collection_speed, intermediate_coverage, inter_df
+
+class GFA:
+     def __init__(self, length: float, width: float, nb_gfa: int, vigR = vigR) -> None:
+          self.length = length
+          self.width = width
+          self.vigR = vigR
+          self.nb_gfa = nb_gfa
+
+     def make_GFA(self):
+          minx = -self.length/2
+          miny = -self.width/2
+          maxx = self.length/2
+          maxy = self.width/2
+          gfa_footprint = Polygon([(minx, miny), (maxx, miny), (maxx, maxy), (minx, maxy), (minx, miny)])
+          return gfa_footprint
      
+     def make_GFA_array(self):
+
+          gfa_df = {'gfa_index':[], 'x': [], 'y': [], 'orientation': [], 'geometry':[], 'color':[]}
+          # gfa_pos_on_vigR = make_vigR_polygon(n_vigR = self.nb_gfa + 1).exterior.coords.xy
+          Dangle = 360/self.nb_gfa
+          angles = np.linspace(Dangle,Dangle * self.nb_gfa, self.nb_gfa)
+          gfa_pos_on_vigR_x = self.vigR * np.cos(np.deg2rad(angles))
+          gfa_pos_on_vigR_y = self.vigR * np.sin(np.deg2rad(angles))
+
+          for i in range(self.nb_gfa):
+               x = gfa_pos_on_vigR_x[i]
+               y = gfa_pos_on_vigR_y[i]
+               gfa = self.make_GFA()
+               placed_gfa = rotate_and_translate(gfa, angles[i], x, y)
+
+               gfa_df['gfa_index'].append(i)
+               gfa_df['x'].append(x)
+               gfa_df['y'].append(y)
+               gfa_df['orientation'].append(angles[i])
+               gfa_df['geometry'].append(placed_gfa)
+               gfa_df['color'].append('brown')
+          
+          gfa_gdf = gpd.GeoDataFrame(gfa_df)
+
+          return gfa_gdf
+
+
 def to_polygon_format(x,y):
      """ Input:
           - x,y: 2 sets of coordinates for polygon creation
@@ -364,9 +407,8 @@ def save_figures_to_dir(save, suffix_name):
 
      plt.savefig(results_dir + today_filename, bbox_inches = 'tight', format='png', dpi = 1200)
 
-def make_vigR_polygon(pizza_angle = 360, r = vigR):
-      
-     n_vigR = 500
+def make_vigR_polygon(pizza_angle = 360, r = vigR, n_vigR = 500):
+     
      vigR_lim_x = r * np.cos(np.deg2rad(np.linspace(0,pizza_angle,n_vigR)))
      vigR_lim_y = r * np.sin(np.deg2rad(np.linspace(0,pizza_angle,n_vigR)))
      if pizza_angle == 360:
