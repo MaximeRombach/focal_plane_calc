@@ -11,6 +11,7 @@ from shapely.plotting import plot_polygon, plot_points
 import os
 from datetime import datetime
 import geopandas as gpd
+import math
 import alphashape # WARNING: check this git issue to solve compatibility problem between shapely 2.0 and alphashape: https://github.com/bellockk/alphashape/issues/36 
 
 logging.basicConfig(level=logging.INFO)
@@ -334,6 +335,7 @@ class GFA:
           self.width = width
           self.vigR = vigR
           self.nb_gfa = nb_gfa
+          self.gfa_gdf = self.make_GFA_array()
 
      def make_GFA(self):
           minx = -self.length/2
@@ -345,7 +347,7 @@ class GFA:
      
      def make_GFA_array(self):
 
-          gfa_df = {'gfa_index':[], 'x': [], 'y': [], 'orientation': [], 'geometry':[], 'color':[]}
+          gfa_df = {'gfa_index':[], 'center': [], 'orientation': [], 'geometry':[], 'color':[]}
           # gfa_pos_on_vigR = make_vigR_polygon(n_vigR = self.nb_gfa + 1).exterior.coords.xy
           Dangle = 360/self.nb_gfa
           angles = np.linspace(Dangle,Dangle * self.nb_gfa, self.nb_gfa)
@@ -359,8 +361,7 @@ class GFA:
                placed_gfa = rotate_and_translate(gfa, angles[i], x, y)
 
                gfa_df['gfa_index'].append(i)
-               gfa_df['x'].append(x)
-               gfa_df['y'].append(y)
+               gfa_df['center'].append([x,y])
                gfa_df['orientation'].append(angles[i])
                gfa_df['geometry'].append(placed_gfa)
                gfa_df['color'].append('brown')
@@ -368,6 +369,21 @@ class GFA:
           gfa_gdf = gpd.GeoDataFrame(gfa_df)
 
           return gfa_gdf
+     
+     def closest_gfa(self, pos):
+          """
+          Finds the closest gfa to a given point
+          
+          Input: pos = [x,y] # [mm, mm]
+          Ouput: index of closest gfa
+          """
+          faraway = np.ones(self.nb_gfa)
+          for idx, gfa_center in enumerate(self.gfa_gdf['center']):
+               faraway[idx] = norm2d(pos, gfa_center)
+          closest_gfa = np.where(faraway == np.amin(faraway))
+
+          return closest_gfa
+
 
 
 def to_polygon_format(x,y):
@@ -378,7 +394,7 @@ def to_polygon_format(x,y):
           - coords: list of tuples for each polygon vertices (just for convenience) """
      coords = []
      for (i,j) in zip(x,y):
-               coords.append((i,j))
+          coords.append((i,j))
                
      return coords
 
@@ -389,6 +405,8 @@ def rotate_and_translate(geom, angle, dx, dy, dz = None, origin = 'centroid'):
 
      return transformed_geom
 
+def norm2d(p,q):
+     return math.sqrt((p[0]-q[0])**2 + (p[1]-q[1])**2)
 
 def save_figures_to_dir(save, suffix_name):
 

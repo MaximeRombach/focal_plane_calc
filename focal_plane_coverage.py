@@ -56,7 +56,7 @@ chanfer_length = 8.2 # [mm] Size of chanfers of module vertices (base value: 7.5
 centered_on_triangle = False
 
 gfa = param.GFA(length = 150, width = 150, nb_gfa = 6)
-gfa_gdf = gfa.make_GFA_array()
+gfa_gdf = gfa.gfa_gdf
 
 """ Intermediate frame parameters """
 
@@ -188,7 +188,7 @@ for nb_robots in nbots:
      covered_area = 0 
      total_modules = 0
      boundaries_df = {'geometry':[], 'color': []}
-     modules_df = {'geometry':[]}
+     modules_df = {'geometry':[], 'color': []}
      coverage_df ={'geometry':[]}
      # Create module arrangement from the global grid
      logging.info(f'Arranging focal plane for {nb_robots} robot case')
@@ -204,11 +204,17 @@ for nb_robots in nbots:
           new_boundary = transformed_all.geoms[3]
           new_modules = transformed_all.geoms[1]
           new_coverage = transformed_all.geoms[2]
+          print(new_boundary.centroid.xy)
+          new_centroid = np.array([new_boundary.centroid.xy[0,0],new_boundary.centroid.xy[0,1]])
           color_boundary = 'green'
+          color_module = 'black'
 
           sticks_out = new_boundary.overlaps(pizza) # a portion of the int triangle sticks out
           int_centroid_out = np.sqrt(dx**2 + dy**2) > vigR
           
+          closest_gfa_index = gfa.closest_gfa(new_centroid)
+          print(closest_gfa_index)
+          closest_gfa = gfa_gdf.loc(gfa_gdf['gfa_index'] == closest_gfa_index)
 
           if not fill_empty and sticks_out:
                color_boundary = 'red'
@@ -268,15 +274,27 @@ for nb_robots in nbots:
                # If int_triangle is not in vigR AND does not overlap with it, no point keeping it
                continue
 
-          overlap_gfa = new_modules.overlaps(gfa_gdf['geometry'])
-          if any(overlap_gfa):
+          overlap_gfa = any(new_modules.overlaps(closest_gfa['geometry'])) or any(new_modules.within(closest_gfa['geometry']))
+          if overlap_gfa:
                color_boundary = 'red'
-               # print(overlap_gfa[overlap_gfa == True].index())
-               # continue
+               color_module = 'red'
+               """ WORK IN PROGRESS """
+               # keep_mod = []
+               # keep_cov = []
+               # for (mod, cov) in zip(new_modules.geoms, new_coverage.geoms):
+               #      if not any(mod.overlaps(gfa_gdf['geometry'])): 
+               #           keep_mod.append(mod)
+               #           keep_cov.append(mod)
+               
+               # # print(overlap_gfa[overlap_gfa == True].index())
+               # # continue
+               # new_modules = MultiPolygon(keep_mod)
+               # new_coverage = MultiPolygon(keep_cov)
 
           boundaries_df['geometry'].append(new_boundary)
           boundaries_df['color'].append(color_boundary)
           modules_df['geometry'].append(new_modules)
+          modules_df['color'].append(color_module)
           coverage_df['geometry'].append(new_coverage)
           # print(len(list(new_modules.geoms)))
           total_modules += len(list(new_modules.geoms))
