@@ -338,6 +338,7 @@ class GFA:
           self.gfa_gdf = self.make_GFA_array()
 
      def make_GFA(self):
+          # Dummy shape, to be replaced with true footprint
           minx = -self.length/2
           miny = -self.width/2
           maxx = self.length/2
@@ -357,6 +358,7 @@ class GFA:
           for i in range(self.nb_gfa):
                x = gfa_pos_on_vigR_x[i]
                y = gfa_pos_on_vigR_y[i]
+               theta = angles[i]
                gfa = self.make_GFA()
                placed_gfa = rotate_and_translate(gfa, angles[i], x, y)
 
@@ -377,13 +379,20 @@ class GFA:
           Input: pos = [x,y] # [mm, mm]
           Ouput: index of closest gfa
           """
+
           faraway = np.ones(self.nb_gfa)
           for idx, gfa_center in enumerate(self.gfa_gdf['center']):
                faraway[idx] = norm2d(pos, gfa_center)
           closest_gfa = np.where(faraway == np.amin(faraway))
 
-          return closest_gfa
+          return closest_gfa[0][0]
+     
+     # def closest_gfa_v2(self, pos):
+     #      angular_loc = np.arctan2(pos[1], pos[0])
+     #      diff = np.asarray(self.gfa_gdf['orientation']) - angular_loc
+     #      closest_gfa = np.where(diff == np.amin(diff))
 
+     #      return closest_gfa[0][0]
 
 
 def to_polygon_format(x,y):

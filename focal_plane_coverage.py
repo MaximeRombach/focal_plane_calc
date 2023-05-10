@@ -10,7 +10,7 @@ import array as array
 import updown_tri as tri
 import time
 from tqdm import tqdm
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, Point
 from shapely.plotting import plot_polygon, plot_points, plot_line
 from shapely import MultiPoint, MultiPolygon, GeometryCollection
 import logging
@@ -50,11 +50,12 @@ start_time = time.time()
 
 """ Global variables """
 nbots = [63, 75, 88, 102]
-# nbots = [63]
+# nbots = [75]
 width_increase = 1 # [mm] How much we want to increase the base length of a module
 chanfer_length = 8.2 # [mm] Size of chanfers of module vertices (base value: 7.5)
 centered_on_triangle = False
 
+"""GFA stuff"""
 gfa = param.GFA(length = 150, width = 150, nb_gfa = 6)
 gfa_gdf = gfa.gfa_gdf
 
@@ -150,6 +151,8 @@ for nb_robots in nbots:
 
      # g,g_ax = plt.subplots()
      pizza = param.make_vigR_polygon()
+     pizza_with_GFA = pizza.difference(MultiPolygon(gfa_gdf['geometry'].tolist()))
+
      grid = MultiPoint(param.to_polygon_format(x_grid, y_grid))
      # param.plot_vigR_poly(pizza)
      # plot_points(grid, label=f"{nb_robots}")
@@ -184,7 +187,7 @@ for nb_robots in nbots:
 
      fill_empty = True # Fill empty spaces by individual modules
      allow_small_out = True # allow covered area of module to stick out of vigR (i.e. useless covered area because does not receive light)
-     out_allowance = 0.07 # percentage of the covered area of a module authorized to stick out of vigR
+     out_allowance = 0.1 # percentage of the covered area of a module authorized to stick out of vigR
      covered_area = 0 
      total_modules = 0
      boundaries_df = {'geometry':[], 'color': []}
@@ -204,17 +207,20 @@ for nb_robots in nbots:
           new_boundary = transformed_all.geoms[3]
           new_modules = transformed_all.geoms[1]
           new_coverage = transformed_all.geoms[2]
-          print(new_boundary.centroid.xy)
-          new_centroid = np.array([new_boundary.centroid.xy[0,0],new_boundary.centroid.xy[0,1]])
+          new_centroid = [dx, dy]
+
           color_boundary = 'green'
           color_module = 'black'
 
-          sticks_out = new_boundary.overlaps(pizza) # a portion of the int triangle sticks out
-          int_centroid_out = np.sqrt(dx**2 + dy**2) > vigR
+          # Flags 
+          sticks_out = new_boundary.overlaps(pizza_with_GFA) # a portion of the int triangle sticks out
+          # int_centroid_out = np.sqrt(dx**2 + dy**2) > vigR # centroid of intermediate triangle out of vigR
+          int_centroid_out = not Point(dx,dy).within(pizza_with_GFA)
           
-          closest_gfa_index = gfa.closest_gfa(new_centroid)
-          print(closest_gfa_index)
-          closest_gfa = gfa_gdf.loc(gfa_gdf['gfa_index'] == closest_gfa_index)
+          closest_gfa_index = gfa.closest_gfa(new_centroid) # determine closest gfa to the current grid position
+          closest_gfa = gfa_gdf.at[closest_gfa_index, "geometry"] # extract closest gfa polygon for overlapping testing
+
+          int_tri_overlaps_gfa = new_boundary.overlaps(closest_gfa)
 
           if not fill_empty and sticks_out:
                color_boundary = 'red'
@@ -233,10 +239,14 @@ for nb_robots in nbots:
                     # plot_polygon(pizza,add_points=False,facecolor='None')
                     # plot_polygon(mod)
                     cent = np.array(cov.centroid.xy)
-                    cov_out = cov.difference(pizza)
+                    cov_out = cov.difference(pizza_with_GFA)
 
-                    centroid_out = np.sqrt(cent[0]**2 + cent[1]**2) > vigR
-                    if not cov.overlaps(pizza) and not centroid_out:
+                    # if mod.overlaps(closest_gfa) or mod.within(closest_gfa):
+                    #      continue
+
+                    # centroid_out = np.sqrt(cent[0]**2 + cent[1]**2) > vigR
+                    centroid_out = not Point(cent[0], cent[1]).within(pizza_with_GFA)
+                    if not cov.overlaps(pizza_with_GFA) and not centroid_out:
                     # If the coverage area of a single module does not stick out of vigR and is within vigR, we keep it
                          temp_mod.append(mod)
                          temp_cov.append(cov)
@@ -248,7 +258,7 @@ for nb_robots in nbots:
 
                     elif allow_small_out and cov_out.area/cov.area < out_allowance and not centroid_out:
                          # If the coverage area of a module sticks out by less than the authorized amount, we keep it
-                         remaining_cov = cov.intersection(pizza)
+                         remaining_cov = cov.intersection(pizza_with_GFA)
                          temp_mod.append(mod)
                          temp_cov.append(remaining_cov)
                          color_boundary = 'blue'
@@ -274,36 +284,24 @@ for nb_robots in nbots:
                # If int_triangle is not in vigR AND does not overlap with it, no point keeping it
                continue
 
-          overlap_gfa = any(new_modules.overlaps(closest_gfa['geometry'])) or any(new_modules.within(closest_gfa['geometry']))
-          if overlap_gfa:
-               color_boundary = 'red'
-               color_module = 'red'
-               """ WORK IN PROGRESS """
-               # keep_mod = []
-               # keep_cov = []
-               # for (mod, cov) in zip(new_modules.geoms, new_coverage.geoms):
-               #      if not any(mod.overlaps(gfa_gdf['geometry'])): 
-               #           keep_mod.append(mod)
-               #           keep_cov.append(mod)
-               
-               # # print(overlap_gfa[overlap_gfa == True].index())
-               # # continue
-               # new_modules = MultiPolygon(keep_mod)
-               # new_coverage = MultiPolygon(keep_cov)
+          # elif int_tri_overlaps_gfa and not sticks_out:
+          #      # If int triangle overlaps a GFA and is still in vigR, we look at the individual modules to keep those who do not overlap GFA
+          #      new_modules = MultiPolygon([mod for mod in new_modules.geoms if mod.overlaps(closest_gfa)])
+          #      color_module = 'red'
 
           boundaries_df['geometry'].append(new_boundary)
           boundaries_df['color'].append(color_boundary)
           modules_df['geometry'].append(new_modules)
           modules_df['color'].append(color_module)
           coverage_df['geometry'].append(new_coverage)
-          # print(len(list(new_modules.geoms)))
+
           total_modules += len(list(new_modules.geoms))
           covered_area += new_coverage.area # add the net covered area of each module
 
      global_bounding_polygon = MultiPolygon(boundaries_df['geometry']).convex_hull
      instrumented_area = global_bounding_polygon.area
      # global_coverage = round(covered_area/instrumented_area*100,1)
-     global_coverage = round(covered_area/pizza.area*100,1)
+     global_coverage = round(covered_area/pizza_with_GFA.area*100,1)
      gdf_bound = gpd.GeoDataFrame(boundaries_df)
      gdf_modules = gpd.GeoDataFrame(modules_df)
      gdf_coverage = gpd.GeoDataFrame(coverage_df)
@@ -374,26 +372,26 @@ plt.ylabel('y position [mm]')
 plt.legend(shadow = True)
 param.save_figures_to_dir(save_plots, filename)
 
-if global_frame_thick > 0:
-     frame=pizza.buffer(20).difference(GeometryCollection(list(global_dict['n63']['boundaries_df']['geometry'])))
-     plt.figure(figsize=(10,10))   
-     figtitle = f'Frame to manufacture - {nb_robots} per module'
-     filename = figtitle
-     plt.title(figtitle)
-     # plot_polygon(global_bounding_polygon, add_points = False, facecolor = 'None', edgecolor ='orange', linestyle = '--')
-     plot_polygon(frame, add_points=False, facecolor='red', alpha = 0.2, edgecolor = 'black', label=f'Wall thickness = {global_frame_thick} mm')
-     param.plot_vigR_poly(pizza, label = 'vigR')
-     plt.xlabel('x position [mm]')
-     plt.ylabel('y position [mm]')
-     plt.legend(shadow = True)
-     plt.legend()
-     param.save_figures_to_dir(save_plots, filename)
+# if global_frame_thick > 0:
+#      frame=pizza.buffer(20).difference(GeometryCollection(list(global_dict['n63']['boundaries_df']['geometry'])))
+#      plt.figure(figsize=(10,10))   
+#      figtitle = f'Frame to manufacture - {nb_robots} per module'
+#      filename = figtitle
+#      plt.title(figtitle)
+#      # plot_polygon(global_bounding_polygon, add_points = False, facecolor = 'None', edgecolor ='orange', linestyle = '--')
+#      plot_polygon(frame, add_points=False, facecolor='red', alpha = 0.2, edgecolor = 'black', label=f'Wall thickness = {global_frame_thick} mm')
+#      param.plot_vigR_poly(pizza, label = 'vigR')
+#      plt.xlabel('x position [mm]')
+#      plt.ylabel('y position [mm]')
+#      plt.legend(shadow = True)
+#      plt.legend()
+#      param.save_figures_to_dir(save_plots, filename)
 
 figtitle = param.final_title(nb_robots, total_modules, total_robots, intermediate_frame_thick, global_frame_thick, allow_small_out, out_allowance)
 filename = f"Coverage global - {nb_robots} rob - Inner {intermediate_frame_thick} mm - Global {global_frame_thick} mm"
 f, ax= plt.subplots(figsize=(10, 10), sharex = True, sharey=True)
 f.suptitle(figtitle)
-gdf_modules.plot(ax=ax,facecolor='None')
+gdf_modules.plot(ax=ax,facecolor='None',edgecolor=gdf_modules['color'])
 gdf_bound.plot(ax=ax,facecolor='None', edgecolor=gdf_bound['color'])
 gdf_coverage.plot(column='label',ax=ax, alpha=0.2, legend=True, legend_kwds={'loc': 'upper right'})
 ax.scatter(0,0,s=7,color='red')
