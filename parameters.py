@@ -12,7 +12,10 @@ import os
 from datetime import datetime
 import geopandas as gpd
 import math
-import alphashape # WARNING: check this git issue to solve compatibility problem between shapely 2.0 and alphashape: https://github.com/bellockk/alphashape/issues/36 
+from shapely.geometry import mapping
+import ezdxf
+import ezdxf.addons.geo
+
 
 logging.basicConfig(level=logging.INFO)
 tan30 = np.tan(np.deg2rad(30))
@@ -335,7 +338,7 @@ class GFA:
           self.width = width
           self.vigR = vigR
           self.nb_gfa = nb_gfa
-          self.gfa_gdf = self.make_GFA_array()
+          self.gdf_gfa = self.make_GFA_array()
 
      def make_GFA(self):
           # Dummy shape, to be replaced with true footprint
@@ -348,7 +351,7 @@ class GFA:
      
      def make_GFA_array(self):
 
-          gfa_df = {'gfa_index':[], 'center': [], 'orientation': [], 'geometry':[], 'color':[]}
+          gfa_df = {'gfa_index':[], 'center': [], 'orientation': [], 'geometry':[], 'color':[], 'label':[]}
           # gfa_pos_on_vigR = make_vigR_polygon(n_vigR = self.nb_gfa + 1).exterior.coords.xy
           Dangle = 360/self.nb_gfa
           angles = np.linspace(Dangle,Dangle * self.nb_gfa, self.nb_gfa)
@@ -366,11 +369,12 @@ class GFA:
                gfa_df['center'].append([x,y])
                gfa_df['orientation'].append(angles[i])
                gfa_df['geometry'].append(placed_gfa)
+               gfa_df['label'].append('GFA')
                gfa_df['color'].append('brown')
           
-          gfa_gdf = gpd.GeoDataFrame(gfa_df)
+          gdf_gfa = gpd.GeoDataFrame(gfa_df)
 
-          return gfa_gdf
+          return gdf_gfa
      
      def closest_gfa(self, pos):
           """
@@ -381,7 +385,7 @@ class GFA:
           """
 
           faraway = np.ones(self.nb_gfa)
-          for idx, gfa_center in enumerate(self.gfa_gdf['center']):
+          for idx, gfa_center in enumerate(self.gdf_gfa['center']):
                faraway[idx] = norm2d(pos, gfa_center)
           closest_gfa = np.where(faraway == np.amin(faraway))
 
@@ -417,7 +421,7 @@ def rotate_and_translate(geom, angle, dx, dy, dz = None, origin = 'centroid'):
 def norm2d(p,q):
      return math.sqrt((p[0]-q[0])**2 + (p[1]-q[1])**2)
 
-def save_figures_to_dir(save, suffix_name):
+def save_figures_to_dir(save, suffix_name, only_frame = False):
 
      if not save:
            return
@@ -432,7 +436,32 @@ def save_figures_to_dir(save, suffix_name):
      if not os.path.isdir(results_dir):
           os.makedirs(results_dir)
 
-     plt.savefig(results_dir + today_filename, bbox_inches = 'tight', format='png', dpi = 1200)
+     plt.savefig(results_dir + today_filename, bbox_inches = 'tight', format='png', dpi = 800)
+
+def save_dxf(save, frame, suffix_name):
+
+     if not save:
+          return
+     
+     script_dir = os.path.dirname(__file__)
+     results_dir = os.path.join(script_dir, 'Results/')
+
+     if not os.path.isdir(results_dir):
+          os.makedirs(results_dir)
+
+     now = datetime.now()
+     name_frame = now.strftime("%Y-%m-%d--%H-%M-%S_") + suffix_name
+
+     doc = ezdxf.new()
+     geoproxy = ezdxf.addons.geo.GeoProxy.parse(mapping(frame))
+
+     msp = doc.modelspace()
+
+     # Use LWPOLYLINE instead of hatch.
+     for entity in geoproxy.to_dxf_entities(polygon=3): 
+          msp.add_entity(entity)
+
+     doc.saveas(results_dir + f"{name_frame}.dxf")
 
 def make_vigR_polygon(pizza_angle = 360, r = vigR, n_vigR = 500):
      
@@ -448,8 +477,8 @@ def make_vigR_polygon(pizza_angle = 360, r = vigR, n_vigR = 500):
 
      return pizza
 
-def plot_vigR_poly(pizza, label = None):
-     plot_polygon(pizza, add_points = False, edgecolor = 'black', linestyle = '--', facecolor= 'None', label = label)
+def plot_vigR_poly(pizza, label = None, ax = None):
+     plot_polygon(pizza, ax = ax, add_points = False, edgecolor = 'black', linestyle = '--', facecolor= 'None', label = label)
 
 def plot_module(module_collection, label_coverage, label_robots, ignore_points):
      for jdx, geo in enumerate(module_collection.geoms):
@@ -536,3 +565,4 @@ def sort_points_for_polygon_format(x: list, y: list, centroid):
      d = np.hstack((vec, angles.reshape(len(angles),1))) # put everything in one array
      d = d[d[:, 2].argsort()] # sort the points by ascending order array
      return to_polygon_format(d[:,0] + centroid[0,0], d[:,1]+ centroid[0,1])
+
