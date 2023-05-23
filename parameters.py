@@ -332,13 +332,55 @@ class IntermediateTriangle:
 
           return intermediate_collection, intermediate_collection_speed, intermediate_coverage, inter_df
 
-class GFA:
-     def __init__(self, length: float, width: float, nb_gfa: int, vigR = vigR) -> None:
+class SavingResults:
+
+     def __init__(self, saving_df) -> None:
+
+          self.results_dir_path = self.path_to_results_dir
+          self.save_plots = saving_df['save_plots']
+          self.save_dxf = saving_df['save_dxf']
+          self.save_csv = saving_df['save_csv']
+
+     def path_to_results_dir(self):
+
+          script_dir = os.path.dirname(__file__)
+          results_dir_path = os.path.join(script_dir, 'Results/')
+
+          if not os.path.isdir(results_dir_path):
+               os.makedirs(results_dir_path)
+          
+          return results_dir_path
+     
+     def save_dxf_to_dir(self, frame, suffix_name):
+
+          if not self.save_dxf:
+               return
+          
+          now = datetime.now()
+          name_frame = now.strftime("%Y-%m-%d--%H-%M-%S_") + suffix_name
+
+          doc = ezdxf.new()
+          geoproxy = ezdxf.addons.geo.GeoProxy.parse(mapping(frame))
+
+          msp = doc.modelspace()
+
+          # Use LWPOLYLINE instead of hatch.
+          for idx, entity in enumerate(geoproxy.to_dxf_entities(polygon=2)): 
+               # doc.layers.add(name=f"layer{idx}")
+               msp.add_entity(entity)
+
+          doc.saveas(self.results_dir_path() + f"{name_frame}.dxf")
+
+class GFA(SavingResults):
+     def __init__(self, length: float, width: float, nb_gfa: int, saving_df, vigR = vigR) -> None:
           self.length = length
           self.width = width
           self.vigR = vigR
           self.nb_gfa = nb_gfa
           self.gdf_gfa = self.make_GFA_array()
+
+          super().__init__(saving_df)
+          self.GFA_to_csv()
 
      def make_GFA(self):
           # Dummy shape, to be replaced with true footprint
@@ -391,12 +433,14 @@ class GFA:
 
           return closest_gfa[0][0]
      
-     # def closest_gfa_v2(self, pos):
-     #      angular_loc = np.arctan2(pos[1], pos[0])
-     #      diff = np.asarray(self.gfa_gdf['orientation']) - angular_loc
-     #      closest_gfa = np.where(diff == np.amin(diff))
+     def GFA_to_csv(self):
 
-     #      return closest_gfa[0][0]
+          if not self.save_csv:
+               return
+
+          now = datetime.now()
+          today_filename = now.strftime("%Y-%m-%d-%H-%M-%S_") + "GFA.csv"
+          self.gdf_gfa.to_csv(self.results_dir_path() + today_filename)
 
 
 def to_polygon_format(x,y):
@@ -430,38 +474,16 @@ def save_figures_to_dir(save, suffix_name, only_frame = False):
      results_dir = os.path.join(script_dir, 'Results/')
 
      now = datetime.now()
-     today_filename = now.strftime("%Y-%m-%d--%H-%M-%S_") + suffix_name + ".png"
-
+     today_filename = now.strftime("%Y-%m-%d-%H-%M-%S_") + suffix_name + ".png"
 
      if not os.path.isdir(results_dir):
           os.makedirs(results_dir)
 
      plt.savefig(results_dir + today_filename, bbox_inches = 'tight', format='png', dpi = 800)
 
-def save_dxf(save, frame, suffix_name):
 
-     if not save:
-          return
-     
-     script_dir = os.path.dirname(__file__)
-     results_dir = os.path.join(script_dir, 'Results/')
 
-     if not os.path.isdir(results_dir):
-          os.makedirs(results_dir)
 
-     now = datetime.now()
-     name_frame = now.strftime("%Y-%m-%d--%H-%M-%S_") + suffix_name
-
-     doc = ezdxf.new()
-     geoproxy = ezdxf.addons.geo.GeoProxy.parse(mapping(frame))
-
-     msp = doc.modelspace()
-
-     # Use LWPOLYLINE instead of hatch.
-     for entity in geoproxy.to_dxf_entities(polygon=3): 
-          msp.add_entity(entity)
-
-     doc.saveas(results_dir + f"{name_frame}.dxf")
 
 def make_vigR_polygon(pizza_angle = 360, r = vigR, n_vigR = 500):
      

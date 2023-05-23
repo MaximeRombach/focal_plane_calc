@@ -52,13 +52,10 @@ start_time = time.time()
 """ Global variables """
 # nbots = [63, 75, 88, 102]
 nbots = [75]
-width_increase = 1 # [mm] How much we want to increase the base length of a module
+width_increase = 0 # [mm] How much we want to increase the base length of a module
 chanfer_length = 8.2 # [mm] Size of chanfers of module vertices (base value: 7.5)
 centered_on_triangle = False
 
-"""GFA stuff"""
-gfa = param.GFA(length = 33.3, width = 61, nb_gfa = 6)
-gdf_gfa = gfa.gdf_gfa
 
 """ Intermediate frame parameters """
 
@@ -74,7 +71,15 @@ is_timer = False
 save_plots = False
 plot_time = 20 # [s] plotting time
 ignore_points = False
-save_frame_as_dxf = False
+save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
+save_csv = False
+saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv}
+saving = param.SavingResults(saving_df)
+
+"""GFA stuff"""
+gfa = param.GFA(length = 33.3, width = 61, nb_gfa = 6, saving_df=saving_df)
+gdf_gfa = gfa.gdf_gfa
+
 
 """ Data storage """
 keys = []
@@ -108,9 +113,10 @@ for nb_robots in nbots:
 
      # %% 2)b) Start meshing the grid for the whole thing
 
-     inter_frame_width = 2*module_width + 2*intermediate_frame_thick*np.cos(np.deg2rad(30))+2*global_frame_thick
+     # inter_frame_width = 2*module_width + 2*intermediate_frame_thick*np.cos(np.deg2rad(30))+2*global_frame_thick
+     inter_frame_width = 2*module_width + 2*intermediate_frame_thick*np.cos(np.deg2rad(30)) + 2*global_frame_thick*np.cos(np.deg2rad(30))
      rho = inter_frame_width * np.sqrt(3)/6
-     dist_global = 2*rho + global_frame_thick
+     dist_global = 2*rho
      inter_centroid = inter_frame_width*np.sqrt(3)/3*np.array([np.cos(np.deg2rad(30)), np.sin(np.deg2rad(30))])
 
      nb_max_modules = round(2*vigR / (inter_frame_width + global_frame_thick), 0)
@@ -157,7 +163,7 @@ for nb_robots in nbots:
      pizza_with_GFA = pizza.difference(MultiPolygon(gdf_gfa['geometry'].tolist()))
 
      grid = MultiPoint(param.to_polygon_format(x_grid, y_grid))
-     param.save_dxf(save_frame_as_dxf, grid, "grid")
+     saving.save_dxf_to_dir(grid, "grid")
      # param.plot_vigR_poly(pizza)
      # plot_points(grid, label=f"{nb_robots}")
      # plt.legend()
@@ -196,7 +202,8 @@ for nb_robots in nbots:
      total_modules = 0
      boundaries_df = {'geometry':[], 'color': []}
      modules_df = {'geometry':[], 'color': []}
-     coverage_df ={'geometry':[]}
+     coverage_df = {'geometry':[]}
+     robots_df = {'geometry':[]}
      # Create module arrangement from the global grid
      logging.info(f'Arranging focal plane for {nb_robots} robot case')
      for idx, (rotate, dx, dy) in enumerate(zip(flip_global, x_grid, y_grid)):
@@ -390,7 +397,6 @@ if global_frame_thick > 0:
 
      frame=pizza.buffer(20).difference(GeometryCollection(list(global_dict[key_frame]['boundaries_df']['geometry']))) 
      frame_ishish = MultiPolygon(list(global_dict[key_frame]['boundaries_df']['geometry']))
-     print(frame)
      # plot_polygon(global_bounding_polygon, add_points = False, facecolor = 'None', edgecolor ='orange', linestyle = '--')
      gdf_gfa.plot(ax=ax,facecolor = 'None', edgecolor=gdf_gfa['color'], linestyle='--', legend = True, label = 'GFA')
      plot_polygon(frame, ax=ax, add_points=False, facecolor='red', alpha = 0.2, edgecolor = 'black', label=f'Wall thickness = {global_frame_thick} mm')
@@ -412,7 +418,7 @@ if global_frame_thick > 0:
      ax.spines['bottom'].set_visible(False)
      ax.axes.get_xaxis().set_visible(False)
      ax.axes.get_yaxis().set_visible(False)
-     param.save_dxf(save_frame_as_dxf, GeometryCollection([frame_ishish, grid]), f'frame_{robots}_robots_{modules}_modules')
+     saving.save_dxf_to_dir(GeometryCollection([frame_ishish, grid]), f'frame_{robots}_robots_{modules}_modules')
      param.save_figures_to_dir(save_plots, filename)
 
 figtitle = param.final_title(nb_robots, total_modules, total_robots, intermediate_frame_thick, global_frame_thick, allow_small_out, out_allowance)
