@@ -333,6 +333,16 @@ class IntermediateTriangle:
           return intermediate_collection, intermediate_collection_speed, intermediate_coverage, inter_df
 
 class SavingResults:
+     """
+     Class for saving the various results produced with focal_plane_coverage.py
+     Initialized with "saving_df" dictionnary containing booleans for:
+
+     - Saving final plots (save_plots) of the focal plane
+     - Saving the layout of the frame in dxf format (save_dxf) for further SolidWorks results
+     - Saving csv files produced along the way (e.g. xy positions of all individual robots)
+
+     It also creates the "Results/" directory, if not already existing, to store eveything in one place
+     """
 
      def __init__(self, saving_df) -> None:
 
