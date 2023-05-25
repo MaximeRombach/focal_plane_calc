@@ -15,6 +15,7 @@ import math
 from shapely.geometry import mapping
 import ezdxf
 import ezdxf.addons.geo
+import updown_tri as tri
 
 
 logging.basicConfig(level=logging.INFO)
@@ -304,7 +305,7 @@ class IntermediateTriangle:
                boundary_xx.append(xx.tolist())
                boundary_yy.append(yy.tolist())
 
-
+          inter_robots_df['geometry'] = GeometryCollection(inter_robots_df['geometry'])
           modules_polygon_intermediate = MultiPolygon(boundaries)
           # Convex hull of boundaries
           bounding_polygon_intermediate = modules_polygon_intermediate.convex_hull
@@ -325,9 +326,10 @@ class IntermediateTriangle:
           covered_area_inter = coverage_polygon_intermediate.area
           intermediate_collection.append(bounding_polygon_intermediate)
           intermediate_collection = GeometryCollection(intermediate_collection)
-          intermediate_collection_speed = GeometryCollection([bounding_polygon_intermediate, modules_polygon_intermediate, coverage_polygon_intermediate, concave_hull])
+          intermediate_collection_speed = GeometryCollection([bounding_polygon_intermediate, modules_polygon_intermediate, coverage_polygon_intermediate, concave_hull, inter_robots_df['geometry']])
           available_intermediate_area = round(bounding_polygon_intermediate.area,1)
           intermediate_coverage = round(covered_area_inter/available_intermediate_area*100,1)
+          
           inter_df = {'inter_boundaries': inter_boundaries_df, 'inter_modules': inter_modules_df, 'inter_coverage': inter_coverage_df, 'inter_robots': inter_robots_df, 'intermediate_coverage': intermediate_coverage}
 
           return intermediate_collection, intermediate_collection_speed, intermediate_coverage, inter_df
@@ -361,7 +363,7 @@ class SavingResults:
           
           return results_dir_path
      
-     def save_dxf_to_dir(self, frame, suffix_name):
+     def save_dxf_to_dir(self, geometries: dict, suffix_name):
 
           if not self.save_dxf:
                return
@@ -370,14 +372,15 @@ class SavingResults:
           name_frame = now.strftime("%Y-%m-%d--%H-%M-%S_") + suffix_name
 
           doc = ezdxf.new()
-          geoproxy = ezdxf.addons.geo.GeoProxy.parse(mapping(frame))
-
           msp = doc.modelspace()
+          for key, geom in geometries.items():
 
-          # Use LWPOLYLINE instead of hatch.
-          for idx, entity in enumerate(geoproxy.to_dxf_entities(polygon=2)): 
-               # doc.layers.add(name=f"layer{idx}")
-               msp.add_entity(entity)
+               geoproxy = ezdxf.addons.geo.GeoProxy.parse(mapping(geom))
+
+               # Use LWPOLYLINE instead of hatch.
+               for entity in geoproxy.to_dxf_entities(polygon=2):
+                    msp.add_entity(entity)
+                    entity.set_dxf_attrib('layer', f"{key}")
 
           doc.saveas(self.results_dir_path() + f"{name_frame}.dxf")
 
@@ -452,6 +455,56 @@ class GFA(SavingResults):
           today_filename = now.strftime("%Y-%m-%d-%H-%M-%S_") + "GFA.csv"
           self.gdf_gfa.to_csv(self.results_dir_path() + today_filename)
 
+class Grid:
+
+     def __init__(self, inter_frame_width: float, centered_on_triangle: bool) -> None:
+
+          self.centered_on_triangle = centered_on_triangle
+          self.inter_frame_width = inter_frame_width
+          self.x_grid, self.y_grid = self.create_grid()
+
+     def create_grid(self):
+                    # Make global grid out of triangular grid method credited in updown_tri.py
+          # Its logic is also explained in updown_tri.py
+          n = 6
+          center_coords = []
+          a_max = n
+          b_max = n
+          c_max = n
+
+          x_grid = []
+          y_grid = []
+          flip_global = [] # stores the orientation of each triangle (either up or downward)
+
+          if self.centered_on_triangle:
+               origin = 'triangle'
+               valid = [0,1]
+          else:
+               origin = 'vertex'
+               valid = [1,2]
+          
+          vigR_tresh = 150
+
+          for a in np.arange(-a_max,a_max):
+               for b in np.arange(-b_max,b_max):
+                    for c in np.arange(-c_max,c_max):
+                         sum_abc = a + b + c
+                         # if valid == 1 or valid == 2: 
+                         if valid.count(sum_abc): # check if sum abc corresponds to a valid triangle depending on the centering case
+                              x,y = tri.tri_center(a,b,c,self.inter_frame_width) 
+                              if np.sqrt(x**2 + y**2) < vigR + vigR_tresh: # allow centroid of inter modules to go out of vigR for further filling purpose
+                                   center_coords.append((a,b,c))
+                                   x_grid.append(x)
+                                   y_grid.append(y)
+                                   if tri.points_up(a,b,c, origin = origin): # flip the modules depending on there position on the grid
+                                        flip_global.append(0)
+                                   else: 
+                                        flip_global.append(1)
+          
+          return x_grid, y_grid
+     
+     # def project_grid_on_sphere(self):
+     #      cent
 
 def to_polygon_format(x,y):
      """ Input:
@@ -490,10 +543,6 @@ def save_figures_to_dir(save, suffix_name, only_frame = False):
           os.makedirs(results_dir)
 
      plt.savefig(results_dir + today_filename, bbox_inches = 'tight', format='png', dpi = 800)
-
-
-
-
 
 def make_vigR_polygon(pizza_angle = 360, r = vigR, n_vigR = 500):
      
@@ -539,21 +588,6 @@ def plot_intermediate(intermediate_collection, nb_robots, ignore_points, interme
                # plot_polygon(mod_collection, add_points=False, facecolor='None', linestyle = '-.', color = 'green', label = 'Available area: {} mm$^2$'.format(available_intermediate_area))
                continue
           plot_module(mod_collection, label_coverage, label_robots, ignore_points)
-
-def plot_intermediate_speed(mod_collection, label_coverage):
-          s11=time.time()
-          if (isinstance (mod_collection.geoms[0], (Polygon, MultiPolygon))):
-               plot_polygon(mod_collection.geoms[0], add_points=False, facecolor='None' , linestyle = '--')
-          else:
-               print(f'mod_collection.geoms[0] is {type(mod_collection.geoms[1])}')
-          if (isinstance (mod_collection.geoms[1], MultiPolygon)):
-               plot_polygon(mod_collection.geoms[1], add_points=False, facecolor='None' , edgecolor='black')
-          else:
-               print(f'mod_collection.geoms[1] is {type(mod_collection.geoms[2])}')
-          if (isinstance (mod_collection.geoms[2], MultiPolygon)):
-               plot_polygon(mod_collection.geoms[2], add_points=False, alpha=0.2, edgecolor='black', label = label_coverage)
-          s12=time.time()
-          # print(f"0: {s12-s11} s")
                
 def final_title(nb_robots, total_modules, total_robots, inter_frame_thick, global_frame_thick, allow_small_out, out_allowance, disp_robots_info = True):
 

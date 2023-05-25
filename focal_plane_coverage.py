@@ -13,6 +13,7 @@ from tqdm import tqdm
 from shapely.geometry import Polygon, Point
 from shapely.plotting import plot_polygon, plot_points, plot_line
 from shapely import MultiPoint, MultiPolygon, GeometryCollection
+from shapely.ops import unary_union
 import logging
 import warnings
 from shapely.errors import ShapelyDeprecationWarning
@@ -53,7 +54,7 @@ start_time = time.time()
 # nbots = [63, 75, 88, 102]
 nbots = [75]
 width_increase = 0 # [mm] How much we want to increase the base length of a module
-chanfer_length = 8.2 # [mm] Size of chanfers of module vertices (base value: 7.5)
+chanfer_length = 10 # [mm] Size of chanfers of module vertices (base value: 7.5)
 centered_on_triangle = False
 
 
@@ -66,12 +67,13 @@ intermediate_frame_thick =  1 # [mm] spacing between modules inside intermediate
 global_frame_thick = 3 # [mm] spacing between modules in global arrangement
 
 """ Drawing parameters """
-draw = True
+draw = False
 is_timer = False
 save_plots = False
 plot_time = 20 # [s] plotting time
 ignore_points = False
-save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
+ignore_robots_positions = True
+save_frame_as_dxf = True # Save the outline of the frame for Solidworks integration
 save_csv = False
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv}
 saving = param.SavingResults(saving_df)
@@ -86,6 +88,7 @@ keys = []
 global_dict = {'n52': {}, 'n63': {}, 'n75': {}, 'n88': {}, 'n102': {},
                'Overall_results': {'nb_robots_list':[], 'total_robots_list' : [],
                                     'total_modules_list':[], 'coverages_list':[]}}
+to_dxf_dict = {}
 
 
 for nb_robots in nbots:
@@ -163,12 +166,14 @@ for nb_robots in nbots:
      pizza_with_GFA = pizza.difference(MultiPolygon(gdf_gfa['geometry'].tolist()))
 
      grid = MultiPoint(param.to_polygon_format(x_grid, y_grid))
-     saving.save_dxf_to_dir(grid, "grid")
+     to_dxf_dict["flat_grid"] = grid
+     # saving.save_dxf_to_dir(grid, "grid")
      # param.plot_vigR_poly(pizza)
      # plot_points(grid, label=f"{nb_robots}")
      # plt.legend()
      # plt.show()
      """ Project grid on BFS surface """
+    
      longitude = np.array(x_grid)/R
      latitude = 2 * np.arctan(np.exp(np.array(y_grid)/R))-np.pi/2
 
@@ -176,23 +181,27 @@ for nb_robots in nbots:
      y_sph = R * np.cos(latitude) * np.sin(longitude)
      z_sph = R * np.sin(latitude)
 
-     x_grid = y_sph
-     y_grid = z_sph
-     grid_sph = MultiPoint(param.to_polygon_format(x_grid, y_grid))
+     # x_grid = y_sph
+     # y_grid = z_sph
+     # grid_sph = MultiPoint(param.to_polygon_format(x_grid, y_grid))
+     # to_dxf_dict["projected_grid"] = grid_sph
+
      # plot_points(grid_sph, color='red')
      # min_pizz = param.make_vigR_polygon(r = vigR-rho)
      # max_pizz = param.make_vigR_polygon(r = vigR+rho)
      # plot_polygon(min_pizz, add_points =False, edgecolor = 'red', linestyle='--', facecolor='None')
      # plot_polygon(max_pizz, add_points =False, edgecolor = 'blue', linestyle='--', facecolor='None')
 
-     # fig = plt.figure()
-     # ax = fig.add_subplot(projection='3d')
-     # ax.scatter(x_sph, y_sph, z_sph , label=f'{max(x_sph)-min(x_sph)}mm')
-     # ax.set_box_aspect((1, 1, 1))
-     # plt.legend()
-     # ax.set_xlabel('X Label')
-     # ax.set_ylabel('Y Label')
-     # ax.set_zlabel('Z Label')
+     fig = plt.figure()
+     ax = fig.add_subplot(projection='3d')
+     ax.scatter(x_sph, y_sph, z_sph , label=f'{max(x_sph)-min(x_sph)}mm', color='red')
+     ax.scatter(min(x_sph), x_grid, y_grid , label=f'{max(x_sph)-min(x_sph)}mm', color='blue')
+     ax.set_box_aspect((1, 1, 1))
+     plt.legend()
+     ax.set_xlabel('X Label')
+     ax.set_ylabel('Y Label')
+     ax.set_zlabel('Z Label')
+     plt.show()
      #%% 2)c) Place the intermediate triangles accordingly on the grid
 
      fill_empty = True # Fill empty spaces by individual modules
@@ -201,7 +210,7 @@ for nb_robots in nbots:
      covered_area = 0 
      total_modules = 0
      boundaries_df = {'geometry':[], 'color': []}
-     modules_df = {'geometry':[], 'color': []}
+     modules_df = {'geometry':[], 'centroid': [], 'color': []}
      coverage_df = {'geometry':[]}
      robots_df = {'geometry':[]}
      # Create module arrangement from the global grid
@@ -218,6 +227,7 @@ for nb_robots in nbots:
           new_boundary = transformed_all.geoms[3]
           new_modules = transformed_all.geoms[1]
           new_coverage = transformed_all.geoms[2]
+          new_robots = transformed_all.geoms[4]
           new_centroid = [dx, dy]
 
           color_boundary = 'green'
@@ -236,6 +246,10 @@ for nb_robots in nbots:
           if not fill_empty and sticks_out:
                color_boundary = 'red'
                continue
+
+          elif int_centroid_out and not sticks_out:
+               # If int_triangle is not in vigR AND does not overlap with it, no point keeping it
+               continue
           
           # Check if intermediate module goes out from vigR and keep the modules that are either right inside and, if allowed,
           # the ones that only stick out of a certain amount
@@ -243,10 +257,11 @@ for nb_robots in nbots:
 
                temp_mod = []
                temp_cov = []
+               temp_rob = []
                xx = []
                yy = []
                
-               for mod, cov in zip(new_modules.geoms, new_coverage.geoms):
+               for mod, cov, robs in zip(new_modules.geoms, new_coverage.geoms, new_robots.geoms):
                     # plot_polygon(pizza,add_points=False,facecolor='None')
                     # plot_polygon(mod)
                     cent = np.array(cov.centroid.xy)
@@ -261,6 +276,7 @@ for nb_robots in nbots:
                     # If the coverage area of a single module does not stick out of vigR and is within vigR, we keep it
                          temp_mod.append(mod)
                          temp_cov.append(cov)
+                         temp_rob.append(robs)
                          color_boundary = 'blue'
 
                          xx.append(mod.exterior.coords.xy[0].tolist())
@@ -282,6 +298,7 @@ for nb_robots in nbots:
                         
                new_modules = MultiPolygon(temp_mod)
                new_coverage = MultiPolygon(temp_cov)
+               new_robots = GeometryCollection(temp_rob)
                convex_hull_modules = new_modules.convex_hull
                temp_cent = np.array(convex_hull_modules.centroid.xy).reshape((1,2))
                xx = param.flatten_list(xx)
@@ -291,9 +308,7 @@ for nb_robots in nbots:
                else:
                     new_boundary = Polygon(param.sort_points_for_polygon_format(xx, yy, temp_cent))
 
-          elif int_centroid_out and not sticks_out:
-               # If int_triangle is not in vigR AND does not overlap with it, no point keeping it
-               continue
+
 
           # elif int_tri_overlaps_gfa and not sticks_out:
           #      # If int triangle overlaps a GFA and is still in vigR, we look at the individual modules to keep those who do not overlap GFA
@@ -304,10 +319,16 @@ for nb_robots in nbots:
           boundaries_df['color'].append(color_boundary)
           modules_df['geometry'].append(new_modules)
           modules_df['color'].append(color_module)
+          modules_df['centroid'].append(Point(new_centroid))
           coverage_df['geometry'].append(new_coverage)
+
+          robots_df['geometry'].append(new_robots)
 
           total_modules += len(list(new_modules.geoms))
           covered_area += new_coverage.area # add the net covered area of each module
+
+     final_grid_df = {'geometry': modules_df['centroid']}
+     gdf_final_grid = gpd.GeoDataFrame(final_grid_df)
 
      global_bounding_polygon = MultiPolygon(boundaries_df['geometry']).convex_hull
      instrumented_area = global_bounding_polygon.area
@@ -317,6 +338,8 @@ for nb_robots in nbots:
      gdf_modules = gpd.GeoDataFrame(modules_df)
      gdf_coverage = gpd.GeoDataFrame(coverage_df)
      gdf_coverage['label'] = f'Coverage vigR: {global_coverage} %'
+     gdf_robots = gpd.GeoDataFrame(robots_df)
+     gdf_robots['markersize'] = 0.05
      total_robots = total_modules*nb_robots
 
      global_dict[key]['boundaries_df'] = boundaries_df
@@ -396,7 +419,7 @@ if global_frame_thick > 0:
      f.suptitle(figtitle)
 
      frame=pizza.buffer(20).difference(GeometryCollection(list(global_dict[key_frame]['boundaries_df']['geometry']))) 
-     frame_ishish = MultiPolygon(list(global_dict[key_frame]['boundaries_df']['geometry']))
+     frame_ishish = unary_union(global_dict[key_frame]['boundaries_df']['geometry'])
      # plot_polygon(global_bounding_polygon, add_points = False, facecolor = 'None', edgecolor ='orange', linestyle = '--')
      gdf_gfa.plot(ax=ax,facecolor = 'None', edgecolor=gdf_gfa['color'], linestyle='--', legend = True, label = 'GFA')
      plot_polygon(frame, ax=ax, add_points=False, facecolor='red', alpha = 0.2, edgecolor = 'black', label=f'Wall thickness = {global_frame_thick} mm')
@@ -418,7 +441,8 @@ if global_frame_thick > 0:
      ax.spines['bottom'].set_visible(False)
      ax.axes.get_xaxis().set_visible(False)
      ax.axes.get_yaxis().set_visible(False)
-     saving.save_dxf_to_dir(GeometryCollection([frame_ishish, grid]), f'frame_{robots}_robots_{modules}_modules')
+     to_dxf_dict['frame'] = frame_ishish
+     saving.save_dxf_to_dir(to_dxf_dict, f'frame_{robots}_robots_{modules}_modules')     
      param.save_figures_to_dir(save_plots, filename)
 
 figtitle = param.final_title(nb_robots, total_modules, total_robots, intermediate_frame_thick, global_frame_thick, allow_small_out, out_allowance)
@@ -428,6 +452,10 @@ f.suptitle(figtitle)
 gdf_modules.plot(ax=ax,facecolor='None',edgecolor=gdf_modules['color'])
 gdf_bound.plot(ax=ax,facecolor='None', edgecolor=gdf_bound['color'])
 gdf_coverage.plot(column='label',ax=ax, alpha=0.2, legend=True, legend_kwds={'loc': 'upper right'})
+
+if not ignore_robots_positions:
+     gdf_robots.plot(ax = ax, markersize = gdf_robots['markersize'])
+
 ax.scatter(0,0,s=7,color='red')
 plot_polygon(pizza, ax=ax, add_points=False, edgecolor='black', facecolor='None', linestyle='--')
 # plot_polygon(global_bounding_polygon, ax=ax, add_points=False, edgecolor='orange', facecolor='None', linestyle='--',label='Instrumented area')
