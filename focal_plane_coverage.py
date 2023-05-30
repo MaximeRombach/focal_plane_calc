@@ -51,12 +51,11 @@ The effective coverage is calculated as the usable positioner area vs total area
 start_time = time.time()
 
 """ Global variables """
-# nbots = [63, 75, 88, 102]
-nbots = [75]
+nbots = [52, 63, 75, 88, 102]
+# nbots = [75]
 width_increase = 0 # [mm] How much we want to increase the base length of a module
 chanfer_length = 10 # [mm] Size of chanfers of module vertices (base value: 7.5)
 centered_on_triangle = False
-
 
 """ Intermediate frame parameters """
 
@@ -67,19 +66,22 @@ intermediate_frame_thick =  1 # [mm] spacing between modules inside intermediate
 global_frame_thick = 3 # [mm] spacing between modules in global arrangement
 
 """ Drawing parameters """
-draw = False
+draw = True
 is_timer = False
-save_plots = False
+
 plot_time = 20 # [s] plotting time
 ignore_points = False
 ignore_robots_positions = True
-save_frame_as_dxf = True # Save the outline of the frame for Solidworks integration
+
+save_plots = False
+save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
 save_csv = False
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv}
 saving = param.SavingResults(saving_df)
 
 """GFA stuff"""
-gfa = param.GFA(length = 33.3, width = 61, nb_gfa = 6, saving_df=saving_df)
+gfa_tune = 1.2
+gfa = param.GFA(length = 33.3*gfa_tune, width = 61*gfa_tune, nb_gfa = 6, saving_df=saving_df)
 gdf_gfa = gfa.gdf_gfa
 
 
@@ -93,12 +95,12 @@ to_dxf_dict = {}
 
 for nb_robots in nbots:
      
-     mod_param = param.Module(nb_robots, width_increase, chanfer_length)
+     mod_param = param.Module(nb_robots, saving_df, width_increase, chanfer_length)
      key = mod_param.key
      keys.append(key)
      module_width = mod_param.module_width
      nb_rows = mod_param.nb_rows
-     module_collection, wks_list, coverages = mod_param.create_module()
+     module_collection, wks_list, coverages = mod_param.module_collection, mod_param.multi_wks_list, mod_param.coverages
      module, module_w_beta_and_safety_dist, effective_wks, triang_meshgrid = module_collection.geoms
      coverage_with_walls, coverage_no_walls = coverages
      
@@ -181,10 +183,10 @@ for nb_robots in nbots:
      y_sph = R * np.cos(latitude) * np.sin(longitude)
      z_sph = R * np.sin(latitude)
 
-     # x_grid = y_sph
-     # y_grid = z_sph
-     # grid_sph = MultiPoint(param.to_polygon_format(x_grid, y_grid))
-     # to_dxf_dict["projected_grid"] = grid_sph
+     x_grid = y_sph
+     y_grid = z_sph
+     grid_sph = MultiPoint(param.to_polygon_format(x_grid, y_grid))
+     to_dxf_dict["projected_grid"] = grid_sph
 
      # plot_points(grid_sph, color='red')
      # min_pizz = param.make_vigR_polygon(r = vigR-rho)
@@ -192,21 +194,21 @@ for nb_robots in nbots:
      # plot_polygon(min_pizz, add_points =False, edgecolor = 'red', linestyle='--', facecolor='None')
      # plot_polygon(max_pizz, add_points =False, edgecolor = 'blue', linestyle='--', facecolor='None')
 
-     fig = plt.figure()
-     ax = fig.add_subplot(projection='3d')
-     ax.scatter(x_sph, y_sph, z_sph , label=f'{max(x_sph)-min(x_sph)}mm', color='red')
-     ax.scatter(min(x_sph), x_grid, y_grid , label=f'{max(x_sph)-min(x_sph)}mm', color='blue')
-     ax.set_box_aspect((1, 1, 1))
-     plt.legend()
-     ax.set_xlabel('X Label')
-     ax.set_ylabel('Y Label')
-     ax.set_zlabel('Z Label')
-     plt.show()
+     # fig = plt.figure()
+     # ax = fig.add_subplot(projection='3d')
+     # ax.scatter(x_sph, y_sph, z_sph , label=f'{max(x_sph)-min(x_sph)}mm', color='red')
+     # ax.scatter(min(x_sph), x_grid, y_grid , label=f'{max(x_sph)-min(x_sph)}mm', color='blue')
+     # ax.set_box_aspect((1, 1, 1))
+     # plt.legend()
+     # ax.set_xlabel('X Label')
+     # ax.set_ylabel('Y Label')
+     # ax.set_zlabel('Z Label')
+     # plt.show()
      #%% 2)c) Place the intermediate triangles accordingly on the grid
 
      fill_empty = True # Fill empty spaces by individual modules
-     allow_small_out = False # allow covered area of module to stick out of vigR (i.e. useless covered area because does not receive light)
-     out_allowance = 0.07 # percentage of the covered area of a module authorized to stick out of vigR
+     allow_small_out = True # allow covered area of module to stick out of vigR (i.e. useless covered area because does not receive light)
+     out_allowance = 0.06 # percentage of the covered area of a module authorized to stick out of vigR
      covered_area = 0 
      total_modules = 0
      boundaries_df = {'geometry':[], 'color': []}
@@ -409,7 +411,7 @@ param.save_figures_to_dir(save_plots, filename)
 if global_frame_thick > 0:
      
      key_frame = keys[-1]
-     # key_frame ='n63'
+     # key_frame ='n75'
      robots = global_dict[key_frame]['nb_robots']
      modules = global_dict[key_frame]['total_modules']
      figtitle = f'Frame to manufacture - {robots} robots per module - {modules} modules'
@@ -464,49 +466,50 @@ gdf_gfa.plot(ax=ax,facecolor = 'None', edgecolor=gdf_gfa['color'], linestyle='--
 
 param.save_figures_to_dir(save_plots, filename)
 
-figtitle = param.final_title(nb_robots, total_modules, total_robots, intermediate_frame_thick, global_frame_thick, allow_small_out, out_allowance, disp_robots_info=False)
-filename = f"Summary of coverages for inner {intermediate_frame_thick} and global {global_frame_thick}"
-f, axes= plt.subplots(nrows=2,ncols=2, figsize=(12, 12), sharex = True, sharey=True)
-f.suptitle(figtitle)
-axes = axes.flatten()
+if len(keys)>1: # Useless to do multiple plots for only one case
+     figtitle = param.final_title(nb_robots, total_modules, total_robots, intermediate_frame_thick, global_frame_thick, allow_small_out, out_allowance, disp_robots_info=False)
+     filename = f"Summary of coverages for inner {intermediate_frame_thick} and global {global_frame_thick}"
+     f, axes= plt.subplots(nrows=2,ncols=2, figsize=(12, 12), sharex = True, sharey=True)
+     f.suptitle(figtitle)
+     axes = axes.flatten()
 
-for idx, (k,ax) in tqdm(enumerate(zip(keys, axes))):
+     for idx, (k,ax) in tqdm(enumerate(zip(keys, axes))):
 
-     gdf_bound = gpd.GeoDataFrame(global_dict[k]['boundaries_df'])
-     gdf_modules = gpd.GeoDataFrame(global_dict[k]['modules_df'])
-     gdf_coverage = gpd.GeoDataFrame(global_dict[k]['coverage_df'])
-     
-     gdf_modules.plot(ax=ax,facecolor='None')
-     gdf_bound.plot(ax=ax,facecolor='None', edgecolor=gdf_bound['color'])
-     gdf_coverage.plot(column='label',ax=ax, alpha=0.2, legend=True, legend_kwds={'loc': 'upper right'})
-     gdf_gfa.plot(ax=ax,facecolor = 'None', edgecolor=gdf_gfa['color'], linestyle='--')
+          gdf_bound = gpd.GeoDataFrame(global_dict[k]['boundaries_df'])
+          gdf_modules = gpd.GeoDataFrame(global_dict[k]['modules_df'])
+          gdf_coverage = gpd.GeoDataFrame(global_dict[k]['coverage_df'])
+          
+          gdf_modules.plot(ax=ax,facecolor='None')
+          gdf_bound.plot(ax=ax,facecolor='None', edgecolor=gdf_bound['color'])
+          gdf_coverage.plot(column='label',ax=ax, alpha=0.2, legend=True, legend_kwds={'loc': 'upper right'})
+          gdf_gfa.plot(ax=ax,facecolor = 'None', edgecolor=gdf_gfa['color'], linestyle='--')
 
-     plot_polygon(pizza, ax=ax, add_points=False, edgecolor='black', facecolor='None', linestyle='--')
-     # plot_polygon(global_dict[k]['global_bounding_polygon'], ax=ax, add_points=False, edgecolor='orange', facecolor='None', linestyle='--',label='Instrumented area')
+          plot_polygon(pizza, ax=ax, add_points=False, edgecolor='black', facecolor='None', linestyle='--')
+          # plot_polygon(global_dict[k]['global_bounding_polygon'], ax=ax, add_points=False, edgecolor='orange', facecolor='None', linestyle='--',label='Instrumented area')
 
-     ax.scatter(0,0,s=7,color='red')
-     ax.set_title(f"{global_dict[k]['nb_robots']} robots / module \n # modules: {global_dict[k]['total_modules']} - # robots: {global_dict[k]['total_robots']}")
-     ax.set_xlabel('x position [mm]')
-     ax.set_ylabel('y position [mm]')
-param.save_figures_to_dir(save_plots, filename)
+          ax.scatter(0,0,s=7,color='red')
+          ax.set_title(f"{global_dict[k]['nb_robots']} robots / module \n # modules: {global_dict[k]['total_modules']} - # robots: {global_dict[k]['total_robots']}")
+          ax.set_xlabel('x position [mm]')
+          ax.set_ylabel('y position [mm]')
+     param.save_figures_to_dir(save_plots, filename)
 
-fig,ax = plt.subplots(figsize = (8,8))
-figtitle = f"Coverages and # robots for {keys} cases"
-filename = figtitle
-fig.suptitle(figtitle)
-ax.plot(nbots, global_dict['Overall_results']['coverages_list'],
-        color="red", marker="o")
-ax.set_xlabel("# robots/module")
-ax.set_ylabel("Coverage [% of vigR area]",
-              color="red")
+     fig,ax = plt.subplots(figsize = (8,8))
+     figtitle = f"Coverages and # robots for {keys} cases"
+     filename = figtitle
+     fig.suptitle(figtitle)
+     ax.plot(nbots, global_dict['Overall_results']['coverages_list'],
+          color="red", marker="o")
+     ax.set_xlabel("# robots/module")
+     ax.set_ylabel("Coverage [% of vigR area]",
+               color="red")
 
-ax2=ax.twinx()
-# make a plot with different y-axis using second axis object
-ax2.plot(nbots, global_dict['Overall_results']['total_robots_list'],
-         color="blue",marker="o")
-ax2.set_ylabel("Total # robots",color="blue")
-ax.grid()
-param.save_figures_to_dir(save_plots, filename)
+     ax2=ax.twinx()
+     # make a plot with different y-axis using second axis object
+     ax2.plot(nbots, global_dict['Overall_results']['total_robots_list'],
+          color="blue",marker="o")
+     ax2.set_ylabel("Total # robots",color="blue")
+     ax.grid()
+     param.save_figures_to_dir(save_plots, filename)
 
 
 end_time = time.time()

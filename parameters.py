@@ -37,11 +37,72 @@ curve_radius = 11067 # [mm] curvature of the focal plane
 
 # global_frame_thick = 3 # [mm] spacing between modules in global arrangement
 
+class SavingResults:
+     """
+     Class for saving the various results produced with focal_plane_coverage.py
+     Initialized with "saving_df" dictionnary containing booleans for:
+
+     - Saving final plots (save_plots) of the focal plane
+     - Saving the layout of the frame in dxf format (save_dxf) for further SolidWorks results
+     - Saving csv files produced along the way (e.g. xy positions of all individual robots)
+
+     It also creates the "Results/" directory, if not already existing, to store eveything in one place
+     """
+
+     def __init__(self, saving_df) -> None:
+
+          self.results_dir_path = self.path_to_results_dir
+          self.save_plots = saving_df['save_plots']
+          self.save_dxf = saving_df['save_dxf']
+          self.save_csv = saving_df['save_csv']
+
+     def path_to_results_dir(self):
+
+          script_dir = os.path.dirname(__file__)
+          results_dir_path = os.path.join(script_dir, 'Results/')
+
+          if not os.path.isdir(results_dir_path):
+               os.makedirs(results_dir_path)
+          
+          return results_dir_path
+     
+     def save_dxf_to_dir(self, geometries: dict, suffix_name):
+
+          if not self.save_dxf:
+               return
+          
+          now = datetime.now()
+          name_frame = now.strftime("%Y-%m-%d--%H-%M-%S_") + suffix_name
+
+          doc = ezdxf.new()
+          msp = doc.modelspace()
+          for key, geom in geometries.items():
+
+               geoproxy = ezdxf.addons.geo.GeoProxy.parse(mapping(geom))
+
+               # Use LWPOLYLINE instead of hatch.
+               for entity in geoproxy.to_dxf_entities(polygon=2):
+                    msp.add_entity(entity)
+                    entity.set_dxf_attrib('layer', f"{key}")
+
+          doc.saveas(self.results_dir_path() + f"{name_frame}.dxf")
+
+     def save_figures_to_dir(self, suffix_name):
+
+          if not self.save_plots:
+               return
+
+          now = datetime.now()
+          today_filename = now.strftime("%Y-%m-%d-%H-%M-%S_") + suffix_name + ".png"
+
+          plt.savefig(self.results_dir_path() + today_filename, bbox_inches = 'tight', format='png', dpi = 800)
+
+
 """ Module parameters """ 
 
-class Module:
+class Module(SavingResults):
 
-     def __init__(self, nb_robots, width_increase = 0, chanfer_length = 7.5):
+     def __init__(self, nb_robots, saving_df, width_increase = 0, chanfer_length = 7.5):
 
           """Robot parameters""" 
 
@@ -65,12 +126,12 @@ class Module:
           self.y_inc = 5.369 # [mm] Vertical increment at each row
           self.test_pitch = np.linalg.norm(np.array([self.x_inc,self.y_inc]))
 
-          self.safety_distance = 0.4 # [mm] physical distance kept between shields and edge of beta arm
+          self.safety_distance = 0.3 # [mm] physical distance kept between shields and edge of beta arm
           self.offset_from_module_edges = self.safety_distance + self.beta2fibre
           self.start_offset_x = 6.2 # [mm]
           self.start_offset_y = 3.41 # [mm]
 
-          self.is_wall = True # flag for protective shields or not on modules
+          self.is_wall = False # flag for protective shields or not on modules
 
           # 1 row addition from one case to another 
           if self.nb_robots == 52:
@@ -104,6 +165,14 @@ class Module:
 
           else:
                raise Exception('Error: only 52, 63, 75, 88, 102 robots per module supported')
+          
+          self.module_collection, self.multi_wks_list, self.coverages = self.create_module()
+          self.module = self.module_collection.geoms[0]
+          self.module_w_beta_and_safety_dist = self.module_collection.geoms[1]
+          self.effective_wks = self.module_collection.geoms[2]
+          self.triang_meshgrid = self.module_collection.geoms[3]
+
+          super().__init__(saving_df)
           
      def equilateral_vertices(self, triangle_width, xoff = 0, yoff = 0):
           """
@@ -212,7 +281,6 @@ class Module:
           xx1, yy1 = self.remove_positioner(xx1, yy1, list_to_remove)
           nbots = len(xx1)
 
-
           triang_meshgrid = MultiPoint(to_polygon_format(xx1, yy1)) # convert the meshgrid into shapely standard for later manipulation
 
           """ 1)b) Define coverage for 1 modules """
@@ -257,6 +325,18 @@ class Module:
 
           logging.info(f'Module object created with width {self.module_width} & {nbots} robots')
           return module_collection, multi_wks_list, coverages
+     
+     def plot_raw_module(self):
+
+          fig = plt.figure(figsize=(8,8))
+          figtitle = f"Module coverage raw - {self.nb_robots} robots per module"
+          plt.title(figtitle)
+          plot_polygon(self.module, facecolor='None', edgecolor='black', add_points=False)
+          plot_polygon(self.module_w_beta_and_safety_dist, facecolor='None', edgecolor='red', linestyle = '--', add_points=False
+                       , label = "Safety dist = {} mm".format(self.offset_from_module_edges))
+          plot_points(self.triang_meshgrid, marker='.', color='k', label = "{} robots".format(self.nb_robots))
+          
+          self.save_figures_to_dir(self.save_plots, figtitle)
 
 class IntermediateTriangle: 
 
@@ -334,55 +414,7 @@ class IntermediateTriangle:
 
           return intermediate_collection, intermediate_collection_speed, intermediate_coverage, inter_df
 
-class SavingResults:
-     """
-     Class for saving the various results produced with focal_plane_coverage.py
-     Initialized with "saving_df" dictionnary containing booleans for:
 
-     - Saving final plots (save_plots) of the focal plane
-     - Saving the layout of the frame in dxf format (save_dxf) for further SolidWorks results
-     - Saving csv files produced along the way (e.g. xy positions of all individual robots)
-
-     It also creates the "Results/" directory, if not already existing, to store eveything in one place
-     """
-
-     def __init__(self, saving_df) -> None:
-
-          self.results_dir_path = self.path_to_results_dir
-          self.save_plots = saving_df['save_plots']
-          self.save_dxf = saving_df['save_dxf']
-          self.save_csv = saving_df['save_csv']
-
-     def path_to_results_dir(self):
-
-          script_dir = os.path.dirname(__file__)
-          results_dir_path = os.path.join(script_dir, 'Results/')
-
-          if not os.path.isdir(results_dir_path):
-               os.makedirs(results_dir_path)
-          
-          return results_dir_path
-     
-     def save_dxf_to_dir(self, geometries: dict, suffix_name):
-
-          if not self.save_dxf:
-               return
-          
-          now = datetime.now()
-          name_frame = now.strftime("%Y-%m-%d--%H-%M-%S_") + suffix_name
-
-          doc = ezdxf.new()
-          msp = doc.modelspace()
-          for key, geom in geometries.items():
-
-               geoproxy = ezdxf.addons.geo.GeoProxy.parse(mapping(geom))
-
-               # Use LWPOLYLINE instead of hatch.
-               for entity in geoproxy.to_dxf_entities(polygon=2):
-                    msp.add_entity(entity)
-                    entity.set_dxf_attrib('layer', f"{key}")
-
-          doc.saveas(self.results_dir_path() + f"{name_frame}.dxf")
 
 class GFA(SavingResults):
      def __init__(self, length: float, width: float, nb_gfa: int, saving_df, vigR = vigR) -> None:
@@ -505,6 +537,20 @@ class Grid:
      
      # def project_grid_on_sphere(self):
      #      cent
+
+class FocalSurf():
+     def __init__(self, focal_surf_param) -> None:
+
+          self.R = focal_surf_param['R'] #curvature radius of focal plane
+          self.k = focal_surf_param['k']
+          self.a2 = focal_surf_param['a2']
+          self.a3 = focal_surf_param['a3']
+          self.c = 1/self.R
+
+     def rad2Z(self, r):
+
+          return self.c*r**2 / (1 + np.sqrt(1 - (1+self.k) * self.c**2) * r**2) + self.a2 * r**4 + self.a2 * r**6
+
 
 def to_polygon_format(x,y):
      """ Input:
@@ -632,3 +678,5 @@ def sort_points_for_polygon_format(x: list, y: list, centroid):
      d = d[d[:, 2].argsort()] # sort the points by ascending order array
      return to_polygon_format(d[:,0] + centroid[0,0], d[:,1]+ centroid[0,1])
 
+focal_surf_MUST = {'R': -11088.4, 'k': 0, 'a2': -2.18895e-12, 'a3': 6.11195e-18, }
+focal_surf_MegaMapper = {}
