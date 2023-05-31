@@ -131,7 +131,7 @@ class Module(SavingResults):
           self.start_offset_x = 6.2 # [mm]
           self.start_offset_y = 3.41 # [mm]
 
-          self.is_wall = False # flag for protective shields or not on modules
+          self.is_wall = True # flag for protective shields or not on modules
 
           # 1 row addition from one case to another 
           if self.nb_robots == 52:
@@ -549,7 +549,7 @@ class FocalSurf():
 
      def rad2Z(self, r):
 
-          return self.c*r**2 / (1 + np.sqrt(1 - (1+self.k) * self.c**2) * r**2) + self.a2 * r**4 + self.a2 * r**6
+          return self.c*r**2 / (1 + np.sqrt(1 - (1+self.k) * self.c**2 * r**2)) + self.a2 * r**4 + self.a2 * r**6
 
 
 def to_polygon_format(x,y):
