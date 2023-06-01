@@ -19,7 +19,7 @@ import warnings
 from shapely.errors import ShapelyDeprecationWarning
 warnings.filterwarnings("ignore", category=ShapelyDeprecationWarning) 
 import parameters as param
-R = param.curve_radius
+R = param.R
 vigR = param.vigR
 
 
@@ -78,7 +78,7 @@ ignore_points = False
 ignore_robots_positions = True
 
 save_plots = False
-save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
+save_frame_as_dxf = True # Save the outline of the frame for Solidworks integration
 save_csv = False
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv}
 saving = param.SavingResults(saving_df)
@@ -128,95 +128,83 @@ for nb_robots in nbots:
      dist_global = 2*rho
      inter_centroid = inter_frame_width*np.sqrt(3)/3*np.array([np.cos(np.deg2rad(30)), np.sin(np.deg2rad(30))])
 
-     nb_max_modules = round(2*vigR / (inter_frame_width + global_frame_thick), 0)
+     grid = param.Grid(module_width, intermediate_frame_thick, global_frame_thick, centered_on_triangle)
+     grid_df = grid.grid_df
 
-     # Make global grid out of triangular grid method credited in updown_tri.py
-     # Its logic is also explained in updown_tri.py
-     n = 6
-     center_coords = []
-     a_max = n
-     b_max = n
-     c_max = n
+     x_grid = grid_df['x_grid_proj']
+     y_grid = grid_df['y_grid_proj']
+     flip_global = grid_df['flip_global']
 
-     x_grid = []
-     y_grid = []
-     flip_global = [] # stores the orientation of each triangle (either up or downward)
+     grid_flat = MultiPoint(param.to_polygon_format(grid_df['x_grid_flat'], grid_df['y_grid_flat']))
+     grid_proj = MultiPoint(param.to_polygon_format(grid_df['x_grid_proj'], grid_df['y_grid_proj']))
+     to_dxf_dict["flat_grid"] = grid_flat
+     to_dxf_dict["proj_grid"] = grid_proj
 
-     if centered_on_triangle:
-          origin = 'triangle'
-          valid = [0,1]
-     else:
-          origin = 'vertex'
-          valid = [1,2]
-     
-     vigR_tresh = 150
-
-     for a in np.arange(-a_max,a_max):
-          for b in np.arange(-b_max,b_max):
-               for c in np.arange(-c_max,c_max):
-                    sum_abc = a + b + c
-                    # if valid == 1 or valid == 2: 
-                    if valid.count(sum_abc): # check if sum abc corresponds to a valid triangle depending on the centering case
-                         x,y = tri.tri_center(a,b,c,inter_frame_width) 
-                         if np.sqrt(x**2 + y**2) < vigR + vigR_tresh: # allow centroid of inter modules to go out of vigR for further filling purpose
-                              center_coords.append((a,b,c))
-                              x_grid.append(x)
-                              y_grid.append(y)
-                              if tri.points_up(a,b,c, origin = origin): # flip the modules depending on there position on the grid
-                                   flip_global.append(0)
-                              else: 
-                                   flip_global.append(1)                             
-
-     # g,g_ax = plt.subplots()
      pizza = param.make_vigR_polygon()
      pizza_with_GFA = pizza.difference(MultiPolygon(gdf_gfa['geometry'].tolist()))
 
-     grid = MultiPoint(param.to_polygon_format(x_grid, y_grid))
-     to_dxf_dict["flat_grid"] = grid
-     # saving.save_dxf_to_dir(grid, "grid")
-     # param.plot_vigR_poly(pizza)
-     # plot_points(grid, label=f"{nb_robots}")
-     # plt.legend()
-     # plt.show()
-     """ Project grid on BFS surface """
-    
-     longitude = np.array(x_grid)/R
-     latitude = 2 * np.arctan(np.exp(np.array(y_grid)/R))-np.pi/2
+     
 
-     x_sph = R * np.cos(latitude) * np.cos(longitude)
-     y_sph = R * np.cos(latitude) * np.sin(longitude)
-     z_sph = R * np.sin(latitude)
+#%%
+     # Make global grid out of triangular grid method credited in updown_tri.py
+     # Its logic is also explained in updown_tri.py
+     # n = 6
+     # center_coords = []
+     # a_max = n
+     # b_max = n
+     # c_max = n
+
+     # x_grid = []
+     # y_grid = []
+     # flip_global = [] # stores the orientation of each triangle (either up or downward)
+
+     # if centered_on_triangle:
+     #      origin = 'triangle'
+     #      valid = [0,1]
+     # else:
+     #      origin = 'vertex'
+     #      valid = [1,2]
+     
+     # vigR_tresh = 150
+
+     # for a in np.arange(-a_max,a_max):
+     #      for b in np.arange(-b_max,b_max):
+     #           for c in np.arange(-c_max,c_max):
+     #                sum_abc = a + b + c
+     #                # if valid == 1 or valid == 2: 
+     #                if valid.count(sum_abc): # check if sum abc corresponds to a valid triangle depending on the centering case
+     #                     x,y = tri.tri_center(a,b,c,inter_frame_width) 
+     #                     if np.sqrt(x**2 + y**2) < vigR + vigR_tresh: # allow centroid of inter modules to go out of vigR for further filling purpose
+     #                          center_coords.append((a,b,c))
+     #                          x_grid.append(x)
+     #                          y_grid.append(y)
+     #                          if tri.points_up(a,b,c, origin = origin): # flip the modules depending on there position on the grid
+     #                               flip_global.append(0)
+     #                          else: 
+     #                               flip_global.append(1)                             
+
+     # # g,g_ax = plt.subplots()
+
+     # # saving.save_dxf_to_dir(grid, "grid")
+     # # param.plot_vigR_poly(pizza)
+     # # plot_points(grid, label=f"{nb_robots}")
+     # # plt.legend()
+     # # plt.show()
+     # """ Project grid on BFS surface """
+    
+     # longitude = np.array(x_grid)/R
+     # latitude = 2 * np.arctan(np.exp(np.array(y_grid)/R))-np.pi/2
+
+     # x_sph = R * np.cos(latitude) * np.cos(longitude)
+     # y_sph = R * np.cos(latitude) * np.sin(longitude)
+     # z_sph = R * np.sin(latitude)
 
      # x_grid = y_sph
      # y_grid = z_sph
-     grid_sph = MultiPoint(param.to_polygon_format(x_grid, y_grid))
-     to_dxf_dict["projected_grid"] = grid_sph
+     # grid_sph = MultiPoint(param.to_polygon_format(x_grid, y_grid))
+     # to_dxf_dict["projected_grid"] = grid_sph
 
-     # plot_points(grid_sph, color='red')
-     # min_pizz = param.make_vigR_polygon(r = vigR-rho)
-     # max_pizz = param.make_vigR_polygon(r = vigR+rho)
-     # plot_polygon(min_pizz, add_points =False, edgecolor = 'red', linestyle='--', facecolor='None')
-     # plot_polygon(max_pizz, add_points =False, edgecolor = 'blue', linestyle='--', facecolor='None')
 
-     fig = plt.figure()
-     ax = fig.add_subplot()
-     ax.scatter(y_sph, z_sph, label=f'projected', color='blue')
-     ax.scatter(x_grid, y_grid, label=f'flat', color='red')
-     ax.set_box_aspect(1)
-     plt.legend()
-     ax.set_xlabel('X Label')
-     ax.set_ylabel('Y Label')
-
-     fig = plt.figure()
-     ax = fig.add_subplot(projection='3d')
-     ax.scatter(x_sph, y_sph, z_sph , label=f'{max(x_sph)-min(x_sph)}mm', color='red')
-     ax.scatter(min(x_sph), x_grid, y_grid , label=f'{max(x_sph)-min(x_sph)}mm', color='blue')
-     ax.set_box_aspect((1, 1, 1))
-     plt.legend()
-     ax.set_xlabel('X Label')
-     ax.set_ylabel('Y Label')
-     ax.set_zlabel('Z Label')
-     plt.show()
      #%% 2)c) Place the intermediate triangles accordingly on the grid
 
      fill_empty = True # Fill empty spaces by individual modules

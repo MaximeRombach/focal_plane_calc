@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import numpy as np
+from numpy.linalg import norm
 import logging
 from shapely import affinity, MultiPolygon, MultiPoint, GeometryCollection
 import matplotlib.pyplot as plt
@@ -26,7 +27,7 @@ tan30 = np.tan(np.deg2rad(30))
 """ Focal plane parameters """
 
 vigR = 613.27 # [mm] radius of the instrument
-curve_radius = 11067 # [mm] curvature of the focal plane
+R = 11067 # [mm] curvature of the focal plane
 
 
 # """ Intermediate frame parameters """
@@ -124,7 +125,7 @@ class Module(SavingResults):
           
           self.x_inc = 3.1 # [mm] Horizontal increment at each row
           self.y_inc = 5.369 # [mm] Vertical increment at each row
-          self.test_pitch = np.linalg.norm(np.array([self.x_inc,self.y_inc]))
+          self.test_pitch = norm(np.array([self.x_inc,self.y_inc]))
 
           self.safety_distance = 0.3 # [mm] physical distance kept between shields and edge of beta arm
           self.offset_from_module_edges = self.safety_distance + self.beta2fibre
@@ -414,8 +415,6 @@ class IntermediateTriangle:
 
           return intermediate_collection, intermediate_collection_speed, intermediate_coverage, inter_df
 
-
-
 class GFA(SavingResults):
      def __init__(self, length: float, width: float, nb_gfa: int, saving_df, vigR = vigR) -> None:
           self.length = length
@@ -489,13 +488,19 @@ class GFA(SavingResults):
 
 class Grid:
 
-     def __init__(self, inter_frame_width: float, centered_on_triangle: bool) -> None:
+     def __init__(self, module_width: float, inter_frame_thick: float, global_frame_thick: float, centered_on_triangle: bool  = False) -> None:
 
           self.centered_on_triangle = centered_on_triangle
-          self.inter_frame_width = inter_frame_width
-          self.x_grid, self.y_grid = self.create_grid()
-
-     def create_grid(self):
+          self.module_width = module_width
+          self.inter_frame_thick = inter_frame_thick
+          self.global_frame_thick = global_frame_thick
+          self.inter_frame_width = 2*self.module_width + 2*self.inter_frame_thick*np.cos(np.deg2rad(30)) + 2*self.global_frame_thick*np.cos(np.deg2rad(30))
+          
+          self.grid_df = {}
+          self.create_flat_grid()
+          self.project_grid_on_sphere()
+          
+     def create_flat_grid(self):
                     # Make global grid out of triangular grid method credited in updown_tri.py
           # Its logic is also explained in updown_tri.py
           n = 6
@@ -515,7 +520,7 @@ class Grid:
                origin = 'vertex'
                valid = [1,2]
           
-          vigR_tresh = 150
+          vigR_tresh = 0
 
           for a in np.arange(-a_max,a_max):
                for b in np.arange(-b_max,b_max):
@@ -533,10 +538,53 @@ class Grid:
                                    else: 
                                         flip_global.append(1)
           
-          return x_grid, y_grid
-     
-     # def project_grid_on_sphere(self):
-     #      cent
+          self.grid_df['x_grid_flat'] = np.array(x_grid)
+          self.grid_df['y_grid_flat'] = np.array(y_grid)
+          self.grid_df['z_grid_flat'] = -np.sqrt(R**2 - (vigR)**2)*np.ones(len(x_grid))
+          # self.grid_df['z_grid_flat'] = -(R-15)
+          
+          self.grid_df['flip_global'] = np.array(flip_global)
+
+     def project_grid_on_sphere(self):
+
+          # Create 3D grid points = take the flat grid and place it at the corresponding z position from the center of the sphere
+          grid_points = np.ones((len(self.grid_df['x_grid_flat']),3))
+          grid_points[:,0] = self.grid_df['x_grid_flat']
+          grid_points[:,1] = self.grid_df['y_grid_flat']
+          grid_points[:,2] = self.grid_df['z_grid_flat']
+          # Normalize 3D flat grid so that every point lie on the unit sphere
+          norm_points = norm(grid_points, axis=1)
+          normalized = grid_points/norm_points[:, np.newaxis]
+          # Scale the unit sphere to the desired sphere with radius R
+          projected = normalized*R
+
+          self.grid_df['x_grid_proj'] = projected[:,0]
+          self.grid_df['y_grid_proj'] = projected[:,1]
+          self.grid_df['z_grid_proj'] = projected[:,2]
+
+     def plot_3D_grid(self):
+
+          fig = plt.figure('3D grid', figsize=(8,8))
+          ax = fig.add_subplot(projection='3d')
+          ax.scatter(self.grid_df['x_grid_proj'], self.grid_df['y_grid_proj'], self.grid_df['z_grid_proj'] , label=f'Projected', color='red')
+          ax.scatter(self.grid_df['x_grid_flat'], self.grid_df['y_grid_flat'], self.grid_df['z_grid_flat'] , label=f'Flat', color='blue')
+          ax.set_box_aspect((5,5,1))
+          plt.legend()
+          ax.set_xlabel('X')
+          ax.set_ylabel('Y')
+          ax.set_zlabel('Z')
+
+     def plot_2D_grid(self):
+
+          fig = plt.figure('2D grid', figsize=(8,8))
+          ax = fig.add_subplot()
+          ax.scatter(self.grid_df['x_grid_proj'], self.grid_df['y_grid_proj'], label=f'Projected', color='red')
+          ax.scatter(self.grid_df['x_grid_flat'], self.grid_df['y_grid_flat'], label=f'Flat', color='blue')
+          ax.set_box_aspect(1)
+          plt.legend()
+          ax.set_xlabel('X')
+          ax.set_ylabel('Y')
+
 
 class FocalSurf():
      def __init__(self, focal_surf_param) -> None:
