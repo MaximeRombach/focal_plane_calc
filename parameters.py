@@ -498,7 +498,6 @@ class Grid:
           
           self.grid_df = {}
           self.create_flat_grid()
-          self.project_grid_on_sphere()
           
      def create_flat_grid(self):
                     # Make global grid out of triangular grid method credited in updown_tri.py
@@ -538,14 +537,19 @@ class Grid:
                                    else: 
                                         flip_global.append(1)
           
-          self.grid_df['x_grid_flat'] = np.array(x_grid)
-          self.grid_df['y_grid_flat'] = np.array(y_grid)
-          self.grid_df['z_grid_flat'] = -np.sqrt(R**2 - (vigR)**2)*np.ones(len(x_grid))
-          # self.grid_df['z_grid_flat'] = -(R-15)
+          x_grid = np.array(x_grid)
+          y_grid = np.array(y_grid)
+          z_grid = -np.sqrt(R**2 - (vigR)**2)*np.ones(len(x_grid))
+
+          self.grid_df['x_grid_flat'] = x_grid
+          self.grid_df['y_grid_flat'] = y_grid
+          self.grid_df['z_grid_flat'] = z_grid
+
+          self.grid_df['grid_flat'] = MultiPoint(to_polygon_format(x_grid, y_grid, z_grid))
           
           self.grid_df['flip_global'] = np.array(flip_global)
 
-     def project_grid_on_sphere(self):
+     def project_grid_on_sphere(self, sphere_radius: float, proj_name: str):
 
           # Create 3D grid points = take the flat grid and place it at the corresponding z position from the center of the sphere
           grid_points = np.ones((len(self.grid_df['x_grid_flat']),3))
@@ -556,11 +560,15 @@ class Grid:
           norm_points = norm(grid_points, axis=1)
           normalized = grid_points/norm_points[:, np.newaxis]
           # Scale the unit sphere to the desired sphere with radius R
-          projected = normalized*R
+          projected = normalized * sphere_radius
 
-          self.grid_df['x_grid_proj'] = projected[:,0]
-          self.grid_df['y_grid_proj'] = projected[:,1]
-          self.grid_df['z_grid_proj'] = projected[:,2]
+          self.grid_df[f'x_grid_{proj_name}'] = projected[:,0]
+          self.grid_df[f'y_grid_{proj_name}'] = projected[:,1]
+          self.grid_df[f'z_grid_{proj_name}'] = projected[:,2]
+          self.grid_df[f'grid_{proj_name}'] = MultiPoint(to_polygon_format(projected[:,0], projected[:,1], projected[:,2]))
+
+          return projected
+
 
      def plot_3D_grid(self):
 
@@ -600,15 +608,19 @@ class FocalSurf():
           return self.c*r**2 / (1 + np.sqrt(1 - (1+self.k) * self.c**2 * r**2)) + self.a2 * r**4 + self.a2 * r**6
 
 
-def to_polygon_format(x,y):
+def to_polygon_format(x,y, z = None):
      """ Input:
           - x,y: 2 sets of coordinates for polygon creation
 
           Output:
           - coords: list of tuples for each polygon vertices (just for convenience) """
      coords = []
-     for (i,j) in zip(x,y):
-          coords.append((i,j))
+     if z is not None:
+          for (i,j,k) in zip(x,y,z):
+               coords.append((i,j,k))
+     else:
+          for (i,j) in zip(x,y):
+               coords.append((i,j))
                
      return coords
 
