@@ -424,7 +424,6 @@ class GFA(SavingResults):
           self.gdf_gfa = self.make_GFA_array()
 
           super().__init__(saving_df)
-          self.GFA_to_csv()
 
      def make_GFA(self):
           # Dummy shape, to be replaced with true footprint

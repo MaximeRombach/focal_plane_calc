@@ -19,6 +19,7 @@ import warnings
 from shapely.errors import ShapelyDeprecationWarning
 warnings.filterwarnings("ignore", category=ShapelyDeprecationWarning) 
 import parameters as param
+from datetime import datetime
 R = param.R
 vigR = param.vigR
 
@@ -52,7 +53,7 @@ start_time = time.time()
 
 """ Global variables """
 # nbots = [52, 63, 75, 88, 102]
-nbots = [75]
+nbots = [63]
 width_increase = 0 # [mm] How much we want to increase the base length of a module
 chanfer_length = 10 # [mm] Size of chanfers of module vertices (base value: 7.5)
 centered_on_triangle = False
@@ -74,11 +75,10 @@ draw = True
 is_timer = False
 
 plot_time = 20 # [s] plotting time
-ignore_points = False
 ignore_robots_positions = True
 
 save_plots = False
-save_frame_as_dxf = True # Save the outline of the frame for Solidworks integration
+save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
 save_csv = False
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv}
 saving = param.SavingResults(saving_df)
@@ -142,18 +142,18 @@ for nb_robots in nbots:
      to_dxf_dict["flat_grid"] = grid_df['grid_flat']
      to_dxf_dict["proj_grid"] = grid_df['grid_proj_front']
 
-     fig = plt.figure('3D grid', figsize=(8,8))
-     ax = fig.add_subplot(projection='3d')
-     ax.scatter(x_grid, y_grid, z_grid , label=f'Projected front', color='red')
-     ax.scatter(grid_df['x_grid_flat'], grid_df['y_grid_flat'], grid_df['z_grid_flat'] , label=f'Flat', color='blue')
-     ax.scatter(grid_df['x_grid_proj_back'], grid_df['y_grid_proj_back'], grid_df['z_grid_proj_back'] , label=f'Projected back', color='green')
-     ax.quiver()
-     ax.set_box_aspect((4,4,1))
-     plt.legend()
-     ax.set_xlabel('X')
-     ax.set_ylabel('Y')
-     ax.set_zlabel('Z')
-     plt.show()
+     # fig = plt.figure('3D grid', figsize=(8,8))
+     # ax = fig.add_subplot(projection='3d')
+     # ax.scatter(x_grid, y_grid, z_grid , label=f'Projected front', color='red')
+     # ax.scatter(grid_df['x_grid_flat'], grid_df['y_grid_flat'], grid_df['z_grid_flat'] , label=f'Flat', color='blue')
+     # ax.scatter(grid_df['x_grid_proj_back'], grid_df['y_grid_proj_back'], grid_df['z_grid_proj_back'] , label=f'Projected back', color='green')
+     # ax.quiver()
+     # ax.set_box_aspect((4,4,1))
+     # plt.legend()
+     # ax.set_xlabel('X')
+     # ax.set_ylabel('Y')
+     # ax.set_zlabel('Z')
+     # plt.show()
 
      pizza = param.make_vigR_polygon()
      pizza_with_GFA = pizza.difference(MultiPolygon(gdf_gfa['geometry'].tolist()))
@@ -162,7 +162,7 @@ for nb_robots in nbots:
 
      fill_empty = True # Fill empty spaces by individual modules
      allow_small_out = True # allow covered area of module to stick out of vigR (i.e. useless covered area because does not receive light)
-     out_allowance = 0.06 # percentage of the covered area of a module authorized to stick out of vigR
+     out_allowance = 0.1 # percentage of the covered area of a module authorized to stick out of vigR
      covered_area = 0 
      total_modules = 0
      boundaries_df = {'geometry':[], 'color': []}
@@ -235,14 +235,18 @@ for nb_robots in nbots:
                          temp_rob.append(robs)
                          color_boundary = 'blue'
 
+                         # Log coordinates of boundaries of individual modules to create concave hull later
                          xx.append(mod.exterior.coords.xy[0].tolist())
                          yy.append(mod.exterior.coords.xy[1].tolist())
                          
-                    elif allow_small_out and cov_out.area/cov.area < out_allowance and not centroid_out:
+                    elif allow_small_out and cov_out.area/cov.area < out_allowance:
                          # If the coverage area of a module sticks out by less than the authorized amount, we keep it
                          remaining_cov = cov.intersection(pizza_with_GFA)
+                         # remaining_robs = robs.intersection(pizza_with_GFA)
+                         remaining_robs = robs
                          temp_mod.append(mod)
                          temp_cov.append(remaining_cov)
+                         temp_rob.append(remaining_robs)
                          color_boundary = 'blue'
 
                if not temp_mod: 
@@ -253,8 +257,9 @@ for nb_robots in nbots:
                         
                new_modules = MultiPolygon(temp_mod)
                new_coverage = MultiPolygon(temp_cov)
-               new_robots = GeometryCollection(temp_rob)
+               new_robots = unary_union(temp_rob)
                convex_hull_modules = new_modules.convex_hull
+               # Create concave hull in case of individual module
                temp_cent = np.array(convex_hull_modules.centroid.xy).reshape((1,2))
                xx = param.flatten_list(xx)
                yy = param.flatten_list(yy)
@@ -279,6 +284,7 @@ for nb_robots in nbots:
           coverage_df['geometry'].append(new_coverage)
 
           robots_df['geometry'].append(new_robots)
+          
 
           total_modules += len(list(new_modules.geoms))
           covered_area += new_coverage.area # add the net covered area of each module
@@ -291,6 +297,7 @@ for nb_robots in nbots:
      gdf_modules = gpd.GeoDataFrame(modules_df)
      gdf_coverage = gpd.GeoDataFrame(coverage_df)
      gdf_coverage['label'] = f'Coverage vigR: {global_coverage} %'
+     robots_df['geometry'] = [unary_union(robots_df['geometry'])]
      gdf_robots = gpd.GeoDataFrame(robots_df)
      gdf_robots['markersize'] = 0.05
      total_robots = total_modules*nb_robots
@@ -404,7 +411,18 @@ gdf_bound.plot(ax=ax,facecolor='None', edgecolor=gdf_bound['color'])
 gdf_coverage.plot(column='label',ax=ax, alpha=0.2, legend=True, legend_kwds={'loc': 'upper right'})
 
 if not ignore_robots_positions:
-     gdf_robots.plot(ax = ax, markersize = gdf_robots['markersize'])
+     gdf_robots.plot(ax = ax, markersize = 0.05)
+
+if save_csv:
+     indiv_pos_df = {'x [mm]': [], 'y [mm]' :[], 'geometry' : []}
+     for idx, point in enumerate(robots_df['geometry'][0].geoms):
+          indiv_pos_df['x [mm]'].append(point.x)
+          indiv_pos_df['y [mm]'].append(point.y)
+          indiv_pos_df['geometry'].append(point)
+     now = datetime.now()
+     info_case = f"{nb_robots}_robots-per-module_{total_robots}_robots_{intermediate_frame_thick}_inner_gap_{global_frame_thick}_global_gap"
+     csv_filename = now.strftime("%Y-%m-%d-%H-%M-%S_") + info_case + ".csv"
+     gpd.GeoDataFrame(indiv_pos_df).to_csv(saving.results_dir_path() + csv_filename, index_label = 'robot_number', sep = ";", decimal = ".")    
 
 ax.scatter(0,0,s=7,color='red')
 plot_polygon(pizza, ax=ax, add_points=False, edgecolor='black', facecolor='None', linestyle='--')
