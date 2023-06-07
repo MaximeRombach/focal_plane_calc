@@ -18,7 +18,6 @@ import ezdxf
 import ezdxf.addons.geo
 import updown_tri as tri
 
-
 logging.basicConfig(level=logging.INFO)
 tan30 = np.tan(np.deg2rad(30))
 
@@ -95,8 +94,8 @@ class SavingResults:
 
           now = datetime.now()
           today_filename = now.strftime("%Y-%m-%d-%H-%M-%S_") + suffix_name + ".png"
-
           plt.savefig(self.results_dir_path() + today_filename, bbox_inches = 'tight', format='png', dpi = 800)
+          logging.info(f'{suffix_name}.png saved')
 
 
 """ Module parameters """ 
