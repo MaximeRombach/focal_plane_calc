@@ -20,9 +20,11 @@ from shapely.errors import ShapelyDeprecationWarning
 warnings.filterwarnings("ignore", category=ShapelyDeprecationWarning) 
 import parameters as param
 from datetime import datetime
+import json
 R = param.R
 vigR = param.vigR
 
+logging.basicConfig(level=logging.INFO)
 
 """
 This code is a tool for calculating the coverage performed for different focal plane arrangements.
@@ -53,7 +55,7 @@ start_time = time.time()
 
 """ Global variables """
 # nbots = [52, 63, 75, 88, 102]
-nbots = [63]
+nbots = [75]
 width_increase = 0 # [mm] How much we want to increase the base length of a module
 chanfer_length = 10 # [mm] Size of chanfers of module vertices (base value: 7.5)
 centered_on_triangle = False
@@ -77,14 +79,15 @@ is_timer = False
 plot_time = 20 # [s] plotting time
 ignore_robots_positions = True
 
-save_plots = False
+save_plots = True
 save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
 save_csv = False
-saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv}
+save_txt = False
+saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
 saving = param.SavingResults(saving_df)
 
 """GFA stuff"""
-gfa_tune = 1.2
+gfa_tune = 1
 gfa = param.GFA(length = 33.3*gfa_tune, width = 61*gfa_tune, nb_gfa = 6, saving_df=saving_df)
 gdf_gfa = gfa.gdf_gfa
 
@@ -108,7 +111,6 @@ for nb_robots in nbots:
      module, module_w_beta_and_safety_dist, effective_wks, triang_meshgrid = module_collection.geoms
      coverage_with_walls, coverage_no_walls = coverages
      
-
      # plot_polygon(module, add_points= False, facecolor='None', edgecolor='black')
      # plot_polygon(effective_wks, add_points= False, alpha = 0.2, edgecolor='black', label=f'Coverage = {coverage_with_walls} %')
      # plot_points(triang_meshgrid, color='black')
@@ -162,13 +164,14 @@ for nb_robots in nbots:
 
      fill_empty = True # Fill empty spaces by individual modules
      allow_small_out = True # allow covered area of module to stick out of vigR (i.e. useless covered area because does not receive light)
-     out_allowance = 0.1 # percentage of the covered area of a module authorized to stick out of vigR
+     out_allowance = 0.06 # percentage of the covered area of a module authorized to stick out of vigR
      covered_area = 0 
      total_modules = 0
      boundaries_df = {'geometry':[], 'color': []}
      modules_df = {'geometry':[], 'centroid': [], 'color': []}
      coverage_df = {'geometry':[]}
      robots_df = {'geometry':[]}
+     grid_df = {'x_front': [], 'y_front': [], 'z_front': [], 'x_back': [], 'y_back': [], 'z_back': []}
      # Create module arrangement from the global grid
      logging.info(f'Arranging focal plane for {nb_robots} robot case')
      for idx, (rotate, dx, dy) in enumerate(zip(flip_global, x_grid, y_grid)):
@@ -285,6 +288,13 @@ for nb_robots in nbots:
 
           robots_df['geometry'].append(new_robots)
           
+          grid_df['x_front'].append(dx)
+          grid_df['y_front'].append(dy)
+          grid_df['z_front'].append(z_grid[idx])
+
+          grid_df['x_back'].append(projected_back[idx,0])
+          grid_df['y_back'].append(projected_back[idx,1])
+          grid_df['z_back'].append(projected_back[idx,2])
 
           total_modules += len(list(new_modules.geoms))
           covered_area += new_coverage.area # add the net covered area of each module
@@ -338,7 +348,7 @@ for idx, wks in enumerate(wks_list.geoms):
 plt.xlabel('x position [mm]')
 plt.ylabel('y position [mm]')
 plt.legend(shadow = True)
-param.save_figures_to_dir(save_plots, figtitle)
+saving.save_figures_to_dir(figtitle)
 
 plt.figure(figsize=(8,8))
 figtitle = f"Module coverage with summed coverage + walls \n {nb_robots} robots per module"
@@ -353,7 +363,7 @@ plot_polygon(effective_wks, add_points=False, alpha=0.2, edgecolor='black', labe
 plt.xlabel('x position [mm]')
 plt.ylabel('y position [mm]')
 plt.legend(shadow = True)
-param.save_figures_to_dir(save_plots, filename)
+saving.save_figures_to_dir(filename)
 
 plt.figure(figsize=(10,10))
 figtitle = f"Intermediate frame - {nb_robots} robots per module \n Inner gap: {intermediate_frame_thick} mm \n Total # modules: 4 - Total # robots: {nb_robots*4}"
@@ -364,7 +374,7 @@ gdf_inter_bound = gpd.GeoDataFrame(inter_df)
 plt.xlabel('x position [mm]')
 plt.ylabel('y position [mm]')
 plt.legend(shadow = True)
-param.save_figures_to_dir(save_plots, filename)
+saving.save_figures_to_dir(filename)
 
 if global_frame_thick > 0:
      
@@ -400,7 +410,7 @@ if global_frame_thick > 0:
      ax.axes.get_yaxis().set_visible(False)
      to_dxf_dict['frame'] = frame_ishish
      saving.save_dxf_to_dir(to_dxf_dict, f'frame_{robots}_robots_{modules}_modules')     
-     param.save_figures_to_dir(save_plots, filename)
+     saving.save_figures_to_dir(filename)
 
 figtitle = param.final_title(nb_robots, total_modules, total_robots, intermediate_frame_thick, global_frame_thick, allow_small_out, out_allowance)
 filename = f"Coverage global - {nb_robots} rob - Inner {intermediate_frame_thick} mm - Global {global_frame_thick} mm"
@@ -422,14 +432,23 @@ if save_csv:
      now = datetime.now()
      info_case = f"{nb_robots}_robots-per-module_{total_robots}_robots_{intermediate_frame_thick}_inner_gap_{global_frame_thick}_global_gap"
      csv_filename = now.strftime("%Y-%m-%d-%H-%M-%S_") + info_case + ".csv"
-     gpd.GeoDataFrame(indiv_pos_df).to_csv(saving.results_dir_path() + csv_filename, index_label = 'robot_number', sep = ";", decimal = ".")    
+     gpd.GeoDataFrame(indiv_pos_df).to_csv(saving.results_dir_path() + csv_filename, index_label = 'robot_number', sep = ";", decimal = ".")
+     logging.info(f'Robots positions saved to .csv file')
+
+if save_txt:
+     
+     with open(saving.results_dir_path() + 'grid.txt', 'w') as file:
+          file.write("x y z\n")
+          for (x_front,y_front,z_front, x_back,y_back,z_back) in zip(grid_df['x_front'], grid_df['y_front'], grid_df['z_front'], grid_df['x_back'], grid_df['y_back'], grid_df['z_back']):
+               file.write(f"{x_front:.3f} {y_front:.3f} {z_front:.3f}\n {x_back:.3f} {y_back:.3f} {z_back:.3f}\n")
+     logging.info(f'Grid saved to .txt file')
 
 ax.scatter(0,0,s=7,color='red')
 plot_polygon(pizza, ax=ax, add_points=False, edgecolor='black', facecolor='None', linestyle='--')
 
 gdf_gfa.plot(ax=ax,facecolor = 'None', edgecolor=gdf_gfa['color'], linestyle='--')
 
-param.save_figures_to_dir(save_plots, filename)
+saving.save_figures_to_dir(filename)
 
 if len(keys)>1: # Useless to do multiple plots for only one case
      figtitle = param.final_title(nb_robots, total_modules, total_robots, intermediate_frame_thick, global_frame_thick, allow_small_out, out_allowance, disp_robots_info=False)
@@ -456,7 +475,7 @@ if len(keys)>1: # Useless to do multiple plots for only one case
           ax.set_title(f"{global_dict[k]['nb_robots']} robots / module \n # modules: {global_dict[k]['total_modules']} - # robots: {global_dict[k]['total_robots']}")
           ax.set_xlabel('x position [mm]')
           ax.set_ylabel('y position [mm]')
-     param.save_figures_to_dir(save_plots, filename)
+     saving.save_figures_to_dir(filename)
 
      fig,ax = plt.subplots(figsize = (8,8))
      figtitle = f"Coverages and # robots for {keys} cases"
@@ -474,7 +493,7 @@ if len(keys)>1: # Useless to do multiple plots for only one case
           color="blue",marker="o")
      ax2.set_ylabel("Total # robots",color="blue")
      ax.grid()
-     param.save_figures_to_dir(save_plots, filename)
+     saving.save_figures_to_dir(filename)
 
 
 end_time = time.time()
