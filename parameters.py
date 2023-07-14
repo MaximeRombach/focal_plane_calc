@@ -2,12 +2,13 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 from numpy.linalg import norm
+from numpy.polynomial import Polynomial
 import logging
 from shapely import affinity, MultiPolygon, MultiPoint, GeometryCollection
 import matplotlib.pyplot as plt
 from shapely.geometry import Polygon, box
 from shapely.ops import unary_union
-import time
+from scipy import optimize
 from shapely.plotting import plot_polygon, plot_points
 import os
 from datetime import datetime
@@ -24,18 +25,86 @@ tan30 = np.tan(np.deg2rad(30))
 ## Parameters ##
 
 """ Focal plane parameters """
+class FocalSurf():
+     def __init__(self, project: str) -> None:
 
-vigR = 613.27 # [mm] radius of the instrument
-R = 11067 # [mm] curvature of the focal plane
+          self.project = project
+          self.focal_surf_param = self.set_surface_parameters()
 
+          self.R = self.focal_surf_param['R'] #curvature radius of focal plane
+          self.k = self.focal_surf_param['k']
+          self.a2 = self.focal_surf_param['a2']
+          self.a3 = self.focal_surf_param['a3']
+          self.c = 1/self.R
 
-# """ Intermediate frame parameters """
+          self.vigR = self.focal_surf_param['vigR'] #vignetting radius
+          self.BFS = self.focal_surf_param['BFS']
 
-# intermediate_frame_thick =  1 # [mm] spacing between modules inside intermediate frame
+     def R2Z(self, r):
 
-# """ Global frame parameters """
+          return self.c*r**2 / (1 + np.sqrt(1 - (1+self.k) * self.c**2 * r**2)) + self.a2 * r**4 + self.a2 * r**6
+     
+     def set_surface_parameters(self):
 
-# global_frame_thick = 3 # [mm] spacing between modules in global arrangement
+          if self.project == 'MUST':
+               focal_surf_param = {'R': -11088.4, # [mm], curvature radius
+                                   'vigD': 1047.16,
+                                   'vigR': 1047.16/2, # [mm], vignetting
+                                   'k': 0, 
+                                   'a2': -2.18895e-12, 
+                                   'a3': 6.11195e-18,
+                                   'f-number': 3.5,
+                                   'BFS': 11025 # [mm], radius of BFS
+                                   }
+
+          elif self.project == 'MegaMapper':
+               focal_surf_param = {'R': -11067, 
+                                   'vigR': 613.27,
+                                   'k': None,
+                                   'a2': None,
+                                   'a3': None,
+                                   }
+          else: 
+               logging.error('ERROR setting focal surface param: unknown project')
+
+          return focal_surf_param
+     
+     # def calc_BFS(self):
+
+     #      # From generate_raft_layout.py code written by Joseph Silber
+     #      # best-fit sphere
+     #      calc_sphR = lambda z_ctr: (r**2 + (z - z_ctr)**2)**0.5
+     #      def calc_sphR_err(z_ctr):
+     #           sphR_test = calc_sphR(z_ctr)
+     #           errors = sphR_test - np.mean(sphR_test)
+     #           scalar_error = np.sum(np.power(errors, 2))
+     #           return scalar_error
+     #      typical_fov = 3.0  # deg
+     #      z_guess = np.sign(np.mean(z)) * np.max(r) / np.radians(typical_fov/2)
+     #      result = optimize.least_squares(fun=calc_sphR_err, x0=z_guess)
+     #      z_ctr = float(result.x)
+     #      sphR = abs(z_ctr)
+     #      is_convex = np.sign(z_ctr) < 1  # convention where +z is toward the fiber tips
+     #      sphR_sign = -1 if is_convex else +1
+
+     #      return sphR
+     
+     def make_vigR_polygon(self, pizza_angle = 360,  n_vigR = 500):
+     
+          vigR_lim_x = self.vigR * np.cos(np.deg2rad(np.linspace(0,pizza_angle,n_vigR)))
+          vigR_lim_y = self.vigR * np.sin(np.deg2rad(np.linspace(0,pizza_angle,n_vigR)))
+          if pizza_angle == 360:
+               end_point = [vigR_lim_x[0], vigR_lim_y[0]]
+          else:
+               end_point = [0, 0]
+          vigR_lim_x = np.insert(vigR_lim_x, 0, end_point[0])
+          vigR_lim_y = np.insert(vigR_lim_y, 0, end_point[1])
+          pizza = Polygon(to_polygon_format(vigR_lim_x, vigR_lim_y))
+
+          return pizza
+
+     def plot_vigR_poly(self, pizza, label = None, ax = None):
+          plot_polygon(pizza, ax = ax, add_points = False, edgecolor = 'black', linestyle = '--', facecolor= 'None', label = label)
 
 class SavingResults:
      """
@@ -55,6 +124,7 @@ class SavingResults:
           self.save_plots = saving_df['save_plots']
           self.save_dxf = saving_df['save_dxf']
           self.save_csv = saving_df['save_csv']
+          self.save_txt = saving_df['save_txt']
 
      def path_to_results_dir(self):
 
@@ -97,12 +167,26 @@ class SavingResults:
           plt.savefig(self.results_dir_path() + today_filename, bbox_inches = 'tight', format='png', dpi = 800)
           logging.info(f'{suffix_name}.png saved')
 
+     def save_grid_to_txt(self, grid, filename):
+
+          if not self.save_txt:
+               return
+          # grid MUST be a (N,3) numpy array
+          x = grid[:,0]
+          y = grid[:,1]
+          z = grid[:,2]
+          with open(self.results_dir_path() + f'{filename}.txt', 'w') as file:
+               file.write("x[mm] y[mm] z[mm]\n")
+               for (dx,dy,dz) in zip(x,y,z):
+                    file.write(f"{dx:.3f} {dy:.3f} {dz:.3f}\n")
+          
+          logging.info(f'{filename}.txt succesfully saved')
 
 """ Module parameters """ 
 
 class Module(SavingResults):
 
-     def __init__(self, nb_robots, saving_df, width_increase = 0, chanfer_length = 7.5):
+     def __init__(self, nb_robots, saving_df, is_wall: bool, width_increase = 0, chanfer_length = 7.5):
 
           """Robot parameters""" 
 
@@ -131,10 +215,18 @@ class Module(SavingResults):
           self.start_offset_x = 6.2 # [mm]
           self.start_offset_y = 3.41 # [mm]
 
-          self.is_wall = True # flag for protective shields or not on modules
+          self.is_wall = is_wall # flag for protective shields or not on modules
+
+          self.module_length = 590 # [mm] last dimension updae for length of module unit
 
           # 1 row addition from one case to another 
-          if self.nb_robots == 52:
+          if self.nb_robots == 42:
+
+               self.module_width = 62.4 + self.width_increase # [mm] triangle side length
+               self.nb_rows = 8 # number of rows of positioners
+               self.key = 'n42'
+          
+          elif self.nb_robots == 52:
 
                self.module_width = 67.6 + self.width_increase # [mm] triangle side length
                self.nb_rows = 9 # number of rows of positioners
@@ -361,7 +453,7 @@ class IntermediateTriangle:
           inter_coverage = []
           covered_area = 0
           inter_boundaries_df = {'name':[],'geometry':[], 'color': []}
-          inter_modules_df = {'geometry':[]}
+          inter_modules_df = {'geometry':[], 'centroids': []}
           inter_coverage_df = {'geometry':[]}
           inter_robots_df = {'geometry':[]}
           
@@ -376,6 +468,7 @@ class IntermediateTriangle:
                transformed_all = rotate_and_translate(self.module_collection, angle, dx, dy, origin = "centroid") # place module at the correct pos and orientation
                boundaries.append(transformed_all.geoms[0]) # log the exterior boundary points of the transformed module
                inter_modules_df['geometry'].append(transformed_all.geoms[0])
+               inter_modules_df['centroids'].append([dx, dy])
                inter_coverage.append(transformed_all.geoms[2])
                inter_coverage_df['geometry'].append(transformed_all.geoms[2])
                intermediate_collection.append(transformed_all)
@@ -385,6 +478,8 @@ class IntermediateTriangle:
                boundary_xx.append(xx.tolist())
                boundary_yy.append(yy.tolist())
 
+          
+          inter_modules_df['centroids'] = np.array(inter_modules_df['centroids'])
           inter_robots_df['geometry'] = GeometryCollection(inter_robots_df['geometry'])
           modules_polygon_intermediate = MultiPolygon(boundaries)
           # Convex hull of boundaries
@@ -415,7 +510,7 @@ class IntermediateTriangle:
           return intermediate_collection, intermediate_collection_speed, intermediate_coverage, inter_df
 
 class GFA(SavingResults):
-     def __init__(self, length: float, width: float, nb_gfa: int, saving_df, vigR = vigR) -> None:
+     def __init__(self, length: float, width: float, nb_gfa: int, saving_df, vigR: float) -> None:
           self.length = length
           self.width = width
           self.vigR = vigR
@@ -486,21 +581,23 @@ class GFA(SavingResults):
 
 class Grid:
 
-     def __init__(self, module_width: float, inter_frame_thick: float, global_frame_thick: float, centered_on_triangle: bool  = False) -> None:
+     def __init__(self, module_width: float, inter_frame_thick: float, global_frame_thick: float, vigR: float, R: float, centered_on_triangle: bool  = False) -> None:
 
           self.centered_on_triangle = centered_on_triangle
           self.module_width = module_width
           self.inter_frame_thick = inter_frame_thick
           self.global_frame_thick = global_frame_thick
           self.inter_frame_width = 2*self.module_width + 2*self.inter_frame_thick*np.cos(np.deg2rad(30)) + 2*self.global_frame_thick*np.cos(np.deg2rad(30))
+          self.vigR = vigR
+          self.R = R
           
           self.grid_df = {}
-          self.create_flat_grid()
+          self.x_grid, self.y_grid, self.z_grid = self.create_flat_grid()
           
      def create_flat_grid(self):
                     # Make global grid out of triangular grid method credited in updown_tri.py
           # Its logic is also explained in updown_tri.py
-          n = 6
+          n = 7
           center_coords = []
           a_max = n
           b_max = n
@@ -517,7 +614,7 @@ class Grid:
                origin = 'vertex'
                valid = [1,2]
           
-          vigR_tresh = 0
+          vigR_tresh = 150
 
           for a in np.arange(-a_max,a_max):
                for b in np.arange(-b_max,b_max):
@@ -526,7 +623,7 @@ class Grid:
                          # if valid == 1 or valid == 2: 
                          if valid.count(sum_abc): # check if sum abc corresponds to a valid triangle depending on the centering case
                               x,y = tri.tri_center(a,b,c,self.inter_frame_width) 
-                              if np.sqrt(x**2 + y**2) < vigR + vigR_tresh: # allow centroid of inter modules to go out of vigR for further filling purpose
+                              if np.sqrt(x**2 + y**2) < self.vigR + vigR_tresh: # allow centroid of inter modules to go out of vigR for further filling purpose
                                    center_coords.append((a,b,c))
                                    x_grid.append(x)
                                    y_grid.append(y)
@@ -537,7 +634,7 @@ class Grid:
           
           x_grid = np.array(x_grid)
           y_grid = np.array(y_grid)
-          z_grid = -np.sqrt(R**2 - (vigR)**2)*np.ones(len(x_grid))
+          z_grid = -np.sqrt(self.R**2 - (self.vigR)**2)*np.ones(len(x_grid))
 
           self.grid_df['x_grid_flat'] = x_grid
           self.grid_df['y_grid_flat'] = y_grid
@@ -547,13 +644,17 @@ class Grid:
           
           self.grid_df['flip_global'] = np.array(flip_global)
 
-     def project_grid_on_sphere(self, sphere_radius: float, proj_name: str):
+          return x_grid, y_grid, z_grid
 
-          # Create 3D grid points = take the flat grid and place it at the corresponding z position from the center of the sphere
-          grid_points = np.ones((len(self.grid_df['x_grid_flat']),3))
-          grid_points[:,0] = self.grid_df['x_grid_flat']
-          grid_points[:,1] = self.grid_df['y_grid_flat']
-          grid_points[:,2] = self.grid_df['z_grid_flat']
+     def project_grid_on_sphere(self, grid_points, sphere_radius: float, proj_name: str):
+
+          """Input:
+
+               - grid_points: (N,3) [numpy array]
+               - sphere_radius: [float] radius of the sphere onto which the grid is projected
+               - proj_name: [string] name of the projection for later logging
+
+          """
           # Normalize 3D flat grid so that every point lie on the unit sphere
           norm_points = norm(grid_points, axis=1)
           normalized = grid_points/norm_points[:, np.newaxis]
@@ -584,27 +685,12 @@ class Grid:
 
           fig = plt.figure('2D grid', figsize=(8,8))
           ax = fig.add_subplot()
-          ax.scatter(self.grid_df['x_grid_proj'], self.grid_df['y_grid_proj'], label=f'Projected', color='red')
-          ax.scatter(self.grid_df['x_grid_flat'], self.grid_df['y_grid_flat'], label=f'Flat', color='blue')
+          ax.scatter(self.x_grid, self.y_grid, label=f'Projected', color='red')
+          # ax.scatter(self.grid_df['x_grid_flat'], self.grid_df['y_grid_flat'], label=f'Flat', color='blue')
           ax.set_box_aspect(1)
           plt.legend()
           ax.set_xlabel('X')
           ax.set_ylabel('Y')
-
-
-class FocalSurf():
-     def __init__(self, focal_surf_param) -> None:
-
-          self.R = focal_surf_param['R'] #curvature radius of focal plane
-          self.k = focal_surf_param['k']
-          self.a2 = focal_surf_param['a2']
-          self.a3 = focal_surf_param['a3']
-          self.c = 1/self.R
-
-     def rad2Z(self, r):
-
-          return self.c*r**2 / (1 + np.sqrt(1 - (1+self.k) * self.c**2 * r**2)) + self.a2 * r**4 + self.a2 * r**6
-
 
 def to_polygon_format(x,y, z = None):
      """ Input:
@@ -648,22 +734,7 @@ def save_figures_to_dir(save, suffix_name, only_frame = False):
 
      plt.savefig(results_dir + today_filename, bbox_inches = 'tight', format='png', dpi = 800)
 
-def make_vigR_polygon(pizza_angle = 360, r = vigR, n_vigR = 500):
-     
-     vigR_lim_x = r * np.cos(np.deg2rad(np.linspace(0,pizza_angle,n_vigR)))
-     vigR_lim_y = r * np.sin(np.deg2rad(np.linspace(0,pizza_angle,n_vigR)))
-     if pizza_angle == 360:
-          end_point = [vigR_lim_x[0], vigR_lim_y[0]]
-     else:
-          end_point = [0, 0]
-     vigR_lim_x = np.insert(vigR_lim_x, 0, end_point[0])
-     vigR_lim_y = np.insert(vigR_lim_y, 0, end_point[1])
-     pizza = Polygon(to_polygon_format(vigR_lim_x, vigR_lim_y))
 
-     return pizza
-
-def plot_vigR_poly(pizza, label = None, ax = None):
-     plot_polygon(pizza, ax = ax, add_points = False, edgecolor = 'black', linestyle = '--', facecolor= 'None', label = label)
 
 def plot_module(module_collection, label_coverage, label_robots, ignore_points):
      for jdx, geo in enumerate(module_collection.geoms):
@@ -738,3 +809,14 @@ def sort_points_for_polygon_format(x: list, y: list, centroid):
 
 focal_surf_MUST = {'R': -11088.4, 'k': 0, 'a2': -2.18895e-12, 'a3': 6.11195e-18, }
 focal_surf_MegaMapper = {}
+
+#%%
+
+f_number = 3.5
+
+blur2loss = Polynomial([0, -0.000141553, 0.000373672, -1.76888E-06, -8.23219E-08, 8.72644E-10])
+defocus2blur = lambda dz_mm: (dz_mm*1000) / 2 / f_number / 3
+
+dz = np.linspace(-27e-3, 27e-3,100)
+# plt.plot(dz, blur2loss(defocus2blur(dz)))
+# # plt.show()

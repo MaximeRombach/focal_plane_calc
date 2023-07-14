@@ -20,9 +20,9 @@ from shapely.errors import ShapelyDeprecationWarning
 warnings.filterwarnings("ignore", category=ShapelyDeprecationWarning) 
 import parameters as param
 from datetime import datetime
-import json
-R = param.R
-vigR = param.vigR
+
+from astropy.coordinates import cartesian_to_spherical
+
 
 logging.basicConfig(level=logging.INFO)
 
@@ -53,9 +53,15 @@ The effective coverage is calculated as the usable positioner area vs total area
 
 start_time = time.time()
 
+project_surface = 'MUST'
+surf = param.FocalSurf(project = project_surface)
+R = abs(surf.R)
+vigR = surf.vigR
+BFS = surf.BFS
+
 """ Global variables """
 # nbots = [52, 63, 75, 88, 102]
-nbots = [75]
+nbots = [102]
 width_increase = 0 # [mm] How much we want to increase the base length of a module
 chanfer_length = 10 # [mm] Size of chanfers of module vertices (base value: 7.5)
 centered_on_triangle = False
@@ -69,17 +75,21 @@ intermediate_frame_thick =  1 # [mm] spacing between modules inside intermediate
 
 global_frame_thick = 3 # [mm] spacing between modules in global arrangement
 
+""" Protective shields on module """
+
+is_wall = True # [bool] puts walls or not on modules (changes greatly coverage)
+
 if intermediate_frame_thick == global_frame_thick and intermediate_frame_thick != 0:
      full_framed = True
 
 """ Drawing parameters """
-draw = True
+draw = False
 is_timer = False
 
 plot_time = 20 # [s] plotting time
-ignore_robots_positions = True
+ignore_robots_positions = False
 
-save_plots = True
+save_plots = False
 save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
 save_csv = False
 save_txt = False
@@ -88,13 +98,15 @@ saving = param.SavingResults(saving_df)
 
 """GFA stuff"""
 gfa_tune = 1
-gfa = param.GFA(length = 33.3*gfa_tune, width = 61*gfa_tune, nb_gfa = 6, saving_df=saving_df)
+nb_gfa = 6
+gfa = param.GFA(length = 33.3*gfa_tune, width = 61*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df)
 gdf_gfa = gfa.gdf_gfa
+polygon_gfa = MultiPolygon(list(gdf_gfa['geometry']))
 
 
 """ Data storage """
 keys = []
-global_dict = {'n52': {}, 'n63': {}, 'n75': {}, 'n88': {}, 'n102': {},
+global_dict = {'n42': {}, 'n52': {}, 'n63': {}, 'n75': {}, 'n88': {}, 'n102': {},
                'Overall_results': {'nb_robots_list':[], 'total_robots_list' : [],
                                     'total_modules_list':[], 'coverages_list':[]}}
 to_dxf_dict = {}
@@ -102,7 +114,7 @@ to_dxf_dict = {}
 
 for nb_robots in nbots:
      
-     mod_param = param.Module(nb_robots, saving_df, width_increase, chanfer_length)
+     mod_param = param.Module(nb_robots, saving_df, is_wall, width_increase, chanfer_length)
      key = mod_param.key
      keys.append(key)
      module_width = mod_param.module_width
@@ -122,59 +134,54 @@ for nb_robots in nbots:
      inter_param = param.IntermediateTriangle(module_collection, mod_param.module_width, intermediate_frame_thick)
      intermediate_collection, intermediate_collection_speed, intermediate_coverage, inter_df = inter_param.create_intermediate_triangle()
 
+     # x_inter = inter_df['inter_modules']['centroids'][:,0]
+     # print(np.reshape(x_inter, (len(x_inter), 1)))
+     # y_inter = inter_df['inter_modules']['centroids'][:,1]
+     # z_inter = -np.sqrt(R**2 - (vigR)**2)*np.ones(len(x_inter))
+     # inter_grid = np.vstack((x_inter.T, y_inter.T, z_inter.T))
+     # print(inter_grid)
+
+     # proj_front = grid.project_grid_on_sphere()
+
      # %% 2)b) Start meshing the grid for the whole thing
 
      # inter_frame_width = 2*module_width + 2*intermediate_frame_thick*np.cos(np.deg2rad(30))+2*global_frame_thick
      inter_frame_width = 2*module_width + 2*intermediate_frame_thick*np.cos(np.deg2rad(30)) + 2*global_frame_thick*np.cos(np.deg2rad(30))
-     print(inter_frame_width)
      rho = inter_frame_width * np.sqrt(3)/6
      dist_global = 2*rho
      inter_centroid = inter_frame_width*np.sqrt(3)/3*np.array([np.cos(np.deg2rad(30)), np.sin(np.deg2rad(30))])
 
-     grid = param.Grid(module_width, intermediate_frame_thick, global_frame_thick, centered_on_triangle)
+     grid = param.Grid(module_width, intermediate_frame_thick, global_frame_thick, vigR, R)
      grid_df = grid.grid_df
-     projected_front = grid.project_grid_on_sphere(R, 'proj_front')
-     projected_back = grid.project_grid_on_sphere(R+590, 'proj_back')
+     # grid.plot_2D_grid()
 
-     x_grid = projected_front[:,0]
-     y_grid = projected_front[:,1]
-     z_grid = projected_front[:,2]
      flip_global = grid_df['flip_global']
 
-     to_dxf_dict["flat_grid"] = grid_df['grid_flat']
-     to_dxf_dict["proj_grid"] = grid_df['grid_proj_front']
-
-     # fig = plt.figure('3D grid', figsize=(8,8))
-     # ax = fig.add_subplot(projection='3d')
-     # ax.scatter(x_grid, y_grid, z_grid , label=f'Projected front', color='red')
-     # ax.scatter(grid_df['x_grid_flat'], grid_df['y_grid_flat'], grid_df['z_grid_flat'] , label=f'Flat', color='blue')
-     # ax.scatter(grid_df['x_grid_proj_back'], grid_df['y_grid_proj_back'], grid_df['z_grid_proj_back'] , label=f'Projected back', color='green')
-     # ax.quiver()
-     # ax.set_box_aspect((4,4,1))
-     # plt.legend()
-     # ax.set_xlabel('X')
-     # ax.set_ylabel('Y')
-     # ax.set_zlabel('Z')
+     pizza = surf.make_vigR_polygon()
+     pizza_with_GFA = pizza.difference(polygon_gfa)
+     # plot_polygon(pizza_with_GFA)
      # plt.show()
 
-     pizza = param.make_vigR_polygon()
-     pizza_with_GFA = pizza.difference(MultiPolygon(gdf_gfa['geometry'].tolist()))
 
      #%% 2)c) Place the intermediate triangles accordingly on the grid
 
      fill_empty = True # Fill empty spaces by individual modules
      allow_small_out = True # allow covered area of module to stick out of vigR (i.e. useless covered area because does not receive light)
-     out_allowance = 0.06 # percentage of the covered area of a module authorized to stick out of vigR
+     out_allowance = 0.5 # percentage of the covered area of a module authorized to stick out of vigR
      covered_area = 0 
      total_modules = 0
      boundaries_df = {'geometry':[], 'color': []}
-     modules_df = {'geometry':[], 'centroid': [], 'color': []}
+     modules_df = {'geometry':[], 'color': []}
      coverage_df = {'geometry':[]}
      robots_df = {'geometry':[]}
-     grid_df = {'x_front': [], 'y_front': [], 'z_front': [], 'x_back': [], 'y_back': [], 'z_back': []}
+     final_grid = {'inter': {'x': [], 'y': [], 'z': [], 'xyz': [], 'geometry': []}, 
+                   'indiv': {'x': [], 'y': [], 'z': [], 'xyz': [], 'geometry': [],
+                             'robots': {'x': [], 'y': [], 'z': [], 'xyz': [], 'geometry': []}
+                             }
+                    }
      # Create module arrangement from the global grid
      logging.info(f'Arranging focal plane for {nb_robots} robot case')
-     for idx, (rotate, dx, dy) in enumerate(zip(flip_global, x_grid, y_grid)):
+     for idx, (rotate, dx, dy, dz) in enumerate(zip(flip_global, grid.x_grid, grid.y_grid, grid.z_grid)):
 
           if rotate:
                angle = 180
@@ -187,20 +194,28 @@ for nb_robots in nbots:
           new_modules = transformed_all.geoms[1]
           new_coverage = transformed_all.geoms[2]
           new_robots = transformed_all.geoms[4]
+          # print(new_robots.geoms)
           new_centroid = [dx, dy]
+          out = []
 
           color_boundary = 'green'
           color_module = 'black'
 
           # Flags 
-          sticks_out = new_boundary.overlaps(pizza_with_GFA) # a portion of the int triangle sticks out
+          sticks_out = new_boundary.overlaps(pizza) # a portion of the int triangle sticks out
           # int_centroid_out = np.sqrt(dx**2 + dy**2) > vigR # centroid of intermediate triangle out of vigR
-          int_centroid_out = not Point(dx,dy).within(pizza_with_GFA)
+          int_centroid_out = not Point(dx,dy).within(pizza)
+
+          # Is on GFA?
+          int_overlaps_GFA = new_boundary.overlaps(polygon_gfa)
           
           # closest_gfa_index = gfa.closest_gfa(new_centroid) # determine closest gfa to the current grid position
           # closest_gfa = gdf_gfa.at[closest_gfa_index, "geometry"] # extract closest gfa polygon for overlapping testing
 
           # int_tri_overlaps_gfa = new_boundary.overlaps(closest_gfa)
+          # plot_polygon(new_modules)
+          # param.plot_vigR_poly(pizza)
+          # plt.show()
 
           if not fill_empty and sticks_out:
                color_boundary = 'red'
@@ -212,7 +227,7 @@ for nb_robots in nbots:
           
           # Check if intermediate module goes out from vigR and keep the modules that are either right inside and, if allowed,
           # the ones that only stick out of a certain amount
-          elif fill_empty and sticks_out:
+          elif fill_empty and sticks_out or int_overlaps_GFA:
 
                temp_mod = []
                temp_cov = []
@@ -224,14 +239,11 @@ for nb_robots in nbots:
                     # plot_polygon(pizza,add_points=False,facecolor='None')
                     # plot_polygon(mod)
                     cent = np.array(cov.centroid.xy)
-                    cov_out = cov.difference(pizza_with_GFA)
+                    cov_out = cov.difference(pizza)
 
-                    # if mod.overlaps(closest_gfa) or mod.within(closest_gfa):
-                    #      continue
-
-                    # centroid_out = np.sqrt(cent[0]**2 + cent[1]**2) > vigR
-                    centroid_out = not Point(cent[0], cent[1]).within(pizza_with_GFA)
-                    if not cov.overlaps(pizza_with_GFA) and not centroid_out:
+                    centroid_out = not Point(cent[0], cent[1]).within(pizza)
+                    mod_overlaps_GFA = mod.overlaps(polygon_gfa)
+                    if not cov.overlaps(pizza) and not centroid_out and not mod_overlaps_GFA:
                     # If the coverage area of a single module does not stick out of vigR and is within vigR, we keep it
                          temp_mod.append(mod)
                          temp_cov.append(cov)
@@ -242,15 +254,22 @@ for nb_robots in nbots:
                          xx.append(mod.exterior.coords.xy[0].tolist())
                          yy.append(mod.exterior.coords.xy[1].tolist())
                          
-                    elif allow_small_out and cov_out.area/cov.area < out_allowance:
+                    elif allow_small_out and cov_out.area/cov.area < out_allowance and not mod_overlaps_GFA:
                          # If the coverage area of a module sticks out by less than the authorized amount, we keep it
-                         remaining_cov = cov.intersection(pizza_with_GFA)
-                         # remaining_robs = robs.intersection(pizza_with_GFA)
+                         remaining_cov = cov.intersection(pizza)
+                         # remaining_robs = robs.intersection(pizza)
                          remaining_robs = robs
                          temp_mod.append(mod)
                          temp_cov.append(remaining_cov)
                          temp_rob.append(remaining_robs)
+
+                         # Log coordinates of boundaries of individual modules to create concave hull later
+                         xx.append(mod.exterior.coords.xy[0].tolist())
+                         yy.append(mod.exterior.coords.xy[1].tolist())
                          color_boundary = 'blue'
+               # plot_polygon(MultiPolygon(temp_mod))
+               # param.plot_vigR_poly(pizza)
+               # plt.show()
 
                if not temp_mod: 
                     #check if empty list; skip case if True (corrects huge bug)
@@ -271,36 +290,41 @@ for nb_robots in nbots:
                else:
                     new_boundary = Polygon(param.sort_points_for_polygon_format(xx, yy, temp_cent))
 
-          # elif int_tri_overlaps_gfa and not sticks_out:
-          #      # If int triangle overlaps a GFA and is still in vigR, we look at the individual modules to keep those who do not overlap GFA
-          #      new_modules = MultiPolygon([mod for mod in new_modules.geoms if mod.overlaps(closest_gfa)])
-          #      color_module = 'red'
-
           if full_framed: # boundaries are the individual modules frontiers for the full framed case
                new_boundary = new_modules
+
+          # Store individual xy location for each module
+          for new_mod in new_modules.geoms:
+               
+               final_grid['indiv']['x'].append(new_mod.centroid.x)
+               final_grid['indiv']['y'].append(new_mod.centroid.y)
+               final_grid['indiv']['z'].append(dz)
+               final_grid['indiv']['xyz'].append([new_mod.centroid.x, new_mod.centroid.y, dz])
+               final_grid['indiv']['geometry'].append(new_mod.centroid)
+
+          # Store individual xy location for each intermediate frame
+          # final_grid['intermediate']['x'].append(dx)
+          # final_grid['intermediate']['y'].append(dy)
+          # final_grid['intermediate']['z'].append(dz)
+          # final_grid['intermediate']['xyz'].append([dx, dy, dz])
+          # final_grid['intermediate']['geometry'].append(Point(dx,dy))
+
+          final_grid['inter']['x'].append(new_boundary.centroid.x)
+          final_grid['inter']['y'].append(new_boundary.centroid.y)
+          final_grid['inter']['z'].append(dz)
+          final_grid['inter']['xyz'].append([dx, dy, dz])
+          final_grid['inter']['geometry'].append(Point(new_boundary.centroid.x,new_boundary.centroid.y))
 
           boundaries_df['geometry'].append(new_boundary)
           boundaries_df['color'].append(color_boundary)
           modules_df['geometry'].append(new_modules)
           modules_df['color'].append(color_module)
-          modules_df['centroid'].append(Point(new_centroid))
           coverage_df['geometry'].append(new_coverage)
 
           robots_df['geometry'].append(new_robots)
-          
-          grid_df['x_front'].append(dx)
-          grid_df['y_front'].append(dy)
-          grid_df['z_front'].append(z_grid[idx])
-
-          grid_df['x_back'].append(projected_back[idx,0])
-          grid_df['y_back'].append(projected_back[idx,1])
-          grid_df['z_back'].append(projected_back[idx,2])
 
           total_modules += len(list(new_modules.geoms))
           covered_area += new_coverage.area # add the net covered area of each module
-
-     final_grid_df = {'geometry': modules_df['centroid']}
-     gdf_final_grid = gpd.GeoDataFrame(final_grid_df)
 
      global_coverage = round(covered_area/pizza_with_GFA.area*100,1)
      gdf_bound = gpd.GeoDataFrame(boundaries_df)
@@ -311,6 +335,8 @@ for nb_robots in nbots:
      gdf_robots = gpd.GeoDataFrame(robots_df)
      gdf_robots['markersize'] = 0.05
      total_robots = total_modules*nb_robots
+
+     gdf_final_grid_int = gpd.GeoDataFrame(final_grid['inter'])
 
      global_dict[key]['boundaries_df'] = boundaries_df
 
@@ -328,7 +354,49 @@ for nb_robots in nbots:
      global_dict['Overall_results']['total_modules_list'].append(total_modules) 
      global_dict['Overall_results']['coverages_list'].append(global_coverage)
      print(f"Total # modules: {total_modules} \n", f"Total # robots: {total_robots}")
-     
+     # plt.figure()
+     # plot_polygon(GeometryCollection(out))
+     # param.plot_vigR_poly(pizza)
+     # plt.show()
+
+#%% 2)d) Project grid on focal surface (BFS as a first try, aspherical will come later)
+
+projection = {'front': {'x': [], 'y': [], 'z': [], 'xyz': [], 'theta': [], 'phi': []},
+              'back': {'x': [], 'y': [], 'z': [], 'xyz': [], 'theta': [], 'phi': []}}
+
+trim_angle = 360 # [deg], put 360° for full grid
+
+
+if trim_angle == 360:
+     grid_points = np.asarray(final_grid['indiv']['xyz'])
+     grid_points_inter = np.asarray(final_grid['inter']['xyz'])
+else:
+     pizza_slice = surf.make_vigR_polygon(pizza_angle = trim_angle)
+     grid_points = []
+     grid_points_inter = []
+     for idx, point in enumerate(final_grid['indiv']['geometry']):
+          if point.within(pizza_slice):
+               grid_points.append(final_grid['indiv']['xyz'][idx])
+     grid_points = np.asarray(grid_points)
+     for idx, point in enumerate(final_grid['inter']['geometry']):
+          if point.within(pizza_slice):
+               grid_points_inter.append(final_grid['inter']['xyz'][idx])
+     grid_points_inter = np.asarray(grid_points_inter)
+
+front_proj = grid.project_grid_on_sphere(grid_points_inter, BFS, 'front_proj')
+back_proj = grid.project_grid_on_sphere(grid_points_inter, BFS + mod_param.module_length, 'back_proj')
+proj = np.vstack((front_proj, back_proj))
+r, lat, lon = cartesian_to_spherical(front_proj[:,0], front_proj[:,1], front_proj[:,2],)
+projection['front']['x'] = front_proj[:,0]
+projection['front']['y'] = front_proj[:,1]
+projection['front']['z'] = front_proj[:,2]
+projection['front']['xyz'] = front_proj
+projection['front']['theta'] = np.rad2deg(lat.value)
+projection['front']['phi'] = np.rad2deg(lon.value)
+cols = ['x', 'y', 'z', 'theta', 'phi']
+df = pd.DataFrame(projection['front'], columns = cols)
+print(df.sort_values(by=['theta', 'phi']))
+saving.save_grid_to_txt(proj, 'grid_inter')
 # %% Plot plot time 
 
 fig = plt.figure(figsize=(8,8))
@@ -382,21 +450,26 @@ if global_frame_thick > 0:
      # key_frame ='n75'
      robots = global_dict[key_frame]['nb_robots']
      modules = global_dict[key_frame]['total_modules']
-     figtitle = f'Frame to manufacture - {robots} robots per module - {modules} modules'
-     filename = figtitle
+     extra_material_for_frame = 50 # [mm] amount of material added on each side of vigR to make the frame structure
+     figtitle = f'Frame to manufacture - {robots} robots per module - {modules} modules \n Vignetting diam: {2*vigR} mm - Extra: {extra_material_for_frame} mm\n Total diam: {2*(vigR + extra_material_for_frame)} mm'
+     filename = f'Frame to manufacture - {robots} robots per module - {modules} modules'
 
      f, ax = plt.subplots(figsize=(10, 10))
      f.suptitle(figtitle)
 
-     frame=pizza.buffer(20).difference(GeometryCollection(list(global_dict[key_frame]['boundaries_df']['geometry']))) 
+     
+     frame=pizza.buffer(extra_material_for_frame).difference(GeometryCollection(list(global_dict[key_frame]['boundaries_df']['geometry']))) 
      frame_ishish = unary_union(global_dict[key_frame]['boundaries_df']['geometry'])
      gdf_gfa.plot(ax=ax,facecolor = 'None', edgecolor=gdf_gfa['color'], linestyle='--', legend = True, label = 'GFA')
+     # gdf_final_grid_int.plot(ax=ax)
+     
      plot_polygon(frame, ax=ax, add_points=False, facecolor='red', alpha = 0.2, edgecolor = 'black', label=f'Wall thickness = {global_frame_thick} mm')
-     param.plot_vigR_poly(pizza, ax=ax, label = 'vigR')
+     surf.plot_vigR_poly(pizza, ax=ax, label = f'vigD = {2*vigR} mm')
      ax.set_xlabel('x position [mm]')
      ax.set_ylabel('y position [mm]')
      ax.legend(shadow = True)
-     ax.legend()
+     saving.save_figures_to_dir(filename)
+
      figtitle = f'Frame to manufacture - {robots} robots per module - {modules} modules'
      filename = figtitle
 
@@ -410,7 +483,7 @@ if global_frame_thick > 0:
      ax.axes.get_yaxis().set_visible(False)
      to_dxf_dict['frame'] = frame_ishish
      saving.save_dxf_to_dir(to_dxf_dict, f'frame_{robots}_robots_{modules}_modules')     
-     saving.save_figures_to_dir(filename)
+     
 
 figtitle = param.final_title(nb_robots, total_modules, total_robots, intermediate_frame_thick, global_frame_thick, allow_small_out, out_allowance)
 filename = f"Coverage global - {nb_robots} rob - Inner {intermediate_frame_thick} mm - Global {global_frame_thick} mm"
@@ -419,6 +492,8 @@ f.suptitle(figtitle)
 gdf_modules.plot(ax=ax,facecolor='None',edgecolor=gdf_modules['color'])
 gdf_bound.plot(ax=ax,facecolor='None', edgecolor=gdf_bound['color'])
 gdf_coverage.plot(column='label',ax=ax, alpha=0.2, legend=True, legend_kwds={'loc': 'upper right'})
+ax.set_xlabel('x position [mm]')
+ax.set_ylabel('y position [mm]')
 
 if not ignore_robots_positions:
      gdf_robots.plot(ax = ax, markersize = 0.05)
@@ -432,16 +507,8 @@ if save_csv:
      now = datetime.now()
      info_case = f"{nb_robots}_robots-per-module_{total_robots}_robots_{intermediate_frame_thick}_inner_gap_{global_frame_thick}_global_gap"
      csv_filename = now.strftime("%Y-%m-%d-%H-%M-%S_") + info_case + ".csv"
-     gpd.GeoDataFrame(indiv_pos_df).to_csv(saving.results_dir_path() + csv_filename, index_label = 'robot_number', sep = ";", decimal = ".")
+     gpd.GeoDataFrame(indiv_pos_df).to_csv(saving.results_dir_path() + csv_filename, index_label = 'robot_number', sep = ";", decimal = ".", header='BONJOUR')
      logging.info(f'Robots positions saved to .csv file')
-
-if save_txt:
-     
-     with open(saving.results_dir_path() + 'grid.txt', 'w') as file:
-          file.write("x y z\n")
-          for (x_front,y_front,z_front, x_back,y_back,z_back) in zip(grid_df['x_front'], grid_df['y_front'], grid_df['z_front'], grid_df['x_back'], grid_df['y_back'], grid_df['z_back']):
-               file.write(f"{x_front:.3f} {y_front:.3f} {z_front:.3f}\n {x_back:.3f} {y_back:.3f} {z_back:.3f}\n")
-     logging.info(f'Grid saved to .txt file')
 
 ax.scatter(0,0,s=7,color='red')
 plot_polygon(pizza, ax=ax, add_points=False, edgecolor='black', facecolor='None', linestyle='--')
