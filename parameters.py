@@ -415,7 +415,7 @@ class Module(SavingResults):
           coverage_no_walls = round(total_positioners_workspace.area/module.area * 100,1)
           coverages = [coverage_with_walls, coverage_no_walls]
 
-          logging.info(f'Module object created with width {self.module_width} & {nbots} robots')
+          logging.info(f'Module object created with width {self.module_width} mm & {nbots} robots')
           return module_collection, multi_wks_list, coverages
      
      def plot_raw_module(self):

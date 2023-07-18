@@ -61,7 +61,7 @@ BFS = surf.BFS
 
 """ Global variables """
 # nbots = [52, 63, 75, 88, 102]
-nbots = [102]
+nbots = [75]
 width_increase = 0 # [mm] How much we want to increase the base length of a module
 chanfer_length = 10 # [mm] Size of chanfers of module vertices (base value: 7.5)
 centered_on_triangle = False
@@ -103,7 +103,7 @@ gfa = param.GFA(length = 33.3*gfa_tune, width = 61*gfa_tune, nb_gfa = nb_gfa, vi
 gdf_gfa = gfa.gdf_gfa
 polygon_gfa = MultiPolygon(list(gdf_gfa['geometry']))
 
-
+logging.info(f'Loaded parameters: \n - Surface:  {project_surface} \n - Inter gap: {intermediate_frame_thick} mm & Global gap: {global_frame_thick} mm \n - {nbots} robots/module')
 """ Data storage """
 keys = []
 global_dict = {'n42': {}, 'n52': {}, 'n63': {}, 'n75': {}, 'n88': {}, 'n102': {},
@@ -279,7 +279,8 @@ for nb_robots in nbots:
                         
                new_modules = MultiPolygon(temp_mod)
                new_coverage = MultiPolygon(temp_cov)
-               new_robots = unary_union(temp_rob)
+               # new_robots = unary_union(temp_rob)
+               new_robots = GeometryCollection(temp_rob)
                convex_hull_modules = new_modules.convex_hull
                # Create concave hull in case of individual module
                temp_cent = np.array(convex_hull_modules.centroid.xy).reshape((1,2))
@@ -294,13 +295,14 @@ for nb_robots in nbots:
                new_boundary = new_modules
 
           # Store individual xy location for each module
-          for new_mod in new_modules.geoms:
+          for new_mod, new_rob in zip(new_modules.geoms, new_robots.geoms) :
                
                final_grid['indiv']['x'].append(new_mod.centroid.x)
                final_grid['indiv']['y'].append(new_mod.centroid.y)
                final_grid['indiv']['z'].append(dz)
                final_grid['indiv']['xyz'].append([new_mod.centroid.x, new_mod.centroid.y, dz])
                final_grid['indiv']['geometry'].append(new_mod.centroid)
+               final_grid['indiv']['robots']['geometry'].append(new_rob)
 
           # Store individual xy location for each intermediate frame
           # final_grid['intermediate']['x'].append(dx)
@@ -354,10 +356,6 @@ for nb_robots in nbots:
      global_dict['Overall_results']['total_modules_list'].append(total_modules) 
      global_dict['Overall_results']['coverages_list'].append(global_coverage)
      print(f"Total # modules: {total_modules} \n", f"Total # robots: {total_robots}")
-     # plt.figure()
-     # plot_polygon(GeometryCollection(out))
-     # param.plot_vigR_poly(pizza)
-     # plt.show()
 
 #%% 2)d) Project grid on focal surface (BFS as a first try, aspherical will come later)
 
@@ -395,7 +393,7 @@ projection['front']['theta'] = np.rad2deg(lat.value)
 projection['front']['phi'] = np.rad2deg(lon.value)
 cols = ['x', 'y', 'z', 'theta', 'phi']
 df = pd.DataFrame(projection['front'], columns = cols)
-print(df.sort_values(by=['theta', 'phi']))
+
 saving.save_grid_to_txt(proj, 'grid_inter')
 # %% Plot plot time 
 
@@ -562,6 +560,10 @@ if len(keys)>1: # Useless to do multiple plots for only one case
      ax.grid()
      saving.save_figures_to_dir(filename)
 
+
+fig,ax = plt.subplots(figsize = (8,8))
+gdf_robots_indiv = gpd.GeoDataFrame(geometry=final_grid['indiv']['robots']['geometry'])
+gdf_robots_indiv.plot(markersize=0.1)
 
 end_time = time.time()
 
