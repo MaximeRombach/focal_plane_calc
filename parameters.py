@@ -63,6 +63,16 @@ class FocalSurf():
                                    'k': None,
                                    'a2': None,
                                    'a3': None,
+                                   'BFS': 11045.6 # [mm], radius of BFS
+                                   }
+
+          elif self.project == 'DESI':
+               focal_surf_param = {'R': -11067, 
+                                   'vigR': 406.,
+                                   'k': None,
+                                   'a2': None,
+                                   'a3': None,
+                                   'BFS': 11067 # [mm], radius of BFS
                                    }
           else: 
                logging.error('ERROR setting focal surface param: unknown project')

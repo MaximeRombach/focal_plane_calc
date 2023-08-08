@@ -53,19 +53,19 @@ The effective coverage is calculated as the usable positioner area vs total area
 
 start_time = time.time()
 
-project_surface = 'MUST'
+project_surface = 'MegaMapper'
 surf = param.FocalSurf(project = project_surface)
 R = abs(surf.R)
 vigR = surf.vigR
 BFS = surf.BFS
 
 """ Global variables """
-# nbots = [52, 63, 75, 88, 102]
-nbots = [75]
+# nbots = [63, 75, 88, 102]
+nbots = [63]
 width_increase = 0 # [mm] How much we want to increase the base length of a module
 chanfer_length = 10 # [mm] Size of chanfers of module vertices (base value: 7.5)
 centered_on_triangle = False
-full_framed = False # flag to check wether we are in semi frameless or in full framed case
+full_framed = False # flag to check wether we are in semi frameless or in full framed case (turns True if inter_gap = global_gap = 0 mm)
 
 """ Intermediate frame parameters """
 
@@ -83,7 +83,7 @@ if intermediate_frame_thick == global_frame_thick and intermediate_frame_thick !
      full_framed = True
 
 """ Drawing parameters """
-draw = False
+draw = True
 is_timer = False
 
 plot_time = 20 # [s] plotting time
@@ -153,7 +153,7 @@ for nb_robots in nbots:
 
      grid = param.Grid(module_width, intermediate_frame_thick, global_frame_thick, vigR, R)
      grid_df = grid.grid_df
-     # grid.plot_2D_grid()
+     grid.plot_2D_grid()
 
      flip_global = grid_df['flip_global']
 
@@ -287,9 +287,10 @@ for nb_robots in nbots:
                xx = param.flatten_list(xx)
                yy = param.flatten_list(yy)
                if not xx or not yy:
-                    new_boundary = convex_hull_modules
+                    new_boundary = new_modules
                else:
-                    new_boundary = Polygon(param.sort_points_for_polygon_format(xx, yy, temp_cent))
+                    # new_boundary = Polygon(param.sort_points_for_polygon_format(xx, yy, temp_cent))
+                    new_boundary = new_modules
 
           if full_framed: # boundaries are the individual modules frontiers for the full framed case
                new_boundary = new_modules
@@ -362,7 +363,7 @@ for nb_robots in nbots:
 projection = {'front': {'x': [], 'y': [], 'z': [], 'xyz': [], 'theta': [], 'phi': []},
               'back': {'x': [], 'y': [], 'z': [], 'xyz': [], 'theta': [], 'phi': []}}
 
-trim_angle = 360 # [deg], put 360° for full grid
+trim_angle = 60 # [deg], put 360° for full grid
 
 
 if trim_angle == 360:
@@ -381,8 +382,8 @@ else:
                grid_points_inter.append(final_grid['inter']['xyz'][idx])
      grid_points_inter = np.asarray(grid_points_inter)
 
-front_proj = grid.project_grid_on_sphere(grid_points_inter, BFS, 'front_proj')
-back_proj = grid.project_grid_on_sphere(grid_points_inter, BFS + mod_param.module_length, 'back_proj')
+front_proj = grid.project_grid_on_sphere(grid_points, BFS, 'front_proj')
+back_proj = grid.project_grid_on_sphere(grid_points, BFS + mod_param.module_length, 'back_proj')
 proj = np.vstack((front_proj, back_proj))
 r, lat, lon = cartesian_to_spherical(front_proj[:,0], front_proj[:,1], front_proj[:,2],)
 projection['front']['x'] = front_proj[:,0]
@@ -394,7 +395,8 @@ projection['front']['phi'] = np.rad2deg(lon.value)
 cols = ['x', 'y', 'z', 'theta', 'phi']
 df = pd.DataFrame(projection['front'], columns = cols)
 
-saving.save_grid_to_txt(proj, 'grid_inter')
+proj[:,2] = proj[:,2] + BFS
+saving.save_grid_to_txt(proj, f'grid_indiv_{nb_robots}')
 # %% Plot plot time 
 
 fig = plt.figure(figsize=(8,8))
@@ -563,7 +565,7 @@ if len(keys)>1: # Useless to do multiple plots for only one case
 
 fig,ax = plt.subplots(figsize = (8,8))
 gdf_robots_indiv = gpd.GeoDataFrame(geometry=final_grid['indiv']['robots']['geometry'])
-gdf_robots_indiv.plot(markersize=0.1)
+gdf_robots_indiv.plot(ax=ax,markersize=0.1)
 
 end_time = time.time()
 
