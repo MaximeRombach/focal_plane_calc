@@ -1,4 +1,6 @@
 ﻿
+using System.Globalization;
+
 namespace SolidworksAutomationTool
 {
     // this enum defines the allowed units in the txt file to be parsed in
@@ -27,7 +29,7 @@ namespace SolidworksAutomationTool
             foreach (Point3D point in point3Ds)
             {
                 pointIndex += 1;
-                Console.WriteLine($"Point {pointIndex, 5}:      x: {point.x,FieldWidthRightAligned:F3}, y: {point.y,FieldWidthRightAligned:F3}, z: {point.z,FieldWidthRightAligned:F3}");
+                Console.WriteLine($"Point {pointIndex, 5}:    x: {point.x,FieldWidthRightAligned:F3} m,    y: {point.y,FieldWidthRightAligned:F3} m,    z: {point.z,FieldWidthRightAligned:F3} m");
             }
         }
 
@@ -53,6 +55,9 @@ namespace SolidworksAutomationTool
 
             using (StreamReader streamReader = new StreamReader(fileName))
             {
+                // create culture info. It will be used to specify number convention during string-to-number conversion
+                CultureInfo usNumberFormatConvention = CultureInfo.CreateSpecificCulture("en-US");
+
                 // line number starts from 0. 
                 uint currentLine = 0;
                 // define delimiters
@@ -80,8 +85,9 @@ namespace SolidworksAutomationTool
                     // Try to convert the splitted line into 3 numbers and create a Point3D instance
                     float[] convertedNumbers = new float[3];
                     for (uint axis = 0; axis < splittedLine.Length; axis ++)
-                    {
-                        if (!Single.TryParse(splittedLine[axis], out convertedNumbers[axis]))
+                    {   
+                        // convert strings to numbers using the US number format, a.k.a using dots as decimal points
+                        if (!Single.TryParse(splittedLine[axis], usNumberFormatConvention, out convertedNumbers[axis]))
                         {
                             Console.WriteLine($"ERROR: Wrong data format in line {currentLine}. Please check for typos");
                             return false;
