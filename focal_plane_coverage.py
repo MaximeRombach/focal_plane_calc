@@ -60,8 +60,8 @@ vigR = surf.vigR
 BFS = surf.BFS
 
 """ Global variables """
-# nbots = [63, 75, 88, 102]
-nbots = [63]
+nbots = [63, 75, 88, 102]
+# nbots = [75]
 width_increase = 0 # [mm] How much we want to increase the base length of a module
 chanfer_length = 10 # [mm] Size of chanfers of module vertices (base value: 7.5)
 centered_on_triangle = False
@@ -89,10 +89,10 @@ is_timer = False
 plot_time = 20 # [s] plotting time
 ignore_robots_positions = False
 
-save_plots = False
+save_plots = False # Save final plots drew with *draw* flag
 save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
-save_csv = False
-save_txt = False
+save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
+save_txt = False # Save positions of modules along focal surface
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
 saving = param.SavingResults(saving_df)
 
@@ -167,7 +167,7 @@ for nb_robots in nbots:
 
      fill_empty = True # Fill empty spaces by individual modules
      allow_small_out = True # allow covered area of module to stick out of vigR (i.e. useless covered area because does not receive light)
-     out_allowance = 0.5 # percentage of the covered area of a module authorized to stick out of vigR
+     out_allowance = 0.06 # percentage of the covered area of a module authorized to stick out of vigR
      covered_area = 0 
      total_modules = 0
      boundaries_df = {'geometry':[], 'color': []}
@@ -397,6 +397,8 @@ df = pd.DataFrame(projection['front'], columns = cols)
 
 proj[:,2] = proj[:,2] + BFS
 saving.save_grid_to_txt(proj, f'grid_indiv_{nb_robots}')
+saving.save_grid_to_txt(front_proj, f'front_grid_indiv_{nb_robots}')
+saving.save_grid_to_txt(back_proj, f'back_grid_indiv_{nb_robots}')
 # %% Plot plot time 
 
 fig = plt.figure(figsize=(8,8))
@@ -508,6 +510,7 @@ if save_csv:
      info_case = f"{nb_robots}_robots-per-module_{total_robots}_robots_{intermediate_frame_thick}_inner_gap_{global_frame_thick}_global_gap"
      csv_filename = now.strftime("%Y-%m-%d-%H-%M-%S_") + info_case + ".csv"
      gpd.GeoDataFrame(indiv_pos_df).to_csv(saving.results_dir_path() + csv_filename, index_label = 'robot_number', sep = ";", decimal = ".", header='BONJOUR')
+     # TBI: robot pos accounting for focal plane curvature
      logging.info(f'Robots positions saved to .csv file')
 
 ax.scatter(0,0,s=7,color='red')

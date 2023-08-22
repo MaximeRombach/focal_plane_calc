@@ -21,7 +21,7 @@
 
 """
 Note by @Maxime Rombach:
-In my case, I am also interested in studying "triangle centered" grid insted of a "vertices centered" one
+In my case, I am also interested in studying "triangle centered" grid instead of a "vertices centered" one
 - Triangle centered: a + b + c = 0 or 1 for "valid" triangle
 - Vertices centered:  a + b + c = 1 or 2 for "valid" triangle
 
