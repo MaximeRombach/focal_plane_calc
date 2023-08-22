@@ -79,7 +79,8 @@ foreach ( (Point3D frontPoint, Point3D backPoint) in frontGridPointCloud.point3D
 {
     modulePart.SketchManager.CreatePoint(frontPoint.x, frontPoint.y , frontPoint.z );
     modulePart.SketchManager.CreatePoint(backPoint.x , backPoint.y  , backPoint.z );
-    modulePart.SketchManager.CreateLine(frontPoint.x , frontPoint.y , frontPoint.z, backPoint.x, backPoint.y, backPoint.z);
+    // create axis of extrusion as construction lines
+    modulePart.SketchManager.CreateLine(frontPoint.x , frontPoint.y , frontPoint.z, backPoint.x, backPoint.y, backPoint.z).ConstructionGeometry = true;
 }
 
 // TODO: find best way to select point pairs
