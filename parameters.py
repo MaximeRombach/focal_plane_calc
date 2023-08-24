@@ -167,14 +167,14 @@ class SavingResults:
 
           doc.saveas(self.results_dir_path() + f"{name_frame}.dxf")
 
-     def save_figures_to_dir(self, suffix_name):
+     def save_figures_to_dir(self, suffix_name: str, dpi: int = 800):
 
           if not self.save_plots:
                return
 
           now = datetime.now()
           today_filename = now.strftime("%Y-%m-%d-%H-%M-%S_") + suffix_name + ".png"
-          plt.savefig(self.results_dir_path() + today_filename, bbox_inches = 'tight', format='png', dpi = 800)
+          plt.savefig(self.results_dir_path() + today_filename, bbox_inches = 'tight', format='png', dpi = dpi)
           logging.info(f'{suffix_name}.png saved')
 
      def save_grid_to_txt(self, grid, filename):
