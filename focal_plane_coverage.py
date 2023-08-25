@@ -53,17 +53,17 @@ The effective coverage is calculated as the usable positioner area vs total area
 
 start_time = time.time()
 
-project_surface = 'MegaMapper'
+project_surface = 'MUST'
 surf = param.FocalSurf(project = project_surface)
 R = abs(surf.R)
 vigR = surf.vigR
 BFS = surf.BFS
 
 """ Global variables """
-nbots = [63, 75, 88, 102]
-# nbots = [75]
-out_allowances = np.arange(0.05, 0.9, 0.05)
-# out_allowances = [0.06]
+# nbots = [42, 52, 63, 75, 88, 102]
+nbots = [75]
+# out_allowances = np.arange(0, 0.9, 0.05)
+out_allowances = [0.5]
 width_increase = 0 # [mm] How much we want to increase the base length of a module
 chanfer_length = 10 # [mm] Size of chanfers of module vertices (base value: 7.5)
 centered_on_triangle = False # move the center of the grid (red dot) on the centroid on a triangle instead of the edge
@@ -71,11 +71,11 @@ full_framed = False # flag to check wether we are in semi frameless or in full f
 
 """ Intermediate frame parameters """
 
-intermediate_frame_thick =  1 # [mm] spacing between modules inside intermediate frame
+intermediate_frame_thick =  3 # [mm] spacing between modules inside intermediate frame
 
 """ Global frame parameters """
 
-global_frame_thick = 2 # [mm] spacing between modules in global arrangement
+global_frame_thick = 3 # [mm] spacing between modules in global arrangement
 
 """ Protective shields on module """
 
@@ -99,8 +99,8 @@ saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv"
 saving = param.SavingResults(saving_df)
 
 """GFA stuff"""
-gfa_tune = 0.9
-nb_gfa = 6
+gfa_tune = 0.5
+nb_gfa = 8
 gfa = param.GFA(length = 33.3*gfa_tune, width = 61*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df)
 gdf_gfa = gfa.gdf_gfa
 polygon_gfa = MultiPolygon(list(gdf_gfa['geometry']))
@@ -268,7 +268,17 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                               
                          elif allow_small_out and cov_out.area/cov.area < out_allowance and not mod_overlaps_GFA:
                               # If the coverage area of a module sticks out by less than the authorized amount, we keep it
+                              plot_polygon(cov)
                               remaining_cov = cov.intersection(pizza)
+
+                              # Sometimes coverage polygon is split in 2 polygons by pizza at the level of the arc de cercle given by the workspaces
+                              # That gives a MultiPolygon which is better to split in separate polygons for further manipulations
+                              if isinstance(remaining_cov, MultiPolygon):
+                                   remaining_temp = []
+                                   for poly in remaining_cov.geoms:
+                                        remaining_temp.append(poly)
+                                   remaining_cov = remaining_temp
+                                   
                               # remaining_robs = robs.intersection(pizza)
                               remaining_robs = robs
                               temp_mod.append(mod)
@@ -279,12 +289,10 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                               xx.append(mod.exterior.coords.xy[0].tolist())
                               yy.append(mod.exterior.coords.xy[1].tolist())
                               color_boundary = 'blue'
-                    # plot_polygon(MultiPolygon(temp_mod))
-                    # param.plot_vigR_poly(pizza)
-                    # plt.show()
 
+                    # Check if empty list; skip case if True (corrects huge bug)
                     if not temp_mod: 
-                         #check if empty list; skip case if True (corrects huge bug)
+                         
                          continue
                     if len(temp_mod) == 4:
                          color_boundary = 'green'
@@ -294,6 +302,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                     # new_robots = unary_union(temp_rob)
                     new_robots = GeometryCollection(temp_rob)
                     convex_hull_modules = new_modules.convex_hull
+
                     # Create concave hull in case of individual module
                     temp_cent = np.array(convex_hull_modules.centroid.xy).reshape((1,2))
                     xx = param.flatten_list(xx)
@@ -370,7 +379,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
           global_dict['Overall_results']['coverages_list'].append(global_coverage)
 
           global_dict[key]['local_coverages_list'].append(global_coverage)
-          print(f"Out allowance: {outage} \n", f"Total # modules: {total_modules} \n", f"Total # robots: {total_robots}")
+          print(f"Out allowance: {outage} \n", f"Total # modules: {total_modules} \n", f"Total # robots: {total_robots} \n", f"Covergae: {global_coverage}")
 
 #%% 2)d) Project grid on focal surface (BFS as a first try, aspherical will come later)
 
@@ -589,7 +598,18 @@ if len(out_allowances) > 1:
      filename = "Coverage_VS_out_allowance"
      plt.title(f'Focal plane coverage VS out allowance of modules \n Inner gap {intermediate_frame_thick} mm - Global gap {global_frame_thick} mm')
      for key in keys:
-          plt.plot(out_allowances, global_dict[key]['local_coverages_list'], '.-', label = f"{global_dict[key]['nbots/module']} robots/module")
+          plt.plot(np.array(out_allowances)*100, global_dict[key]['local_coverages_list'], '.-', label = f"{global_dict[key]['nbots/module']} robots/module")
+     plt.xlabel('Out allowance [%]')
+     plt.ylabel('Coverage [%]')
+     plt.grid()
+     plt.legend(shadow = True)
+     saving.save_figures_to_dir(filename)
+
+     fig = plt.figure(figsize=(8,8))
+     filename = "Coverage_VS_out_allowance"
+     plt.title(f'Focal plane coverage VS out allowance of modules \n Inner gap {intermediate_frame_thick} mm - Global gap {global_frame_thick} mm')
+     for key in keys:
+          plt.plot(np.array(out_allowances)*100, global_dict[key]['local_coverages_list'], '.-', label = f"{global_dict[key]['nbots/module']} robots/module")
      plt.xlabel('Out allowance [%]')
      plt.ylabel('Coverage [%]')
      plt.grid()
