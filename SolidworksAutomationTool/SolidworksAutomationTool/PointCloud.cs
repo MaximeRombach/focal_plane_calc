@@ -83,11 +83,11 @@ namespace SolidworksAutomationTool
                     }
 
                     // Try to convert the splitted line into 3 numbers and create a Point3D instance
-                    float[] convertedNumbers = new float[3];
+                    double[] convertedNumbers = new double[3];
                     for (uint axis = 0; axis < splittedLine.Length; axis ++)
                     {   
                         // convert strings to numbers using the US number format, a.k.a using dots as decimal points
-                        if (!Single.TryParse(splittedLine[axis], usNumberFormatConvention, out convertedNumbers[axis]))
+                        if (!double.TryParse(splittedLine[axis], usNumberFormatConvention, out convertedNumbers[axis]))
                         {
                             Console.WriteLine($"ERROR: Wrong data format in line {currentLine}. Please check for typos");
                             return false;
@@ -96,7 +96,7 @@ namespace SolidworksAutomationTool
                         // Since solidworks's api seems to only take data in meters. We need to convert everything to meters, when the point cloud txt file contains data in mm
                         convertedNumbers[axis] = dataUnit switch
                         {
-                            Units.Millimeter => convertedNumbers[axis] / 1000.0f,
+                            Units.Millimeter => convertedNumbers[axis] / 1000.0,
                             Units.Meter => convertedNumbers[axis],
                             // Currently only support meters and milimeters. Other units might be added later
                             _ => -1,
@@ -124,20 +124,20 @@ namespace SolidworksAutomationTool
     /* A simple class to hold a 3D point */
     public class Point3D : IEquatable<Point3D>
     {
-        public float x = 0.0f;
-        public float y = 0.0f;
-        public float z = 0.0f;
+        public double x = 0.0f;
+        public double y = 0.0f;
+        public double z = 0.0f;
 
         // Constructors of Point3D
         public Point3D() { }
-        public Point3D(float x, float y, float z)
+        public Point3D(double x, double y, double z)
         {
-            this.x = x; 
-            this.y = y; 
+            this.x = x;
+            this.y = y;
             this.z = z;
         }
 
-        public Point3D(float[] values)
+        public Point3D(double[] values)
         {
             if (values.Length != 3)
             {
@@ -151,21 +151,30 @@ namespace SolidworksAutomationTool
         // Function to help inter-point comparison
         public bool Equals(Point3D otherPoint)
         {
-            if(otherPoint == null)
+            if (otherPoint == null)
             {
                 return false;
             }
             // if comparing the same object, then they are surely equal
-            if(Object.ReferenceEquals(this, otherPoint))
+            if (Object.ReferenceEquals(this, otherPoint))
             {
                 return true;
             }
             // only makes sense to compare apples with apples
-            if(this.GetType() != otherPoint.GetType())
+            if (this.GetType() != otherPoint.GetType())
             {
                 return false;
             }
             return this.x == otherPoint.x && this.y == otherPoint.y && this.z == otherPoint.z;
         }
+
+        // Create a mid point in between two points. The two points are passed in as "const reference"
+        public static Point3D CreateMidPoint(in Point3D firstPoint, in Point3D secondPoint)
+        {
+            return new Point3D( firstPoint.x / 2 + secondPoint.x / 2, 
+                                firstPoint.y / 2 + secondPoint.y / 2, 
+                                firstPoint.z / 2 + secondPoint.z / 2 );
+        }
     }
+
 }
