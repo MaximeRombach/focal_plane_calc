@@ -53,7 +53,7 @@ The effective coverage is calculated as the usable positioner area vs total area
 
 start_time = time.time()
 
-project_surface = 'MUST'
+project_surface = 'MegaMapper'
 surf = param.FocalSurf(project = project_surface)
 R = abs(surf.R)
 vigR = surf.vigR
@@ -91,11 +91,11 @@ is_timer = False
 plot_time = 20 # [s] plotting time
 ignore_robots_positions = False
 
-save_plots = True # Save final plots drew with *draw* flag
-save_all_plots = False
-save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
-save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
-save_txt = False # Save positions of modules along focal surface
+save_plots = True # Save most useful plots drew with *draw* flag
+save_all_plots = True  # Save all plots (including intermediate ones)
+save_frame_as_dxf = True # Save the outline of the frame for Solidworks integration
+save_csv = True # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
+save_txt = True # Save positions of modules along curved focal surface
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
 saving = param.SavingResults(saving_df)
 
@@ -110,12 +110,12 @@ logging.info(f'Loaded parameters: \n - Surface:  {project_surface} \n - Inter ga
 """ Data storage """
 keys = []
 
-global_dict = {'n42': {'local_total_robots_list' : [], 'local_total_modules_list':[], 'local_coverages_list':[]},
-               'n52': {'local_total_robots_list' : [], 'local_total_modules_list':[], 'local_coverages_list':[]},
-               'n63': {'local_total_robots_list' : [], 'local_total_modules_list':[], 'local_coverages_list':[]},
-               'n75': {'local_total_robots_list' : [], 'local_total_modules_list':[], 'local_coverages_list':[]},
-               'n88': {'local_total_robots_list' : [], 'local_total_modules_list':[], 'local_coverages_list':[]},
-               'n102': {'local_total_robots_list' : [], 'local_total_modules_list':[], 'local_coverages_list':[]},
+global_dict = {'n42': {'local_total_robots_list' : [], 'local_total_modules_list':[], 'local_coverages_list':[], 'useless_robots_list': [], 'useful_robots_list': [], 'efficiency_list': [] },
+               'n52': {'local_total_robots_list' : [], 'local_total_modules_list':[], 'local_coverages_list':[], 'useless_robots_list': [], 'useful_robots_list': [], 'efficiency_list': [] },
+               'n63': {'local_total_robots_list' : [], 'local_total_modules_list':[], 'local_coverages_list':[], 'useless_robots_list': [], 'useful_robots_list': [], 'efficiency_list': [] },
+               'n75': {'local_total_robots_list' : [], 'local_total_modules_list':[], 'local_coverages_list':[], 'useless_robots_list': [], 'useful_robots_list': [], 'efficiency_list': [] },
+               'n88': {'local_total_robots_list' : [], 'local_total_modules_list':[], 'local_coverages_list':[], 'useless_robots_list': [], 'useful_robots_list': [], 'efficiency_list': [] },
+               'n102': {'local_total_robots_list' : [], 'local_total_modules_list':[], 'local_coverages_list':[], 'useless_robots_list': [], 'useful_robots_list': [], 'efficiency_list': []},
                'Overall_results': {'nb_robots_list':[], 'total_robots_list' : [],
                                     'total_modules_list':[], 'coverages_list':[]}}
 to_dxf_dict = {}
@@ -173,16 +173,16 @@ for nb_robots in nbots: # iterate over number of robots/module cases
      # plot_polygon(pizza_with_GFA)
      # plt.show()
 
-
-          #%% 2)c) Place the intermediate triangles accordingly on the grid
+     #%% 2)c) Place the intermediate triangles accordingly on the grid
 
      for outage in out_allowances: #iterate over how much we allow a module coverage to be out of the vignetting radius
 
           fill_empty = True # Fill empty spaces by individual modules
           allow_small_out = True # allow covered area of module to stick out of vigR (i.e. useless covered area because does not receive light)
           out_allowance = outage # percentage of the covered area of a module authorized to stick out of vigR
-          covered_area = 0 
-          total_modules = 0
+          covered_area = 0 # total covered area of vigR
+          total_modules = 0 # total number of modules in vigR
+          useless_robots = 0 # robots that are not in the vigR
           boundaries_df = {'geometry':[], 'color': []}
           modules_df = {'geometry':[], 'color': []}
           coverage_df = {'geometry':[]}
@@ -279,9 +279,15 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                                    for poly in remaining_cov.geoms:
                                         remaining_temp.append(poly)
                                    remaining_cov = remaining_temp
-                                   
-                              # remaining_robs = robs.intersection(pizza)
-                              remaining_robs = robs
+
+                              remaining_robs = robs     
+                              robs_in_vigR = robs.intersection(pizza)
+                              useless_robots += len(list(robs.geoms)) - len(list(robs_in_vigR.geoms)) # counts the number of robots that are not in vigR
+                              # pizz = surf.make_vigR_polygon()
+                              # surf.plot_vigR_poly(pizz)
+                              # plot_points(remaining_robs)
+                              # plot_polygon(mod)
+                              # plt.show()
                               temp_mod.append(mod)
                               temp_cov.append(remaining_cov)
                               temp_rob.append(remaining_robs)
@@ -382,6 +388,9 @@ for nb_robots in nbots: # iterate over number of robots/module cases
           global_dict[key]['local_coverages_list'].append(global_coverage)
           global_dict[key]['local_total_robots_list'].append(total_robots)
           global_dict[key]['local_total_modules_list'].append(total_modules)
+          global_dict[key]['useless_robots_list'].append(useless_robots)
+          global_dict[key]['useful_robots_list'].append(total_robots - useless_robots)
+          global_dict[key]['efficiency_list'].append((total_robots - useless_robots)/total_robots)
           print(f"Out allowance: {outage} \n", f"Total # modules: {total_modules} \n", f"Total # robots: {total_robots} \n", f"Covergae: {global_coverage}")
 
 #%% 2)d) Project grid on focal surface (BFS as a first try, aspherical will come later)
@@ -428,7 +437,7 @@ saving.save_grid_to_txt(back_proj, f'back_grid_indiv_{nb_robots}')
 # %% Plot plot time 
 
 fig = plt.figure(figsize=(8,8))
-figtitle = f"Module coverage raw - {nb_robots} robots per module"
+figtitle = f"_Module_coverage_raw__{nb_robots}_robots_per_module"
 plt.title(figtitle)
 plot_polygon(module, facecolor='None', edgecolor='black', add_points=False)
 plot_polygon(module_w_beta_and_safety_dist, facecolor='None', edgecolor='red', linestyle = '--', add_points=False
@@ -449,7 +458,7 @@ if save_all_plots:
 
 plt.figure(figsize=(8,8))
 figtitle = f"Module coverage with summed coverage + walls \n {nb_robots} robots per module"
-filename = f"Module cov w walls - {nb_robots} robots per mod"
+filename = f"__Module_cov_w_walls__{nb_robots}_robots_per_mod"
 plt.title(figtitle)
 plot_polygon(module, facecolor='None', edgecolor='black', add_points=False)
 plot_polygon(module_w_beta_and_safety_dist, facecolor='None', linestyle = '--', add_points=False
@@ -465,7 +474,7 @@ if save_all_plots:
 
 plt.figure(figsize=(10,10))
 figtitle = f"Intermediate frame - {nb_robots} robots per module \n Inner gap: {intermediate_frame_thick} mm \n Total # modules: 4 - Total # robots: {nb_robots*4}"
-filename = f"Intermediate plot - {nb_robots} robots per mod"
+filename = f"__Intermediate_plot_{nb_robots}_robots_per_mod"
 plt.title(figtitle)
 param.plot_intermediate(intermediate_collection, nb_robots, False, intermediate_coverage, draw_legend = True)
 gdf_inter_bound = gpd.GeoDataFrame(inter_df)
@@ -483,7 +492,7 @@ if global_frame_thick > 0:
      modules = global_dict[key_frame]['total_modules']
      extra_material_for_frame = 50 # [mm] amount of material added on each side of vigR to make the frame structure
      figtitle = f'Frame to manufacture - {robots} robots per module - {modules} modules \n Vignetting diam: {2*vigR} mm - Extra: {extra_material_for_frame} mm\n Total diam: {2*(vigR + extra_material_for_frame)} mm'
-     filename = f'Frame to manufacture - {robots} robots per module - {modules} modules'
+     filename = f'__Frame_to_manufacture__{robots}_robots_per_module__{modules}_modules'
 
      f, ax = plt.subplots(figsize=(10, 10))
      f.suptitle(figtitle)
@@ -501,7 +510,7 @@ if global_frame_thick > 0:
      ax.legend(shadow = True)
      saving.save_figures_to_dir(filename)
 
-     figtitle = f'Frame to manufacture - {robots} robots per module - {modules} modules'
+     figtitle = f'__Frame_to_manufacture__{robots}_robots_per_module__{modules}_modules'
      filename = figtitle
 
      f, ax = plt.subplots(figsize=(10, 10))     
@@ -517,7 +526,7 @@ if global_frame_thick > 0:
      
 
 figtitle = param.final_title(nb_robots, total_modules, total_robots, intermediate_frame_thick, global_frame_thick, allow_small_out, out_allowance)
-filename = f"Coverage global - {nb_robots} rob - Inner {intermediate_frame_thick} mm - Global {global_frame_thick} mm"
+filename = f"__Coverage global_{nb_robots}_rob__Inner_{intermediate_frame_thick}_mm__Global_{global_frame_thick}_mm"
 f, ax= plt.subplots(figsize=(10, 10), sharex = True, sharey=True)
 f.suptitle(figtitle)
 gdf_modules.plot(ax=ax,facecolor='None',edgecolor=gdf_modules['color'])
@@ -632,6 +641,29 @@ if len(out_allowances) > 1:
      plt.grid()
      plt.legend(shadow = True)
      saving.save_figures_to_dir(filename)
+
+     fig = plt.figure(figsize=(8,8))
+     filename = "Useless_VS_total_robots"
+     plt.title(f'Useless robots VS total robots \n Inner gap {intermediate_frame_thick} mm - Global gap {global_frame_thick} mm')
+     for key in keys:
+          plt.plot(global_dict[key]['useless_robots_list'], global_dict[key]['local_total_robots_list'], '.-', label = f"{global_dict[key]['nbots/module']} robots/module")
+     plt.xlabel('Useless robots [-]')
+     plt.ylabel('Total robots [-]')
+     plt.grid()
+     plt.legend(shadow = True)
+     saving.save_figures_to_dir(filename)
+
+     fig = plt.figure(figsize=(8,8))
+     filename = "Useful_robots_VS_total_robots"
+     plt.title(f'Useful robots VS total robots \n Inner gap {intermediate_frame_thick} mm - Global gap {global_frame_thick} mm')
+     for key in keys:
+          plt.plot(global_dict[key]['efficiency_list'], global_dict[key]['local_coverages_list'], '.-', label = f"{global_dict[key]['nbots/module']} robots/module")
+     plt.xlabel('Useful robots / Total robots [-]')
+     plt.ylabel('Coverage [%]')
+     plt.grid()
+     plt.legend(shadow = True)
+     saving.save_figures_to_dir(filename)
+     
 
 end_time = time.time()
 
