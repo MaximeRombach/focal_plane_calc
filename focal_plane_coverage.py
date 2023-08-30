@@ -53,7 +53,7 @@ The effective coverage is calculated as the usable positioner area vs total area
 
 start_time = time.time()
 
-project_surface = 'MUST'
+project_surface = 'MegaMapper'
 surf = param.FocalSurf(project = project_surface)
 R = abs(surf.R)
 vigR = surf.vigR
@@ -91,11 +91,11 @@ is_timer = False
 plot_time = 20 # [s] plotting time
 ignore_robots_positions = False
 
-save_plots = False # Save final plots drew with *draw* flag
-save_all_plots = False
-save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
-save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
-save_txt = False # Save positions of modules along focal surface
+save_plots = True # Save most useful plots drew with *draw* flag
+save_all_plots = True  # Save all plots (including intermediate ones)
+save_frame_as_dxf = True # Save the outline of the frame for Solidworks integration
+save_csv = True # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
+save_txt = True # Save positions of modules along curved focal surface
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
 saving = param.SavingResults(saving_df)
 
@@ -437,7 +437,7 @@ saving.save_grid_to_txt(back_proj, f'back_grid_indiv_{nb_robots}')
 # %% Plot plot time 
 
 fig = plt.figure(figsize=(8,8))
-figtitle = f"Module coverage raw - {nb_robots} robots per module"
+figtitle = f"_Module_coverage_raw__{nb_robots}_robots_per_module"
 plt.title(figtitle)
 plot_polygon(module, facecolor='None', edgecolor='black', add_points=False)
 plot_polygon(module_w_beta_and_safety_dist, facecolor='None', edgecolor='red', linestyle = '--', add_points=False
@@ -458,7 +458,7 @@ if save_all_plots:
 
 plt.figure(figsize=(8,8))
 figtitle = f"Module coverage with summed coverage + walls \n {nb_robots} robots per module"
-filename = f"Module cov w walls - {nb_robots} robots per mod"
+filename = f"__Module_cov_w_walls__{nb_robots}_robots_per_mod"
 plt.title(figtitle)
 plot_polygon(module, facecolor='None', edgecolor='black', add_points=False)
 plot_polygon(module_w_beta_and_safety_dist, facecolor='None', linestyle = '--', add_points=False
@@ -474,7 +474,7 @@ if save_all_plots:
 
 plt.figure(figsize=(10,10))
 figtitle = f"Intermediate frame - {nb_robots} robots per module \n Inner gap: {intermediate_frame_thick} mm \n Total # modules: 4 - Total # robots: {nb_robots*4}"
-filename = f"Intermediate plot - {nb_robots} robots per mod"
+filename = f"__Intermediate_plot_{nb_robots}_robots_per_mod"
 plt.title(figtitle)
 param.plot_intermediate(intermediate_collection, nb_robots, False, intermediate_coverage, draw_legend = True)
 gdf_inter_bound = gpd.GeoDataFrame(inter_df)
@@ -492,7 +492,7 @@ if global_frame_thick > 0:
      modules = global_dict[key_frame]['total_modules']
      extra_material_for_frame = 50 # [mm] amount of material added on each side of vigR to make the frame structure
      figtitle = f'Frame to manufacture - {robots} robots per module - {modules} modules \n Vignetting diam: {2*vigR} mm - Extra: {extra_material_for_frame} mm\n Total diam: {2*(vigR + extra_material_for_frame)} mm'
-     filename = f'Frame to manufacture - {robots} robots per module - {modules} modules'
+     filename = f'__Frame_to_manufacture__{robots}_robots_per_module__{modules}_modules'
 
      f, ax = plt.subplots(figsize=(10, 10))
      f.suptitle(figtitle)
@@ -510,7 +510,7 @@ if global_frame_thick > 0:
      ax.legend(shadow = True)
      saving.save_figures_to_dir(filename)
 
-     figtitle = f'Frame to manufacture - {robots} robots per module - {modules} modules'
+     figtitle = f'__Frame_to_manufacture__{robots}_robots_per_module__{modules}_modules'
      filename = figtitle
 
      f, ax = plt.subplots(figsize=(10, 10))     
@@ -526,7 +526,7 @@ if global_frame_thick > 0:
      
 
 figtitle = param.final_title(nb_robots, total_modules, total_robots, intermediate_frame_thick, global_frame_thick, allow_small_out, out_allowance)
-filename = f"Coverage global - {nb_robots} rob - Inner {intermediate_frame_thick} mm - Global {global_frame_thick} mm"
+filename = f"__Coverage global_{nb_robots}_rob__Inner_{intermediate_frame_thick}_mm__Global_{global_frame_thick}_mm"
 f, ax= plt.subplots(figsize=(10, 10), sharex = True, sharey=True)
 f.suptitle(figtitle)
 gdf_modules.plot(ax=ax,facecolor='None',edgecolor=gdf_modules['color'])
