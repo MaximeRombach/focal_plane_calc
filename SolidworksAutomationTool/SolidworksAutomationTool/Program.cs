@@ -45,9 +45,10 @@ if ( frontGridPointCloud.point3Ds.Count != backGridPointCloud.point3Ds.Count )
 
 Console.WriteLine("Starting SolidWorks Application ...");
 
+// Solidworks related variable definitions
 SldWorks? solidworksApp;
 ModelDoc2 modulePart;
-
+ModelView modelView;
 // get solidworks and start it
 const string solidWorkAppID = "SldWorks.Application";
 solidworksApp = Activator.CreateInstance(Type.GetTypeFromProgID(solidWorkAppID)) as SldWorks;
@@ -76,30 +77,91 @@ modulePart.ShowNamedView2("", (int)swStandardViews_e.swIsometricView);
 
 PromptAndWait("Press any key to create point clouds and axes of extrusions");
 
+// disable user input box when adding dimensions
+solidworksApp.SetUserPreferenceToggle( (int)swUserPreferenceToggle_e.swInputDimValOnCreate, false );
+// disable view refreshing until points are created
+modelView =(ModelView)modulePart.GetFirstModelView();
+modelView.EnableGraphicsUpdate = false;
+
+// try to allocate space for front sketchpoints and back sketchpoints
+List<SketchPoint> frontSketchPointList = new List<SketchPoint>( frontGridPointCloud.point3Ds.Count );
+List<SketchPoint> backSketchPointList = new List<SketchPoint>(backGridPointCloud.point3Ds.Count);
+List<SketchSegment> extrusionAxisList = new List<SketchSegment>(frontSketchPointList.Count);
+
 // Try iterating through two point clouds at the same time
 foreach ( (Point3D frontPoint, Point3D backPoint) in frontGridPointCloud.point3Ds.Zip(backGridPointCloud.point3Ds))
 {
     // create top and bottom points
-    SketchPoint newlyCreatedFrontSketchPoint = modulePart.SketchManager.CreatePoint(frontPoint.x, frontPoint.y , frontPoint.z );
-    SketchPoint newlyCreatedBackSketchPoint = modulePart.SketchManager.CreatePoint(backPoint.x , backPoint.y  , backPoint.z );
+    frontSketchPointList.Add( modulePart.SketchManager.CreatePoint(frontPoint.x, frontPoint.y , frontPoint.z ) );
+    backSketchPointList.Add( modulePart.SketchManager.CreatePoint(backPoint.x , backPoint.y  , backPoint.z ) );
 
     // create axis of extrusion as construction lines
-    SketchSegment extrusionAxis = modulePart.SketchManager.CreateLine(frontPoint.x , frontPoint.y , frontPoint.z, backPoint.x, backPoint.y, backPoint.z);
-    extrusionAxis.ConstructionGeometry = true;
-
-    // Try to craete a mid point. Seems fine
-    Point3D midPoint = Point3D.CreateMidPoint(frontPoint, backPoint);
-    SketchPoint newlyCreatedMidSketchPoint = modulePart.SketchManager.CreatePoint(midPoint.x, midPoint.y, midPoint.z);
-
+    extrusionAxisList.Add( modulePart.SketchManager.CreateLine(frontPoint.x , frontPoint.y , frontPoint.z, backPoint.x, backPoint.y, backPoint.z) );
+    // using fancy but convenient index-from-end operator (^), which is available in C# 8.0 and later, to get the last element in a list.
+    extrusionAxisList[^1 ].ConstructionGeometry = true;
 
 }
+
+modelView.EnableGraphicsUpdate = true;
+
 // Sometimes the camera is not pointing toward the part. So repoint the camera to the part.
 modulePart.ViewZoomtofit2();
 
-// TODO: find best way to select point pairs
-
 // The documentation says: Inserts a new 3D sketch in a model or closes the active sketch. ?? 
 modulePart.SketchManager.Insert3DSketch(true);
+
+// magic clear selection method
+modulePart.ClearSelection2(true);
+
+// create another 3D sketch so that the extrusion axes are untouched
+modulePart.SketchManager.Insert3DSketch(true);
+
+PromptAndWait("Press any key to create small segments");
+
+// TODO: find best way to select point pairs
+// According to solidworks api, we need to define a SelectData object and pass it into each selection call.
+SelectionMgr swSelectionManager = (SelectionMgr)modulePart.SelectionManager;
+SelectData swSelectData = (SelectData)swSelectionManager.CreateSelectData();
+
+modelView.EnableGraphicsUpdate = false;
+
+// Define small segment length
+double smallSegmentLength = 30e-3;
+
+// Try to craete a mid point. Seems fine
+foreach ((SketchPoint frontSketchPoint, SketchPoint backSketchPoint, SketchSegment extrusionAxis) in frontSketchPointList.Zip(backSketchPointList, extrusionAxisList))
+{
+    // first create a small sketch point at the middle of an extrusion axis
+    SketchPoint smallSegmentSketchPoint = modulePart.SketchManager.CreatePoint(   (frontSketchPoint.X + backSketchPoint.X) / 2,
+                                            (frontSketchPoint.Y + backSketchPoint.Y) / 2,
+                                            (frontSketchPoint.Z + backSketchPoint.Z) / 2);
+
+    // constraint the point to be on coincide with the extrusion axis. Assuming the smallSegmentSketchPoint is already selected after creation
+    extrusionAxis.Select4(true, swSelectData);
+    modulePart.SketchAddConstraints("sgCOINCIDENT");
+    
+    // clear previous selections, so that no unintentional selection
+    modulePart.ClearSelection2(true);
+
+    // add a length dimension to the small segment
+    frontSketchPoint.Select4(true, swSelectData);
+    smallSegmentSketchPoint.Select4(true, swSelectData);
+    // add dimension. Maybe there's a cleaner way to access the dimension variable directly
+    DisplayDimension smallSegmentDisplayDimension = (DisplayDimension)modulePart.AddDimension2(frontSketchPoint.X, frontSketchPoint.Y, frontSketchPoint.Z);
+    // The Index argument is valid for chamfer display dimensions only. If the display dimension is not a chamfer display dimension, then Index is ignored.
+    Dimension smallSegmentDimension = smallSegmentDisplayDimension.GetDimension2(0);
+    smallSegmentDimension.SetSystemValue3(smallSegmentLength, (int)swSetValueInConfiguration_e.swSetValue_InThisConfiguration, "");
+
+    modulePart.ClearSelection2(true);
+
+}
+// enbale user input box for dimensions
+solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, true);
+
+modelView.EnableGraphicsUpdate = true;
+
+modulePart.SketchManager.Insert3DSketch(true);
+modulePart.ViewZoomtofit2();
 
 // wait for user input before closing
 PromptAndWait("Press any key to close Solidworks");
