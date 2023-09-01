@@ -3,6 +3,7 @@
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 using SolidworksAutomationTool;
+using System.Threading.Channels;
 
 /* Display a prompt to the console and wait for the user's input before continuing */
 static void PromptAndWait(string prompt)
@@ -41,6 +42,20 @@ backGridPointCloud.PrintPoint3Ds();
 if ( frontGridPointCloud.point3Ds.Count != backGridPointCloud.point3Ds.Count )
 {
     Console.WriteLine("WARNING: the number of points on the front and back grid are not the same. Is this intentional?");
+}
+
+// TODO: optimize. 
+// find minimum in Z axis
+double minZ = 999;
+foreach (Point3D frontPoint in frontGridPointCloud.point3Ds)
+{
+    minZ = Math.Min( minZ, frontPoint.z );
+}
+// cancel the offset in the z direction for all points. Otherwise the points are placed at a super far place
+foreach ((Point3D frontPoint, Point3D backPoint) in frontGridPointCloud.point3Ds.Zip(backGridPointCloud.point3Ds))
+{
+    frontPoint.z -= minZ;
+    backPoint.z -= minZ;
 }
 
 Console.WriteLine("Starting SolidWorks Application ...");
