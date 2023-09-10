@@ -10,7 +10,6 @@ static void PromptAndWait(string prompt)
     Console.WriteLine(prompt);
     Console.ReadKey();
 }
-
 static double DegreeToRadian(double angleInDegrees)
 {
     return angleInDegrees / 180.0 * Math.PI;
@@ -32,8 +31,11 @@ void MakeSelectedLineHorizontal(ref ModelDoc2 partModelDoc)
     partModelDoc.SketchAddConstraints("sgHORIZONTAL2D");
 }
 
+void ClearSelection(ref ModelDoc2 partModelDoc)
+    => partModelDoc.ClearSelection2(true);
 
-
+void SelectOrigin(ref ModelDoc2 partModelDoc)
+    => partModelDoc.Extension.SelectByID2("Point1@Origin", "EXTSKETCHPOINT", 0, 0, 0, false, 0, null, 0);
 
 
 Console.WriteLine("Welcome to the LASTRO Solidworks Automation Tool!");
@@ -66,7 +68,6 @@ if ( frontGridPointCloud.point3Ds.Count != backGridPointCloud.point3Ds.Count )
 
 // TODO: optimize. 
 // find minimum in Z axis
-
 Console.WriteLine("Removing offsets in Z axis for all points ...");
 
 double minZ = 999;
@@ -115,7 +116,7 @@ PromptAndWait("Press any key to create part");
 // create a part
 modulePart = solidworksApp.INewDocument2( solidworksApp.GetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplatePart), 0, 0, 0);
 
-PromptAndWait("Press any key to insert 3D sketch");
+//PromptAndWait("Press any key to insert 3D sketch");
 modulePart.SketchManager.Insert3DSketch(true);
 
 // set the view to isometric. The empty string tells solidworks to use the view indicated by the swStandardViews_e enum.
@@ -169,7 +170,6 @@ modulePart.ClearSelection2(true);
 
 PromptAndWait("Press any key to create small segments");
 
-// TODO: find best way to select point pairs
 // According to solidworks api, we need to define a SelectData object and pass it into each selection call.
 SelectionMgr swSelectionManager = (SelectionMgr)modulePart.SelectionManager;
 SelectData swSelectData = (SelectData)swSelectionManager.CreateSelectData();
@@ -242,14 +242,35 @@ SketchArc arc = (SketchArc)modulePart.SketchManager.CreateArc(arcCenterPoint.x, 
                                     arcStartPoint.x, arcStartPoint.y, arcStartPoint.z,
                                     arcEndPoint.x, arcEndPoint.y, arcEndPoint.z,
                                     -1);    // +1 : Go from the start point to the end point in a counter-clockwise direction
-modulePart.ClearSelection2(true);
+ClearSelection(ref modulePart);
+
+// try to constraint the arc's starting point to the origin
+SketchPoint arcStartSketchPoint = (SketchPoint)arc.GetStartPoint2();
+arcStartSketchPoint.Select4(true, swSelectData);
+SelectOrigin(ref modulePart);
+MakeSelectedCoincide(ref modulePart);
+ClearSelection(ref modulePart);
+
+
+// Dimension the arc
+((SketchSegment)arc).Select4(true, swSelectData);
+DisplayDimension arcDisplayDimension = (DisplayDimension)modulePart.AddDimension2(  arcStartPoint.x /2.0 + arcEndPoint.x / 2.0,
+                                                                                    arcStartPoint.y / 2.0,
+                                                                                    arcStartPoint.z / 2.0 + arcEndPoint.z / 2.0 );
+// The Index argument is valid for chamfer display dimensions only. If the display dimension is not a chamfer display dimension, then Index is ignored.
+Dimension arcDimension = arcDisplayDimension.GetDimension2(0);
+arcDimension.SetSystemValue3(arcRadius, (int)swSetValueInConfiguration_e.swSetValue_InThisConfiguration, "");
+
+ClearSelection(ref modulePart);
+
+
 // create vertical line aka the revolution axis
 SketchLine verticalLine = (SketchLine)modulePart.SketchManager.CreateLine(arcStartPoint.x, arcStartPoint.y, arcStartPoint.z, 
                                                                             arcStartPoint.x, 180e-3, 0);
 MakeSelectedLineVertical(ref modulePart);
 modulePart.ClearSelection2(true);
 // try to select the origin and set the revolution axis to be coincident with it
-modulePart.Extension.SelectByID2("Point1@Origin", "EXTSKETCHPOINT", 0, 0, 0, false, 0, null, 0);
+SelectOrigin(ref modulePart);
 SketchPoint verticalLineStartPoint = (SketchPoint)verticalLine.GetStartPoint2();
 verticalLineStartPoint.Select4(true, swSelectData);
 MakeSelectedCoincide(ref modulePart);
@@ -269,7 +290,7 @@ Dimension bottonSurfaceRadiusDimension = bottonSurfaceRadiusDisplayDimension.Get
 bottonSurfaceRadiusDimension.SetSystemValue3(bottomSurfaceRadius, (int)swSetValueInConfiguration_e.swSetValue_InThisConfiguration, "");
 
 modulePart.ClearSelection2(true);
-// create vertical line connecting the top line 
+// create vertical line (outer rim of the boarder) connecting the top line 
 SketchPoint topSurfaceTopRightPoint = (SketchPoint)horizontalLine.GetEndPoint2();
 double outerRimHeight = 200e-3;
 SketchLine verticalLineToArc = (SketchLine)modulePart.SketchManager.CreateLine(topSurfaceTopRightPoint.X, topSurfaceTopRightPoint.Y, topSurfaceTopRightPoint.Z, 
@@ -294,9 +315,34 @@ outerRimHeightDimension.SetSystemValue3(outerRimHeight, (int)swSetValueInConfigu
 modulePart.ClearSelection2(true);
 
 modulePart.SketchManager.AddToDB = false;
+
+// trim the extra arc. This is a preparation step of creating a pizza slice revolution
+((SketchSegment)arc).Select4(true, swSelectData);
+bool trimSuccess = modulePart.SketchManager.SketchTrim((int)swSketchTrimChoice_e.swSketchTrimClosest, arcEndPoint.x, arcEndPoint.y, arcEndPoint.z);
+ClearSelection(ref modulePart);
+
+// DEBUG: try to get the current sketch's name
+Feature currentSketch = (Feature)modulePart.SketchManager.ActiveSketch;
+string pizzaSketchName = currentSketch.Name ;
+
 // quit editing sketch 
 modulePart.SketchManager.InsertSketch(true);
-modulePart.ClearSelection2(true);
+ClearSelection(ref modulePart);
+
+/* Create the first pizza slice */
+// select the sketch to use
+// TODO: possibly create a wrapper function to select sketches and lines
+modulePart.Extension.SelectByID2(pizzaSketchName, "EXTSKETCH", 0, 0, 0, true, 0, null, 0);
+
+// select the axis to revolve. According to API doc, we must select with a specific mark
+swSelectData.Mark = 4;
+((SketchSegment)verticalLine).Select4(true, swSelectData);
+// Revolve the first pizza slice
+Feature pizzaSlice = modulePart.FeatureManager.FeatureRevolve2(true, true, false, false, true, false, 
+                                                0, 0, Math.PI/3, 0, false, false, 0.01, 0.01, 0, 0, 0, true, true, true);
+
+ClearSelection(ref modulePart);
+
 modulePart.ViewZoomtofit2();
 // enbale user input box for dimensions
 solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, true);
