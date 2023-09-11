@@ -32,7 +32,7 @@ It is split in 3 main steps:
 1) Define the coverage of the positioners in 1 module unit
      a) Make the triangular meshgrid of the center position of each robot within a raft
      b) Derive their actual coverage 
-2) Pattern intermediate modul units (4 of them) together
+2) Pattern intermediate module units (4 of them) together
 3) Derive the total grid coverage
 
 Main focal plane parameters that can be tuned in parameters.py:
@@ -62,7 +62,7 @@ BFS = surf.BFS
 """ Global variables """
 nbots = [63, 75, 88, 102]
 # nbots = [75]
-out_allowances = np.arange(0, 0.9, 0.05)
+out_allowances = np.arange(0, 0.95, 0.05)
 # out_allowances = [0]
 width_increase = 0 # [mm] How much we want to increase the base length of a module
 chanfer_length = 10 # [mm] Size of chanfers of module vertices (base value: 7.5)
@@ -75,7 +75,7 @@ intermediate_frame_thick =  1 # [mm] spacing between modules inside intermediate
 
 """ Global frame parameters """
 
-global_frame_thick = 3 # [mm] spacing between modules in global arrangement
+global_frame_thick = 2 # [mm] spacing between modules in global arrangement
 
 """ Protective shields on module """
 
@@ -91,11 +91,11 @@ is_timer = False
 plot_time = 20 # [s] plotting time
 ignore_robots_positions = False
 
-save_plots = True # Save most useful plots drew with *draw* flag
-save_all_plots = True  # Save all plots (including intermediate ones)
-save_frame_as_dxf = True # Save the outline of the frame for Solidworks integration
-save_csv = True # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
-save_txt = True # Save positions of modules along curved focal surface
+save_plots = False # Save most useful plots drew with *draw* flag
+save_all_plots = False  # Save all plots (including intermediate ones)
+save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
+save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
+save_txt = False # Save positions of modules along curved focal surface
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
 saving = param.SavingResults(saving_df)
 
@@ -193,7 +193,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                               }
                          }
           # Create module arrangement from the global grid
-          logging.info(f'Arranging focal plane for {nb_robots} robot case')
+          logging.info(f'Arranging focal plane for {nb_robots} robots case')
           for idx, (rotate, dx, dy, dz) in enumerate(zip(flip_global, grid.x_grid, grid.y_grid, grid.z_grid)):
 
                if rotate:
@@ -391,7 +391,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
           global_dict[key]['useless_robots_list'].append(useless_robots)
           global_dict[key]['useful_robots_list'].append(total_robots - useless_robots)
           global_dict[key]['efficiency_list'].append((total_robots - useless_robots)/total_robots)
-          print(f"Out allowance: {outage} \n", f"Total # modules: {total_modules} \n", f"Total # robots: {total_robots} \n", f"Covergae: {global_coverage}")
+          print(f"Out allowance: {outage} \n", f"Total # modules: {total_modules} \n", f"Total # robots: {total_robots} \n", f"Coverage: {global_coverage}")
 
 #%% 2)d) Project grid on focal surface (BFS as a first try, aspherical will come later)
 
@@ -437,7 +437,8 @@ saving.save_grid_to_txt(back_proj, f'back_grid_indiv_{nb_robots}')
 # %% Plot plot time 
 
 fig = plt.figure(figsize=(8,8))
-figtitle = f"_Module_coverage_raw__{nb_robots}_robots_per_module"
+figtitle = f"Module coverage raw - {nb_robots} robots per module"
+filename = f"__Module_coverage_raw__{nb_robots}_robots_per_module"
 plt.title(figtitle)
 plot_polygon(module, facecolor='None', edgecolor='black', add_points=False)
 plot_polygon(module_w_beta_and_safety_dist, facecolor='None', edgecolor='red', linestyle = '--', add_points=False
@@ -659,6 +660,28 @@ if len(out_allowances) > 1:
      for key in keys:
           plt.plot(global_dict[key]['efficiency_list'], global_dict[key]['local_coverages_list'], '.-', label = f"{global_dict[key]['nbots/module']} robots/module")
      plt.xlabel('Useful robots / Total robots [-]')
+     plt.ylabel('Coverage [%]')
+     plt.grid()
+     plt.legend(shadow = True)
+     saving.save_figures_to_dir(filename)
+
+     fig = plt.figure(figsize=(8,8))
+     filename = "Useless_robots_VS_coverage"
+     plt.title(f'Useless robots VS total robots \n Inner gap {intermediate_frame_thick} mm - Global gap {global_frame_thick} mm')
+     for key in keys:
+          plt.plot(global_dict[key]['useless_robots_list'], global_dict[key]['local_coverages_list'], '.-', label = f"{global_dict[key]['nbots/module']} robots/module")
+     plt.xlabel('Useless robots [-]')
+     plt.ylabel('Coverage [%]')
+     plt.grid()
+     plt.legend(shadow = True)
+     saving.save_figures_to_dir(filename)
+     
+     fig = plt.figure(figsize=(8,8))
+     filename = "Useful_robots_VS_coverage"
+     plt.title(f'Useful robots VS coverage \n Inner gap {intermediate_frame_thick} mm - Global gap {global_frame_thick} mm')
+     for key in keys:
+          plt.plot(global_dict[key]['useful_robots_list'], global_dict[key]['local_coverages_list'], '.-', label = f"{global_dict[key]['nbots/module']} robots/module")
+     plt.xlabel('Useful robots [-]')
      plt.ylabel('Coverage [%]')
      plt.grid()
      plt.legend(shadow = True)

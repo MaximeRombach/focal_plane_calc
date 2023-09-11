@@ -39,6 +39,7 @@ class FocalSurf():
 
           self.vigR = self.focal_surf_param['vigR'] #vignetting radius
           self.BFS = self.focal_surf_param['BFS']
+          self.f_number = self.focal_surf_param['f-number']
 
      def R2Z(self, r):
 
@@ -59,11 +60,12 @@ class FocalSurf():
 
           elif self.project == 'MegaMapper':
                focal_surf_param = {'R': -11067, 
-                                   'vigR': 613.27,
+                                   'vigR': 613.2713,
                                    'k': None,
                                    'a2': None,
                                    'a3': None,
-                                   'BFS': 11045.6 # [mm], radius of BFS
+                                   'BFS': 11045.6, # [mm], radius of BFS
+                                   'f-number': 3.57
                                    }
 
           elif self.project == 'DESI':
@@ -139,7 +141,7 @@ class SavingResults:
      def path_to_results_dir(self):
 
           script_dir = os.path.dirname(__file__)
-          results_dir_path = os.path.join(script_dir, 'Results/')
+          results_dir_path = os.path.join(script_dir, 'Results_examples/')
 
           if not os.path.isdir(results_dir_path):
                os.makedirs(results_dir_path)

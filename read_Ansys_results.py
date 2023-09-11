@@ -22,7 +22,7 @@ Output:
     - TBD: Figure: frame thickness vs average stress (max stress is influenced by stress concentration, good to have average stress to check coherence)
 
 """
-filename = "./Results/turbo_table_data4.csv"
+filename = "./Results/turbo_table_data5.csv"
 comment_prefix = "#"  # Set this to the comment prefix used in your file
 separator = ","
 
@@ -49,7 +49,7 @@ df = pd.DataFrame(data)
 df.drop([0,1],inplace=True)
 df.drop([0,1,2], axis=1, inplace=True)
 print(df) 
-df.columns = ['Frame thickness', 'def63', 'def102', 'maxstress102', 'def75_nulle', 'maxstress63', 'avstress63', 'avstress102', 'maxstress75', 'avstress75', 'def75']
+df.columns = ['Frame thickness', 'def63', 'def102', 'maxstress102', 'maxstress63', 'avstress63', 'avstress102', 'def75', 'maxstress75', 'avstress75']
 df.sort_values(by=['Frame thickness'], ascending = True, inplace = True)
 
 
