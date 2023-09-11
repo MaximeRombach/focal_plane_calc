@@ -16,24 +16,40 @@ static double DegreeToRadian(double angleInDegrees)
 }
 
 // some scaffold functions. So far none of the functions clears selection. So the user should remember to manually clear selection
+/*
+    Wrapper function to make selected segments coincident
+    Note that this function doesn't check if the selected segments are valid to be make coincident with each others.
+ */
 void MakeSelectedCoincide(ref ModelDoc2 partModelDoc)
 {
     partModelDoc.SketchAddConstraints("sgCOINCIDENT");
 }
 
+/*
+    Wrapper function to make a selected line vertical. 
+    Note that this function doesn't check if the selected is a line or something else. 
+    TODO: add check to make sure the selected item is a valid line
+ */
 void MakeSelectedLineVertical(ref ModelDoc2 partModelDoc)
 {
     partModelDoc.SketchAddConstraints("sgVERTICAL2D");
 }
 
+/*
+    Wrapper function to make a selected line horizontal. 
+    Note that this function doesn't check if the selected is a line or something else. 
+    TODO: add check to make sure the selected item is a valid line
+ */
 void MakeSelectedLineHorizontal(ref ModelDoc2 partModelDoc)
 {
     partModelDoc.SketchAddConstraints("sgHORIZONTAL2D");
 }
 
+// Wrapper function to clear selection
 void ClearSelection(ref ModelDoc2 partModelDoc)
     => partModelDoc.ClearSelection2(true);
 
+// Wrapper function to select the origin
 void SelectOrigin(ref ModelDoc2 partModelDoc)
     => partModelDoc.Extension.SelectByID2("Point1@Origin", "EXTSKETCHPOINT", 0, 0, 0, false, 0, null, 0);
 
@@ -107,12 +123,11 @@ if (solidworksApp == null)
 }
 
 solidworksApp.Visible = true;
-Console.WriteLine("SolidWorks should appear. If not, there is an error starting solidworks");
+Console.WriteLine("Please wait a bit. SolidWorks should appear. If not, there is an error starting solidworks");
 
-// create part file. Seems fine
-PromptAndWait("Press any key to create part");
+/* Start modeling the robot holder in the focal plane */
+PromptAndWait("Press any key to create the robot-holder from the point clouds");
 
-/* Start modeling */
 // create a part
 modulePart = solidworksApp.INewDocument2( solidworksApp.GetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplatePart), 0, 0, 0);
 
@@ -122,8 +137,6 @@ modulePart.SketchManager.Insert3DSketch(true);
 // set the view to isometric. The empty string tells solidworks to use the view indicated by the swStandardViews_e enum.
 modulePart.ShowNamedView2("", (int)swStandardViews_e.swIsometricView);
 
-PromptAndWait("Press any key to create point clouds and axes of extrusions");
-
 // disable user input box when adding dimensions
 solidworksApp.SetUserPreferenceToggle( (int)swUserPreferenceToggle_e.swInputDimValOnCreate, false );
 // disable view refreshing until points are created
@@ -131,11 +144,11 @@ modelView =(ModelView)modulePart.GetFirstModelView();
 modelView.EnableGraphicsUpdate = false;
 modulePart.SketchManager.AddToDB = true;
 
-// try diabling feature tree updates
+// try diabling feature tree updates to gain performance
 modulePart.FeatureManager.EnableFeatureTree = false;
 
 // try to allocate space for front sketchpoints and back sketchpoints
-List<SketchPoint> frontSketchPointList = new List<SketchPoint>( frontGridPointCloud.point3Ds.Count );
+List<SketchPoint> frontSketchPointList = new List<SketchPoint>(frontGridPointCloud.point3Ds.Count);
 List<SketchPoint> backSketchPointList = new List<SketchPoint>(backGridPointCloud.point3Ds.Count);
 List<SketchSegment> extrusionAxisList = new List<SketchSegment>(frontSketchPointList.Count);
 
@@ -150,9 +163,9 @@ foreach ( (Point3D frontPoint, Point3D backPoint) in frontGridPointCloud.point3D
     extrusionAxisList.Add( modulePart.SketchManager.CreateLine(frontPoint.x , frontPoint.y , frontPoint.z, backPoint.x, backPoint.y, backPoint.z) );
     // using fancy but convenient index-from-end operator (^), which is available in C# 8.0 and later, to get the last element in a list.
     extrusionAxisList[^1 ].ConstructionGeometry = true;
-
 }
 
+// EnableGraphicsUpdate affects whether to refresh the model view during a selection, such as IEntity::Select4 or IFeature::Select2.
 modelView.EnableGraphicsUpdate = true;
 
 // Sometimes the camera is not pointing toward the part. So repoint the camera to the part.
@@ -162,18 +175,19 @@ modulePart.ViewZoomtofit2();
 modulePart.SketchManager.Insert3DSketch(true);
 
 // magic clear selection method
-modulePart.ClearSelection2(true);
+ClearSelection(ref modulePart);
 
 // create another 3D sketch so that the extrusion axes are untouched
 modulePart.SketchManager.Insert3DSketch(true);
-modulePart.ClearSelection2(true);
+ClearSelection(ref modulePart);
 
 PromptAndWait("Press any key to create small segments");
 
 // According to solidworks api, we need to define a SelectData object and pass it into each selection call.
 SelectionMgr swSelectionManager = (SelectionMgr)modulePart.SelectionManager;
-SelectData swSelectData = (SelectData)swSelectionManager.CreateSelectData();
+SelectData swSelectData = swSelectionManager.CreateSelectData();
 
+// EnableGraphicsUpdate affects whether to refresh the model view during a selection, such as IEntity::Select4 or IFeature::Select2.
 modelView.EnableGraphicsUpdate = false;
 
 // Define small segment length
@@ -189,10 +203,10 @@ foreach ((SketchPoint frontSketchPoint, SketchPoint backSketchPoint, SketchSegme
 
     // constraint the point to be on coincide with the extrusion axis. Assuming the smallSegmentSketchPoint is already selected after creation
     extrusionAxis.Select4(true, swSelectData);
-    modulePart.SketchAddConstraints("sgCOINCIDENT");
-    
+    MakeSelectedCoincide(ref modulePart);
+
     // clear previous selections, so that no unintentional selection
-    modulePart.ClearSelection2(true);
+    ClearSelection(ref modulePart);
 
     // add a length dimension to the small segment
     frontSketchPoint.Select4(true, swSelectData);
@@ -203,7 +217,7 @@ foreach ((SketchPoint frontSketchPoint, SketchPoint backSketchPoint, SketchSegme
     Dimension smallSegmentDimension = smallSegmentDisplayDimension.GetDimension2(0);
     smallSegmentDimension.SetSystemValue3(smallSegmentLength, (int)swSetValueInConfiguration_e.swSetValue_InThisConfiguration, "");
 
-    modulePart.ClearSelection2(true);
+    ClearSelection(ref modulePart);
 }
 // enbale user input box for dimensions
 solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, true);
@@ -214,12 +228,12 @@ modelView.EnableGraphicsUpdate = true;
 modulePart.FeatureManager.EnableFeatureTree = true;
 
 modulePart.SketchManager.Insert3DSketch(true);
-modulePart.ClearSelection2(true);
+ClearSelection(ref modulePart);
 modulePart.ViewZoomtofit2();
 
 modulePart.SketchManager.AddToDB = true;
 
-PromptAndWait("Press any key to extrude a pizza");
+PromptAndWait("Press any key to revolve a pizza slice");
 // define variables needed for pizza creation
 double arcRadius = 11045.6e-3;    // in meters
 //double arcAngle = Math.PI/12;
@@ -251,7 +265,6 @@ SelectOrigin(ref modulePart);
 MakeSelectedCoincide(ref modulePart);
 ClearSelection(ref modulePart);
 
-
 // Dimension the arc
 ((SketchSegment)arc).Select4(true, swSelectData);
 DisplayDimension arcDisplayDimension = (DisplayDimension)modulePart.AddDimension2(  arcStartPoint.x /2.0 + arcEndPoint.x / 2.0,
@@ -268,14 +281,14 @@ ClearSelection(ref modulePart);
 SketchLine verticalLine = (SketchLine)modulePart.SketchManager.CreateLine(arcStartPoint.x, arcStartPoint.y, arcStartPoint.z, 
                                                                             arcStartPoint.x, 180e-3, 0);
 MakeSelectedLineVertical(ref modulePart);
-modulePart.ClearSelection2(true);
+ClearSelection(ref modulePart);
 // try to select the origin and set the revolution axis to be coincident with it
 SelectOrigin(ref modulePart);
 SketchPoint verticalLineStartPoint = (SketchPoint)verticalLine.GetStartPoint2();
 verticalLineStartPoint.Select4(true, swSelectData);
 MakeSelectedCoincide(ref modulePart);
 
-modulePart.ClearSelection2(true);
+ClearSelection(ref modulePart);
 
 // create horizontal line (for flat bottom surface)
 double bottomSurfaceRadius = 663.27e-3;
@@ -289,21 +302,21 @@ DisplayDimension bottonSurfaceRadiusDisplayDimension = (DisplayDimension)moduleP
 Dimension bottonSurfaceRadiusDimension = bottonSurfaceRadiusDisplayDimension.GetDimension2(0);
 bottonSurfaceRadiusDimension.SetSystemValue3(bottomSurfaceRadius, (int)swSetValueInConfiguration_e.swSetValue_InThisConfiguration, "");
 
-modulePart.ClearSelection2(true);
+ClearSelection(ref modulePart);
 // create vertical line (outer rim of the boarder) connecting the top line 
 SketchPoint topSurfaceTopRightPoint = (SketchPoint)horizontalLine.GetEndPoint2();
 double outerRimHeight = 200e-3;
 SketchLine verticalLineToArc = (SketchLine)modulePart.SketchManager.CreateLine(topSurfaceTopRightPoint.X, topSurfaceTopRightPoint.Y, topSurfaceTopRightPoint.Z, 
                                                                                 topSurfaceTopRightPoint.X, -outerRimHeight, 0);
 MakeSelectedLineVertical(ref modulePart);
-modulePart.ClearSelection2(true);
+ClearSelection(ref modulePart);
 
 // make vertical line coincide with the arc
 SketchPoint verticalLineToArcEndPoint = (SketchPoint)verticalLineToArc.GetEndPoint2();
 verticalLineToArcEndPoint.Select4(true, swSelectData);
 ((SketchSegment)arc).Select4(true, swSelectData);
 MakeSelectedCoincide(ref modulePart);
-modulePart.ClearSelection2(true);
+ClearSelection(ref modulePart);
 
 // add constraint to outer rim height
 // Note: before calling AddDimension2(), we must select the entity to be dimensioned
@@ -312,7 +325,7 @@ DisplayDimension outerRimHeightDisplayDimension = (DisplayDimension)modulePart.A
 // The Index argument is valid for chamfer display dimensions only. If the display dimension is not a chamfer display dimension, then Index is ignored.
 Dimension outerRimHeightDimension = outerRimHeightDisplayDimension.GetDimension2(0);
 outerRimHeightDimension.SetSystemValue3(outerRimHeight, (int)swSetValueInConfiguration_e.swSetValue_InThisConfiguration, "");
-modulePart.ClearSelection2(true);
+ClearSelection(ref modulePart);
 
 modulePart.SketchManager.AddToDB = false;
 
@@ -322,8 +335,7 @@ bool trimSuccess = modulePart.SketchManager.SketchTrim((int)swSketchTrimChoice_e
 ClearSelection(ref modulePart);
 
 // DEBUG: try to get the current sketch's name
-Feature currentSketch = (Feature)modulePart.SketchManager.ActiveSketch;
-string pizzaSketchName = currentSketch.Name ;
+string pizzaSketchName = ((Feature)modulePart.SketchManager.ActiveSketch).Name;
 
 // quit editing sketch 
 modulePart.SketchManager.InsertSketch(true);
