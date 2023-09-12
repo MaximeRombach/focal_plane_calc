@@ -32,25 +32,42 @@ class FocalSurf():
           self.focal_surf_param = self.set_surface_parameters()
 
           self.R = self.focal_surf_param['R'] #curvature radius of focal plane
-          self.k = self.focal_surf_param['k']
-          self.a2 = self.focal_surf_param['a2']
-          self.a3 = self.focal_surf_param['a3']
-          self.c = 1/self.R
+          self.asph_formula = self.focal_surf_param['asph_formula'] # Checks the presence or not of aspherical coefficients
+          if self.asph_formula: # Store spherical focal plane parameters if known
+               
+               self.k = self.focal_surf_param['k']
+               self.a2 = self.focal_surf_param['a2']
+               self.a3 = self.focal_surf_param['a3']
+               self.c = 1/self.R
+               self.asph_coeff = [self.k, self.a2, self.a3]
 
-          self.vigR = self.focal_surf_param['vigR'] #vignetting radius
+          self.vigR = self.focal_surf_param['vigR'] # vignetting radius
           self.BFS = self.focal_surf_param['BFS']
           self.f_number = self.focal_surf_param['f-number']
+          
+     def asph_R2Z(self):
+          """ 
+          Returns the aspherical focal plane curve from the aspherical coefficients
 
-     def R2Z(self, r):
+          Input:
+                    - r: radial position on focal plane
+          Output:   
+                    - z: height position on focal plane
+          """
+          if self.focal_surf_param['asph_formula']:
+               main_term = lambda r: self.c * np.power(r, 2) / (1 + np.sqrt(1 - (1 + self.k) * self.c**2 * np.power(r, 2)))
+               secondary_terms = lambda r: self.a2 * np.power(r, 4) + self.a3 * np.power(r, 6)
+               return lambda r: main_term(r) + secondary_terms(r)
+          else:
+               return print('Aspherical coefficients not defined for this project \n Taking sampled data from csv file instead')
 
-          return self.c*r**2 / (1 + np.sqrt(1 - (1+self.k) * self.c**2 * r**2)) + self.a2 * r**4 + self.a2 * r**6
-     
      def set_surface_parameters(self):
 
           if self.project == 'MUST':
                focal_surf_param = {'R': -11088.4, # [mm], curvature radius
                                    'vigD': 1047.16,
                                    'vigR': 1047.16/2, # [mm], vignetting
+                                   'asph_formula': True,
                                    'k': 0, 
                                    'a2': -2.18895e-12, 
                                    'a3': 6.11195e-18,
@@ -61,9 +78,7 @@ class FocalSurf():
           elif self.project == 'MegaMapper':
                focal_surf_param = {'R': -11067, 
                                    'vigR': 613.2713,
-                                   'k': None,
-                                   'a2': None,
-                                   'a3': None,
+                                   'asph_formula': False,
                                    'BFS': 11045.6, # [mm], radius of BFS
                                    'f-number': 3.57
                                    }
@@ -71,35 +86,36 @@ class FocalSurf():
           elif self.project == 'DESI':
                focal_surf_param = {'R': -11067, 
                                    'vigR': 406.,
-                                   'k': None,
-                                   'a2': None,
-                                   'a3': None,
-                                   'BFS': 11067 # [mm], radius of BFS
+                                   'asph_formula': False,
+                                   'BFS': 11067 # [mm], radius of BFS,
                                    }
           else: 
                logging.error('ERROR setting focal surface param: unknown project')
 
+          
+
           return focal_surf_param
      
-     # def calc_BFS(self):
+     def calc_BFS(self, r, z):
 
-     #      # From generate_raft_layout.py code written by Joseph Silber
-     #      # best-fit sphere
-     #      calc_sphR = lambda z_ctr: (r**2 + (z - z_ctr)**2)**0.5
-     #      def calc_sphR_err(z_ctr):
-     #           sphR_test = calc_sphR(z_ctr)
-     #           errors = sphR_test - np.mean(sphR_test)
-     #           scalar_error = np.sum(np.power(errors, 2))
-     #           return scalar_error
-     #      typical_fov = 3.0  # deg
-     #      z_guess = np.sign(np.mean(z)) * np.max(r) / np.radians(typical_fov/2)
-     #      result = optimize.least_squares(fun=calc_sphR_err, x0=z_guess)
-     #      z_ctr = float(result.x)
-     #      sphR = abs(z_ctr)
-     #      is_convex = np.sign(z_ctr) < 1  # convention where +z is toward the fiber tips
-     #      sphR_sign = -1 if is_convex else +1
+          # Courtesy of Joseph Silber from generate_raft_layout.py code in https://github.com/joesilber/raft-design 
+          # best-fit sphere
+          calc_sphR = lambda z_ctr: (r**2 + (z - z_ctr)**2)**0.5
+          def calc_sphR_err(z_ctr):
+               sphR_test = calc_sphR(z_ctr) 
+               errors = sphR_test - np.mean(sphR_test) 
+               scalar_error = np.sum(np.power(errors, 2)) # metric for optimization 
+               return scalar_error
+          typical_fov = 3.0  # deg
+          z_guess = np.sign(np.mean(z)) * np.max(r) / np.radians(typical_fov/2)
+          result = optimize.least_squares(fun=calc_sphR_err, x0=z_guess)
+          z_ctr = float(result.x) # signed BFS radius
+          sphR = abs(z_ctr) # unsigned BFS radius
+          # is_convex = np.sign(z_ctr) < 1  # convention where +z is toward the fiber tips
+          # sphR_sign = -1 if is_convex else +1
+          logging.info(f"Best-fit sphere radius: {sphR:.3f} mm")
 
-     #      return sphR
+          return sphR
      
      def make_vigR_polygon(self, pizza_angle = 360,  n_vigR = 500):
      
