@@ -27,3 +27,5 @@ The goal of this program is to study the impact of locally changing the gap betw
 ## Total coverage
 
 The modules are then placed 4 by 4 (in green) in the focal plane bounded by its vignetting radius (*vigR*). Individual modules (in blue) are used as we get closer to the edge of the vigR, more can be inserted as we increase the *out_allowance* parameter, which sets how much the workspace of a module is allowed to stick out of vigR.
+
+![](Results_examples/2023-08-30-10-28-16___Coverage_global_102_rob__Inner_1_mm__Global_3_mm.png)
