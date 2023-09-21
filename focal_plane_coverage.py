@@ -32,14 +32,14 @@ It is split in 3 main steps:
 1) Define the coverage of the positioners in 1 module unit
      a) Make the triangular meshgrid of the center position of each robot within a raft
      b) Derive their actual coverage 
-2) Pattern intermediate modul units (4 of them) together
+2) Pattern intermediate module units (4 of them) together
 3) Derive the total grid coverage
 
 Main focal plane parameters that can be tuned in parameters.py:
 
 - nb_robots : 63, 75, 102 (per module), all automatically associated to an adapted module size
-- intermediate_frame_thick [mm]: gap between modules inside intermediate triangle
-- global_frame_thick [mm]: gap between intermediate triangles in global frame (if inter = global, equivalent to framed cas)
+- inner_gap [mm]: gap between modules inside intermediate triangle
+- global_gap [mm]: gap between intermediate triangles in global frame (if inter = global, equivalent to framed cas)
 
 The effective coverage is calculated as the usable positioner area vs total area of vigR (for comparison purposes)
 """
@@ -60,10 +60,12 @@ vigR = surf.vigR
 BFS = surf.BFS
 
 """ Global variables """
-nbots = [63, 75, 88, 102]
-# nbots = [75]
-out_allowances = np.arange(0, 0.9, 0.05)
-# out_allowances = [0]
+
+# nbots = [63, 75, 88, 102] # number of robots per module
+nbots = [75]
+# out_allowances = np.arange(0, 0.95, 0.05) # how much is a module allowed to stick out of vigR (max value)
+out_allowances = [0.5]
+
 width_increase = 0 # [mm] How much we want to increase the base length of a module
 chanfer_length = 10 # [mm] Size of chanfers of module vertices (base value: 7.5)
 centered_on_triangle = False # move the center of the grid (red dot) on the centroid on a triangle instead of the edge
@@ -71,17 +73,17 @@ full_framed = False # flag to check wether we are in semi frameless or in full f
 
 """ Intermediate frame parameters """
 
-intermediate_frame_thick =  1 # [mm] spacing between modules inside intermediate frame
+inner_gap =  1 # [mm] spacing between modules inside intermediate frame
 
 """ Global frame parameters """
 
-global_frame_thick = 3 # [mm] spacing between modules in global arrangement
+global_gap = 3 # [mm] spacing between modules in global arrangement
 
 """ Protective shields on module """
 
 is_wall = True # [bool] puts walls or not on modules (changes greatly coverage)
 
-if intermediate_frame_thick == global_frame_thick and intermediate_frame_thick != 0:
+if inner_gap == global_gap and inner_gap != 0:
      full_framed = True
 
 """ Drawing parameters """
@@ -91,11 +93,11 @@ is_timer = False
 plot_time = 20 # [s] plotting time
 ignore_robots_positions = False
 
-save_plots = True # Save most useful plots drew with *draw* flag
-save_all_plots = True  # Save all plots (including intermediate ones)
-save_frame_as_dxf = True # Save the outline of the frame for Solidworks integration
-save_csv = True # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
-save_txt = True # Save positions of modules along curved focal surface
+save_plots = False # Save most useful plots drew with *draw* flag
+save_all_plots = False  # Save all plots (including intermediate ones)
+save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
+save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
+save_txt = False # Save positions of modules along curved focal surface
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
 saving = param.SavingResults(saving_df)
 
@@ -106,7 +108,7 @@ gfa = param.GFA(length = 33.3*gfa_tune, width = 61*gfa_tune, nb_gfa = nb_gfa, vi
 gdf_gfa = gfa.gdf_gfa
 polygon_gfa = MultiPolygon(list(gdf_gfa['geometry']))
 
-logging.info(f'Loaded parameters: \n - Surface:  {project_surface} \n - Inter gap: {intermediate_frame_thick} mm & Global gap: {global_frame_thick} mm \n - {nbots} robots/module')
+logging.info(f'Loaded parameters: \n - Surface:  {project_surface} \n - Inter gap: {inner_gap} mm & Global gap: {global_gap} mm \n - {nbots} robots/module')
 """ Data storage """
 keys = []
 
@@ -142,7 +144,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
 
      # %% 2)a) Meshing the grid for intermediate frame (4 triangles: 3 upwards + 1 downwards)
 
-     inter_param = param.IntermediateTriangle(module_collection, mod_param.module_width, intermediate_frame_thick)
+     inter_param = param.IntermediateTriangle(module_collection, mod_param.module_width, inner_gap)
      intermediate_collection, intermediate_collection_speed, intermediate_coverage, inter_df = inter_param.create_intermediate_triangle()
 
      # x_inter = inter_df['inter_modules']['centroids'][:,0]
@@ -156,13 +158,13 @@ for nb_robots in nbots: # iterate over number of robots/module cases
 
      # %% 2)b) Start meshing the grid for the whole thing
 
-     # inter_frame_width = 2*module_width + 2*intermediate_frame_thick*np.cos(np.deg2rad(30))+2*global_frame_thick
-     inter_frame_width = 2*module_width + 2*intermediate_frame_thick*np.cos(np.deg2rad(30)) + 2*global_frame_thick*np.cos(np.deg2rad(30))
+     # inter_frame_width = 2*module_width + 2*inner_gap*np.cos(np.deg2rad(30))+2*global_gap
+     inter_frame_width = 2*module_width + 2*inner_gap*np.cos(np.deg2rad(30)) + 2*global_gap*np.cos(np.deg2rad(30))
      rho = inter_frame_width * np.sqrt(3)/6
      dist_global = 2*rho
      inter_centroid = inter_frame_width*np.sqrt(3)/3*np.array([np.cos(np.deg2rad(30)), np.sin(np.deg2rad(30))])
 
-     grid = param.Grid(module_width, intermediate_frame_thick, global_frame_thick, vigR, R)
+     grid = param.Grid(module_width, inner_gap, global_gap, vigR, R)
      grid_df = grid.grid_df
      grid.plot_2D_grid()
 
@@ -193,7 +195,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                               }
                          }
           # Create module arrangement from the global grid
-          logging.info(f'Arranging focal plane for {nb_robots} robot case')
+          logging.info(f'Arranging focal plane for {nb_robots} robots case')
           for idx, (rotate, dx, dy, dz) in enumerate(zip(flip_global, grid.x_grid, grid.y_grid, grid.z_grid)):
 
                if rotate:
@@ -216,19 +218,10 @@ for nb_robots in nbots: # iterate over number of robots/module cases
 
                # Flags 
                sticks_out = new_boundary.overlaps(pizza) # a portion of the int triangle sticks out
-               # int_centroid_out = np.sqrt(dx**2 + dy**2) > vigR # centroid of intermediate triangle out of vigR
                int_centroid_out = not Point(dx,dy).within(pizza)
 
                # Is on GFA?
                int_overlaps_GFA = new_boundary.overlaps(polygon_gfa)
-               
-               # closest_gfa_index = gfa.closest_gfa(new_centroid) # determine closest gfa to the current grid position
-               # closest_gfa = gdf_gfa.at[closest_gfa_index, "geometry"] # extract closest gfa polygon for overlapping testing
-
-               # int_tri_overlaps_gfa = new_boundary.overlaps(closest_gfa)
-               # plot_polygon(new_modules)
-               # param.plot_vigR_poly(pizza)
-               # plt.show()
 
                if not fill_empty and sticks_out:
                     color_boundary = 'red'
@@ -299,7 +292,6 @@ for nb_robots in nbots: # iterate over number of robots/module cases
 
                     # Check if empty list; skip case if True (corrects huge bug)
                     if not temp_mod: 
-                         
                          continue
                     if len(temp_mod) == 4:
                          color_boundary = 'green'
@@ -317,8 +309,8 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                     if not xx or not yy:
                          new_boundary = new_modules
                     else:
-                         # new_boundary = Polygon(param.sort_points_for_polygon_format(xx, yy, temp_cent))
-                         new_boundary = new_modules
+                         # new_boundary = Polygon(param.sort_points_for_polygon_format(xx, yy, temp_cent)) # display bug of blue boundaries but to keep for generating frame outline
+                         new_boundary = new_modules # corrects dispaly bug of blue boundaries 
 
                if full_framed: # boundaries are the individual modules frontiers for the full framed case
                     new_boundary = new_modules
@@ -391,7 +383,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
           global_dict[key]['useless_robots_list'].append(useless_robots)
           global_dict[key]['useful_robots_list'].append(total_robots - useless_robots)
           global_dict[key]['efficiency_list'].append((total_robots - useless_robots)/total_robots)
-          print(f"Out allowance: {outage} \n", f"Total # modules: {total_modules} \n", f"Total # robots: {total_robots} \n", f"Covergae: {global_coverage}")
+          print(f"Out allowance: {outage} \n", f"Total # modules: {total_modules} \n", f"Total # robots: {total_robots} \n", f"Coverage: {global_coverage} %")
 
 #%% 2)d) Project grid on focal surface (BFS as a first try, aspherical will come later)
 
@@ -437,7 +429,8 @@ saving.save_grid_to_txt(back_proj, f'back_grid_indiv_{nb_robots}')
 # %% Plot plot time 
 
 fig = plt.figure(figsize=(8,8))
-figtitle = f"_Module_coverage_raw__{nb_robots}_robots_per_module"
+figtitle = f"Module coverage raw - {nb_robots} robots per module"
+filename = f"__Module_coverage_raw__{nb_robots}_robots_per_module"
 plt.title(figtitle)
 plot_polygon(module, facecolor='None', edgecolor='black', add_points=False)
 plot_polygon(module_w_beta_and_safety_dist, facecolor='None', edgecolor='red', linestyle = '--', add_points=False
@@ -473,7 +466,7 @@ if save_all_plots:
      saving.save_figures_to_dir(filename)
 
 plt.figure(figsize=(10,10))
-figtitle = f"Intermediate frame - {nb_robots} robots per module \n Inner gap: {intermediate_frame_thick} mm \n Total # modules: 4 - Total # robots: {nb_robots*4}"
+figtitle = f"Intermediate frame - {nb_robots} robots per module \n Inner gap: {inner_gap} mm \n Total # modules: 4 - Total # robots: {nb_robots*4}"
 filename = f"__Intermediate_plot_{nb_robots}_robots_per_mod"
 plt.title(figtitle)
 param.plot_intermediate(intermediate_collection, nb_robots, False, intermediate_coverage, draw_legend = True)
@@ -484,7 +477,7 @@ plt.legend(shadow = True)
 if save_all_plots:
      saving.save_figures_to_dir(filename)
 
-if global_frame_thick > 0:
+if global_gap > 0:
      
      key_frame = keys[-1]
      # key_frame ='n75'
@@ -497,13 +490,11 @@ if global_frame_thick > 0:
      f, ax = plt.subplots(figsize=(10, 10))
      f.suptitle(figtitle)
 
-     
      frame=pizza.buffer(extra_material_for_frame).difference(GeometryCollection(list(global_dict[key_frame]['boundaries_df']['geometry']))) 
      frame_ishish = unary_union(global_dict[key_frame]['boundaries_df']['geometry'])
      gdf_gfa.plot(ax=ax,facecolor = 'None', edgecolor=gdf_gfa['color'], linestyle='--', legend = True, label = 'GFA')
-     # gdf_final_grid_int.plot(ax=ax)
-     
-     plot_polygon(frame, ax=ax, add_points=False, facecolor='red', alpha = 0.2, edgecolor = 'black', label=f'Wall thickness = {global_frame_thick} mm')
+
+     plot_polygon(frame, ax=ax, add_points=False, facecolor='red', alpha = 0.2, edgecolor = 'black', label=f'Wall thickness = {global_gap} mm')
      surf.plot_vigR_poly(pizza, ax=ax, label = f'vigD = {2*vigR} mm')
      ax.set_xlabel('x position [mm]')
      ax.set_ylabel('y position [mm]')
@@ -513,20 +504,23 @@ if global_frame_thick > 0:
      figtitle = f'__Frame_to_manufacture__{robots}_robots_per_module__{modules}_modules'
      filename = figtitle
 
-     f, ax = plt.subplots(figsize=(10, 10))     
-     plot_polygon(frame, ax=ax, add_points=False, facecolor='red', alpha = 0.2, edgecolor = 'black')
-     ax.spines['top'].set_visible(False)
-     ax.spines['right'].set_visible(False)
-     ax.spines['left'].set_visible(False)
-     ax.spines['bottom'].set_visible(False)
-     ax.axes.get_xaxis().set_visible(False)
-     ax.axes.get_yaxis().set_visible(False)
-     to_dxf_dict['frame'] = frame_ishish
-     saving.save_dxf_to_dir(to_dxf_dict, f'frame_{robots}_robots_{modules}_modules')     
+     if save_frame_as_dxf: # if frame saved to dx, make a plot of the saved frame outline
+
+          f, ax = plt.subplots(figsize=(10, 10))     
+          plot_polygon(frame, ax=ax, add_points=False, facecolor='red', alpha = 0.2, edgecolor = 'black')
+          ax.spines['top'].set_visible(False)
+          ax.spines['right'].set_visible(False)
+          ax.spines['left'].set_visible(False)
+          ax.spines['bottom'].set_visible(False)
+          ax.axes.get_xaxis().set_visible(False)
+          ax.axes.get_yaxis().set_visible(False)
+          to_dxf_dict['frame'] = frame_ishish
+          saving.save_dxf_to_dir(to_dxf_dict, f'frame_{robots}_robots_{modules}_modules')
+          ax.set_title('Outline saved to DXF file')     
      
 
-figtitle = param.final_title(nb_robots, total_modules, total_robots, intermediate_frame_thick, global_frame_thick, allow_small_out, out_allowance)
-filename = f"__Coverage global_{nb_robots}_rob__Inner_{intermediate_frame_thick}_mm__Global_{global_frame_thick}_mm"
+figtitle = param.final_title(nb_robots, total_modules, total_robots, inner_gap, global_gap, allow_small_out, out_allowance)
+filename = f"__Coverage global_{nb_robots}_rob__Inner_{inner_gap}_mm__Global_{global_gap}_mm"
 f, ax= plt.subplots(figsize=(10, 10), sharex = True, sharey=True)
 f.suptitle(figtitle)
 gdf_modules.plot(ax=ax,facecolor='None',edgecolor=gdf_modules['color'])
@@ -545,7 +539,7 @@ if save_csv:
           indiv_pos_df['y [mm]'].append(point.y)
           indiv_pos_df['geometry'].append(point)
      now = datetime.now()
-     info_case = f"{nb_robots}_robots-per-module_{total_robots}_robots_{intermediate_frame_thick}_inner_gap_{global_frame_thick}_global_gap"
+     info_case = f"{nb_robots}_robots-per-module_{total_robots}_robots_{inner_gap}_inner_gap_{global_gap}_global_gap"
      csv_filename = now.strftime("%Y-%m-%d-%H-%M-%S_") + info_case + ".csv"
      gpd.GeoDataFrame(indiv_pos_df).to_csv(saving.results_dir_path() + csv_filename, index_label = 'robot_number', sep = ";", decimal = ".", header='BONJOUR')
      # TBI: robot pos accounting for focal plane curvature
@@ -559,8 +553,8 @@ gdf_gfa.plot(ax=ax,facecolor = 'None', edgecolor=gdf_gfa['color'], linestyle='--
 saving.save_figures_to_dir(filename)
 
 if len(nbots)>1: # Useless to do multiple plots for only one case
-     figtitle = param.final_title(nb_robots, total_modules, total_robots, intermediate_frame_thick, global_frame_thick, allow_small_out, out_allowance, disp_robots_info=False)
-     filename = f"Summary of coverages for inner {intermediate_frame_thick} and global {global_frame_thick}"
+     figtitle = param.final_title(nb_robots, total_modules, total_robots, inner_gap, global_gap, allow_small_out, out_allowance, disp_robots_info=False)
+     filename = f"Summary of coverages for inner {inner_gap} and global {global_gap}"
      f, axes= plt.subplots(nrows=2,ncols=2, figsize=(12, 12), sharex = True, sharey=True)
      f.suptitle(figtitle)
      axes = axes.flatten()
@@ -611,7 +605,7 @@ gdf_robots_indiv.plot(ax=ax,markersize=0.1)
 if len(out_allowances) > 1:
      fig = plt.figure(figsize=(8,8))
      filename = "Coverage_VS_out_allowance"
-     plt.title(f'Focal plane coverage VS out allowance of modules \n Inner gap {intermediate_frame_thick} mm - Global gap {global_frame_thick} mm')
+     plt.title(f'Focal plane coverage VS out allowance of modules \n Inner gap {inner_gap} mm - Global gap {global_gap} mm')
      for key in keys:
           plt.plot(np.array(out_allowances)*100, global_dict[key]['local_coverages_list'], '.-', label = f"{global_dict[key]['nbots/module']} robots/module")
      plt.xlabel('Out allowance [%]')
@@ -622,7 +616,7 @@ if len(out_allowances) > 1:
 
      fig = plt.figure(figsize=(8,8))
      filename = "Robots_VS_out_allowance"
-     plt.title(f'Total robots VS out allowance of modules \n Inner gap {intermediate_frame_thick} mm - Global gap {global_frame_thick} mm')
+     plt.title(f'Total robots VS out allowance of modules \n Inner gap {inner_gap} mm - Global gap {global_gap} mm')
      for key in keys:
           plt.plot(np.array(out_allowances)*100, global_dict[key]['local_total_robots_list'], '.-', label = f"{global_dict[key]['nbots/module']} robots/module")
      plt.xlabel('Out allowance [%]')
@@ -633,7 +627,7 @@ if len(out_allowances) > 1:
 
      fig = plt.figure(figsize=(8,8))
      filename = "Robots_VS_Coverage"
-     plt.title(f'Focal plane coverage VS total robots \n Inner gap {intermediate_frame_thick} mm - Global gap {global_frame_thick} mm')
+     plt.title(f'Focal plane coverage VS total robots \n Inner gap {inner_gap} mm - Global gap {global_gap} mm')
      for key in keys:
           plt.plot(global_dict[key]['local_total_robots_list'], global_dict[key]['local_coverages_list'], '.-', label = f"{global_dict[key]['nbots/module']} robots/module")
      plt.xlabel('Total robots [-]')
@@ -644,7 +638,7 @@ if len(out_allowances) > 1:
 
      fig = plt.figure(figsize=(8,8))
      filename = "Useless_VS_total_robots"
-     plt.title(f'Useless robots VS total robots \n Inner gap {intermediate_frame_thick} mm - Global gap {global_frame_thick} mm')
+     plt.title(f'Useless robots VS total robots \n Inner gap {inner_gap} mm - Global gap {global_gap} mm')
      for key in keys:
           plt.plot(global_dict[key]['useless_robots_list'], global_dict[key]['local_total_robots_list'], '.-', label = f"{global_dict[key]['nbots/module']} robots/module")
      plt.xlabel('Useless robots [-]')
@@ -655,10 +649,32 @@ if len(out_allowances) > 1:
 
      fig = plt.figure(figsize=(8,8))
      filename = "Useful_robots_VS_total_robots"
-     plt.title(f'Useful robots VS total robots \n Inner gap {intermediate_frame_thick} mm - Global gap {global_frame_thick} mm')
+     plt.title(f'Useful robots VS total robots \n Inner gap {inner_gap} mm - Global gap {global_gap} mm')
      for key in keys:
           plt.plot(global_dict[key]['efficiency_list'], global_dict[key]['local_coverages_list'], '.-', label = f"{global_dict[key]['nbots/module']} robots/module")
      plt.xlabel('Useful robots / Total robots [-]')
+     plt.ylabel('Coverage [%]')
+     plt.grid()
+     plt.legend(shadow = True)
+     saving.save_figures_to_dir(filename)
+
+     fig = plt.figure(figsize=(8,8))
+     filename = "Useless_robots_VS_coverage"
+     plt.title(f'Useless robots VS total robots \n Inner gap {inner_gap} mm - Global gap {global_gap} mm')
+     for key in keys:
+          plt.plot(global_dict[key]['useless_robots_list'], global_dict[key]['local_coverages_list'], '.-', label = f"{global_dict[key]['nbots/module']} robots/module")
+     plt.xlabel('Useless robots [-]')
+     plt.ylabel('Coverage [%]')
+     plt.grid()
+     plt.legend(shadow = True)
+     saving.save_figures_to_dir(filename)
+     
+     fig = plt.figure(figsize=(8,8))
+     filename = "Useful_robots_VS_coverage"
+     plt.title(f'Useful robots VS coverage \n Inner gap {inner_gap} mm - Global gap {global_gap} mm')
+     for key in keys:
+          plt.plot(global_dict[key]['useful_robots_list'], global_dict[key]['local_coverages_list'], '.-', label = f"{global_dict[key]['nbots/module']} robots/module")
+     plt.xlabel('Useful robots [-]')
      plt.ylabel('Coverage [%]')
      plt.grid()
      plt.legend(shadow = True)
