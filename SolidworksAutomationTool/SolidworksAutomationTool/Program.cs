@@ -46,11 +46,11 @@ foreach ((Point3D frontPoint, Point3D backPoint) in frontGridPointCloud.point3Ds
 }
 
 // DEBUG use: check if the points are read in correctly
-Console.WriteLine("\nFront grid point cloud: ");
+Console.WriteLine("\nFront grid point cloud with z-axis offset removed: ");
 frontGridPointCloud.PrintPoint3Ds();
 
 // DEBUG use: check if the points are read in correctly
-Console.WriteLine("\nBack grid point cloud: ");
+Console.WriteLine("\nBack grid point cloud with z-axis offset removed: ");
 backGridPointCloud.PrintPoint3Ds();
 
 Console.WriteLine("Starting SolidWorks Application ...");
@@ -181,15 +181,14 @@ ZoomToFit(ref modulePart);
 modulePart.SketchManager.AddToDB = true;
 
 PromptAndWait("Press any key to revolve a pizza slice");
+
 // define variables needed for pizza creation
-double arcRadius = 11045.6e-3;    // in meters
-//double arcAngle = Math.PI/12;
 double arcAngle = DegreeToRadian(15);
 
 // TODO: verify Solidworks wants points to be defined in the local cartesian coordinate frame.
-Point3D arcCenterPoint = new(0, -arcRadius, 0);
+Point3D arcCenterPoint = new(0, -bestFitSphereRadius, 0);
 Point3D arcStartPoint = new(0, 0, 0);
-Point3D arcEndPoint = new(arcRadius * Math.Sin(arcAngle), -arcRadius * (1 - Math.Cos(arcAngle)), 0);
+Point3D arcEndPoint = new(bestFitSphereRadius * Math.Sin(arcAngle), -bestFitSphereRadius * (1 - Math.Cos(arcAngle)), 0);
 
 modulePart.Extension.SelectByID2("Top Plane", "PLANE", 0, 0, 0, false, 0, null, 0);
 // create arc to form the curved top surface
@@ -214,12 +213,12 @@ ClearSelection(ref modulePart);
 
 // Dimension the arc
 ((SketchSegment)arc).Select4(true, swSelectData);
-DisplayDimension arcDisplayDimension = (DisplayDimension)modulePart.AddDimension2(  arcStartPoint.x /2.0 + arcEndPoint.x / 2.0,
+DisplayDimension arcDisplayDimension = (DisplayDimension)modulePart.AddDimension2(  arcStartPoint.x / 2.0 + arcEndPoint.x / 2.0,
                                                                                     arcStartPoint.y / 2.0,
                                                                                     arcStartPoint.z / 2.0 + arcEndPoint.z / 2.0 );
 // The Index argument is valid for chamfer display dimensions only. If the display dimension is not a chamfer display dimension, then Index is ignored.
 Dimension arcDimension = arcDisplayDimension.GetDimension2(0);
-arcDimension.SetSystemValue3(arcRadius, (int)swSetValueInConfiguration_e.swSetValue_InThisConfiguration, "");
+arcDimension.SetSystemValue3(bestFitSphereRadius, (int)swSetValueInConfiguration_e.swSetValue_InThisConfiguration, "");
 
 ClearSelection(ref modulePart);
 
