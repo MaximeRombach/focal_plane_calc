@@ -53,6 +53,10 @@ void ClearSelection(ref ModelDoc2 partModelDoc)
 void SelectOrigin(ref ModelDoc2 partModelDoc)
     => partModelDoc.Extension.SelectByID2("Point1@Origin", "EXTSKETCHPOINT", 0, 0, 0, false, 0, null, 0);
 
+/* Wrapper function to zoom-to-fit the view */
+void ZoomToFit(ref ModelDoc2 partModelDoc)
+    => partModelDoc.ViewZoomtofit2();
+
 
 Console.WriteLine("Welcome to the LASTRO Solidworks Automation Tool!");
 
@@ -82,20 +86,16 @@ if ( frontGridPointCloud.point3Ds.Count != backGridPointCloud.point3Ds.Count )
     Console.WriteLine("WARNING: the number of points on the front and back grid are not the same. Is this intentional?");
 }
 
-// TODO: optimize. 
-// find minimum in Z axis
+// remove the offset in Z direction with the best-fit sphere's radius. Otherwise the points are placed at a super far place
 Console.WriteLine("Removing offsets in Z axis for all points ...");
+// TODO: GUI aspect: make the sphere's radius a variable
+const double bestFitSphereRadius = 11045.6e-3;    // in meters
 
-double minZ = 999;
-foreach (Point3D frontPoint in frontGridPointCloud.point3Ds)
-{
-    minZ = Math.Min( minZ, frontPoint.z );
-}
-// cancel the offset in the z direction for all points. Otherwise the points are placed at a super far place
+// Using the add operation because the z coordinates in the point clouds are negative. We want to offset them to close to zero
 foreach ((Point3D frontPoint, Point3D backPoint) in frontGridPointCloud.point3Ds.Zip(backGridPointCloud.point3Ds))
 {
-    frontPoint.z -= minZ;
-    backPoint.z -= minZ;
+    frontPoint.z += bestFitSphereRadius;
+    backPoint.z += bestFitSphereRadius;
 }
 
 // DEBUG use: check if the points are read in correctly
@@ -191,9 +191,9 @@ SelectData swSelectData = swSelectionManager.CreateSelectData();
 modelView.EnableGraphicsUpdate = false;
 
 // Define small segment length
-double smallSegmentLength = 30e-3;
+double smallSegmentLength = 30e-3; // in meters
 
-// Try to craete a mid point. Seems fine
+// Create the small segments from the top surface
 foreach ((SketchPoint frontSketchPoint, SketchPoint backSketchPoint, SketchSegment extrusionAxis) in frontSketchPointList.Zip(backSketchPointList, extrusionAxisList))
 {
     // first create a small sketch point at the middle of an extrusion axis
@@ -229,7 +229,7 @@ modulePart.FeatureManager.EnableFeatureTree = true;
 
 modulePart.SketchManager.Insert3DSketch(true);
 ClearSelection(ref modulePart);
-modulePart.ViewZoomtofit2();
+ZoomToFit(ref modulePart);
 
 modulePart.SketchManager.AddToDB = true;
 
@@ -276,7 +276,6 @@ arcDimension.SetSystemValue3(arcRadius, (int)swSetValueInConfiguration_e.swSetVa
 
 ClearSelection(ref modulePart);
 
-
 // create vertical line aka the revolution axis
 SketchLine verticalLine = (SketchLine)modulePart.SketchManager.CreateLine(arcStartPoint.x, arcStartPoint.y, arcStartPoint.z, 
                                                                             arcStartPoint.x, 180e-3, 0);
@@ -290,12 +289,22 @@ MakeSelectedCoincide(ref modulePart);
 
 ClearSelection(ref modulePart);
 
+// coincide the center point of the arc to the revolution axis
+SketchPoint arcCenterSketchPoint = (SketchPoint)arc.GetCenterPoint2();
+arcCenterSketchPoint.Select4(true, swSelectData);
+((SketchSegment)verticalLine).Select4(true, swSelectData);
+MakeSelectedCoincide(ref modulePart);
+ClearSelection(ref modulePart);
+
 // create horizontal line (for flat bottom surface)
 double bottomSurfaceRadius = 663.27e-3;
 SketchPoint verticalLineEndPoint = (SketchPoint)verticalLine.GetEndPoint2();
 SketchLine horizontalLine = (SketchLine)modulePart.SketchManager.CreateLine(verticalLineEndPoint.X, verticalLineEndPoint.Y, verticalLineEndPoint.Z,
                                                                             bottomSurfaceRadius, verticalLineEndPoint.Y, 0);
 MakeSelectedLineHorizontal(ref modulePart);
+
+// TODO: check if it's necessary to create a wrapper functino for setting dimensions
+
 // add dimension constraint for the horizontal line
 DisplayDimension bottonSurfaceRadiusDisplayDimension = (DisplayDimension)modulePart.AddDimension2(verticalLineEndPoint.X, verticalLineEndPoint.Y, verticalLineEndPoint.Z);
 // The Index argument is valid for chamfer display dimensions only. If the display dimension is not a chamfer display dimension, then Index is ignored.
@@ -350,12 +359,13 @@ modulePart.Extension.SelectByID2(pizzaSketchName, "EXTSKETCH", 0, 0, 0, true, 0,
 swSelectData.Mark = 4;
 ((SketchSegment)verticalLine).Select4(true, swSelectData);
 // Revolve the first pizza slice
+// TODO: check if it's necessary to create a wrapper function for the feature revolve function. The official api takes too many parameters
 Feature pizzaSlice = modulePart.FeatureManager.FeatureRevolve2(true, true, false, false, true, false, 
-                                                0, 0, Math.PI/3, 0, false, false, 0.01, 0.01, 0, 0, 0, true, true, true);
+                                                0, 0, DegreeToRadian(60), 0, false, false, 0.01, 0.01, 0, 0, 0, true, true, true);
 
 ClearSelection(ref modulePart);
 
-modulePart.ViewZoomtofit2();
+ZoomToFit(ref modulePart);
 // enbale user input box for dimensions
 solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, true);
 // wait for user input before closing
