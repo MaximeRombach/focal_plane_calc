@@ -314,6 +314,22 @@ ClearSelection(ref modulePart);
 ZoomToFit(ref modulePart);
 // enbale user input box for dimensions
 solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, true);
+
+/* Extrude triangles in the slice
+ * Steps:
+ * 1. create points that are both on the bottom plane and the extrusion axes
+ * 2. create reference planes by using "normal and point" method
+ * 3. start sketches on those planes and draw triangles on sketches
+ * 4. extrude triangles
+ */
+
+/* Create planes near the bottom plane
+ * 1. Try InsertRefPlane Method (IFeatureManager)
+ * 2. select a point on the bottom plane, require it to be coincident with the ref plane
+ * 3. select the extrusion axis, require it to be perpendicular to the ref plane
+ */
+
+
 // wait for user input before closing
 PromptAndWait("Press any key to close Solidworks");
 
