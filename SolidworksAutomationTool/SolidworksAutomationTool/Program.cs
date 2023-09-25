@@ -223,14 +223,14 @@ arcDimension.SetSystemValue3(bestFitSphereRadius, (int)swSetValueInConfiguration
 ClearSelection(ref modulePart);
 
 // create vertical line aka the revolution axis
-SketchLine verticalLine = (SketchLine)modulePart.SketchManager.CreateLine(arcStartPoint.x, arcStartPoint.y, arcStartPoint.z, 
+SketchLine revolutionAxisVerticalLine = (SketchLine)modulePart.SketchManager.CreateLine(arcStartPoint.x, arcStartPoint.y, arcStartPoint.z, 
                                                                             arcStartPoint.x, 180e-3, 0);
 MakeSelectedLineVertical(ref modulePart);
 ClearSelection(ref modulePart);
 // try to select the origin and set the revolution axis to be coincident with it
 SelectOrigin(ref modulePart);
-SketchPoint verticalLineStartPoint = (SketchPoint)verticalLine.GetStartPoint2();
-verticalLineStartPoint.Select4(true, swSelectData);
+SketchPoint revolutionAxisVerticalLineStartPoint = (SketchPoint)revolutionAxisVerticalLine.GetStartPoint2();
+revolutionAxisVerticalLineStartPoint.Select4(true, swSelectData);
 MakeSelectedCoincide(ref modulePart);
 
 ClearSelection(ref modulePart);
@@ -238,45 +238,45 @@ ClearSelection(ref modulePart);
 // coincide the center point of the arc to the revolution axis
 SketchPoint arcCenterSketchPoint = (SketchPoint)arc.GetCenterPoint2();
 arcCenterSketchPoint.Select4(true, swSelectData);
-((SketchSegment)verticalLine).Select4(true, swSelectData);
+((SketchSegment)revolutionAxisVerticalLine).Select4(true, swSelectData);
 MakeSelectedCoincide(ref modulePart);
 ClearSelection(ref modulePart);
 
 // create horizontal line (for flat bottom surface)
 double bottomSurfaceRadius = 663.27e-3;
-SketchPoint verticalLineEndPoint = (SketchPoint)verticalLine.GetEndPoint2();
-SketchLine horizontalLine = (SketchLine)modulePart.SketchManager.CreateLine(verticalLineEndPoint.X, verticalLineEndPoint.Y, verticalLineEndPoint.Z,
-                                                                            bottomSurfaceRadius, verticalLineEndPoint.Y, 0);
+SketchPoint revolutionAxisVerticalLineEndPoint = (SketchPoint)revolutionAxisVerticalLine.GetEndPoint2();
+SketchLine horizontalLine = (SketchLine)modulePart.SketchManager.CreateLine(revolutionAxisVerticalLineEndPoint.X, revolutionAxisVerticalLineEndPoint.Y, revolutionAxisVerticalLineEndPoint.Z,
+                                                                            bottomSurfaceRadius, revolutionAxisVerticalLineEndPoint.Y, 0);
 MakeSelectedLineHorizontal(ref modulePart);
 
 // TODO: check if it's necessary to create a wrapper functino for setting dimensions
 
 // add dimension constraint for the horizontal line
-DisplayDimension bottonSurfaceRadiusDisplayDimension = (DisplayDimension)modulePart.AddDimension2(verticalLineEndPoint.X, verticalLineEndPoint.Y, verticalLineEndPoint.Z);
+DisplayDimension bottonSurfaceRadiusDisplayDimension = (DisplayDimension)modulePart.AddDimension2(revolutionAxisVerticalLineEndPoint.X, revolutionAxisVerticalLineEndPoint.Y, revolutionAxisVerticalLineEndPoint.Z);
 // The Index argument is valid for chamfer display dimensions only. If the display dimension is not a chamfer display dimension, then Index is ignored.
 Dimension bottonSurfaceRadiusDimension = bottonSurfaceRadiusDisplayDimension.GetDimension2(0);
 bottonSurfaceRadiusDimension.SetSystemValue3(bottomSurfaceRadius, (int)swSetValueInConfiguration_e.swSetValue_InThisConfiguration, "");
 
 ClearSelection(ref modulePart);
 // create vertical line (outer rim of the boarder) connecting the top line 
-SketchPoint topSurfaceTopRightPoint = (SketchPoint)horizontalLine.GetEndPoint2();
+SketchPoint bottomSurfaceTopRightPoint = (SketchPoint)horizontalLine.GetEndPoint2();
 double outerRimHeight = 200e-3;
-SketchLine verticalLineToArc = (SketchLine)modulePart.SketchManager.CreateLine(topSurfaceTopRightPoint.X, topSurfaceTopRightPoint.Y, topSurfaceTopRightPoint.Z, 
-                                                                                topSurfaceTopRightPoint.X, -outerRimHeight, 0);
+SketchLine revolutionAxisVerticalLineToArc = (SketchLine)modulePart.SketchManager.CreateLine(bottomSurfaceTopRightPoint.X, bottomSurfaceTopRightPoint.Y, bottomSurfaceTopRightPoint.Z, 
+                                                                                bottomSurfaceTopRightPoint.X, -outerRimHeight, 0);
 MakeSelectedLineVertical(ref modulePart);
 ClearSelection(ref modulePart);
 
 // make vertical line coincide with the arc
-SketchPoint verticalLineToArcEndPoint = (SketchPoint)verticalLineToArc.GetEndPoint2();
-verticalLineToArcEndPoint.Select4(true, swSelectData);
+SketchPoint revolutionAxisVerticalLineToArcEndPoint = (SketchPoint)revolutionAxisVerticalLineToArc.GetEndPoint2();
+revolutionAxisVerticalLineToArcEndPoint.Select4(true, swSelectData);
 ((SketchSegment)arc).Select4(true, swSelectData);
 MakeSelectedCoincide(ref modulePart);
 ClearSelection(ref modulePart);
 
 // add constraint to outer rim height
 // Note: before calling AddDimension2(), we must select the entity to be dimensioned
-((SketchSegment)verticalLineToArc).Select4(true, swSelectData);
-DisplayDimension outerRimHeightDisplayDimension = (DisplayDimension)modulePart.AddDimension2(topSurfaceTopRightPoint.X, topSurfaceTopRightPoint.Y, topSurfaceTopRightPoint.Z);
+((SketchSegment)revolutionAxisVerticalLineToArc).Select4(true, swSelectData);
+DisplayDimension outerRimHeightDisplayDimension = (DisplayDimension)modulePart.AddDimension2(bottomSurfaceTopRightPoint.X, bottomSurfaceTopRightPoint.Y, bottomSurfaceTopRightPoint.Z);
 // The Index argument is valid for chamfer display dimensions only. If the display dimension is not a chamfer display dimension, then Index is ignored.
 Dimension outerRimHeightDimension = outerRimHeightDisplayDimension.GetDimension2(0);
 outerRimHeightDimension.SetSystemValue3(outerRimHeight, (int)swSetValueInConfiguration_e.swSetValue_InThisConfiguration, "");
@@ -303,7 +303,7 @@ modulePart.Extension.SelectByID2(pizzaSketchName, "EXTSKETCH", 0, 0, 0, true, 0,
 
 // select the axis to revolve. According to API doc, we must select with a specific mark
 swSelectData.Mark = 4;
-((SketchSegment)verticalLine).Select4(true, swSelectData);
+((SketchSegment)revolutionAxisVerticalLine).Select4(true, swSelectData);
 // Revolve the first pizza slice
 // TODO: check if it's necessary to create a wrapper function for the feature revolve function. The official api takes too many parameters
 Feature pizzaSlice = modulePart.FeatureManager.FeatureRevolve2(true, true, false, false, true, false, 
@@ -315,6 +315,7 @@ ZoomToFit(ref modulePart);
 // enbale user input box for dimensions
 solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, true);
 
+// TODO: write a function to extrude one triangle. By using this function repetitively, the program remains clean and easy-to-maintain
 /* Extrude triangles in the slice
  * Steps:
  * 1. create points that are both on the bottom plane and the extrusion axes
@@ -322,6 +323,40 @@ solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimVa
  * 3. start sketches on those planes and draw triangles on sketches
  * 4. extrude triangles
  */
+
+// First define the bottom plane, by creating a parallel plane w.r.t the front plane
+double bottomToFrontPlaneDistance = ((SketchSegment)revolutionAxisVerticalLine).GetLength();
+modulePart.Extension.SelectByID2("Front Plane", "PLANE", 0, 0, 0, false, 0, null, 0);
+// A trick to flip the offset orientation when creating a ref plane: https://stackoverflow.com/questions/71885722/how-to-create-a-flip-offset-reference-plane-with-solidworks-vba-api
+RefPlane bottomPlane = (RefPlane)modulePart.FeatureManager.InsertRefPlane((int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Distance 
+                                                                                + (int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_OptionFlip, bottomToFrontPlaneDistance,
+                                                                             0, 0, 0, 0);
+((Feature)bottomPlane).Name = "Bottom Plane";
+
+// quick test to see if a point can be created on the bottom surface
+modulePart.Insert3DSketch();
+// for speed improvements
+modelView.EnableGraphicsUpdate = false;
+modulePart.SketchManager.AddToDB = true;
+List<SketchPoint> bottomSurfaceSketchPointList = new();
+foreach (SketchSegment extrusionAxis in extrusionAxisList)
+{
+    // create a point at some random location (DO NOT USE 0,0,0, that's the origin). The exact location doesn't matter since we will constraint it any ways
+    SketchPoint bottomPlaneSketchPoint = modulePart.SketchManager.CreatePoint(27, 27, 27);
+    bottomSurfaceSketchPointList.Append(bottomPlaneSketchPoint);
+
+    extrusionAxis.Select4(true, swSelectData);
+    MakeSelectedCoincide(ref modulePart);
+    ClearSelection(ref modulePart);
+    // TODO: the bottom plane will need to be passed in if this loop is used as a function
+    // using -1 as the mark, meaning that we don't specify the purpose of the selection to Solidworks
+    ((Feature)bottomPlane).Select2(true, -1);
+    bottomPlaneSketchPoint.Select4(true, swSelectData);
+    MakeSelectedCoincide(ref modulePart);
+    ClearSelection(ref modulePart);
+}
+modelView.EnableGraphicsUpdate = true;
+modulePart.SketchManager.AddToDB = false;
 
 /* Create planes near the bottom plane
  * 1. Try InsertRefPlane Method (IFeatureManager)
