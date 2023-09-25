@@ -27,7 +27,6 @@ PointCloud backGridPointCloud = new();
 backGridPointCloud.ReadPointCloudFromTxt(backGridPointCloudFilePath, Units.Millimeter);
 Console.WriteLine("Completed reading point cloud file");
 
-
 if ( frontGridPointCloud.point3Ds.Count != backGridPointCloud.point3Ds.Count )
 {
     Console.WriteLine("WARNING: the number of points on the front and back grid are not the same. Is this intentional?");
@@ -318,7 +317,7 @@ solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimVa
 // TODO: write a function to extrude one triangle. By using this function repetitively, the program remains clean and easy-to-maintain
 /* Extrude triangles in the slice
  * Steps:
- * 1. create points that are both on the bottom plane and the extrusion axes
+ * 1. create points that are both on the bottom plane and the extrusion axes    - Done
  * 2. create reference planes by using "normal and point" method
  * 3. start sketches on those planes and draw triangles on sketches
  * 4. extrude triangles
@@ -334,16 +333,18 @@ RefPlane bottomPlane = (RefPlane)modulePart.FeatureManager.InsertRefPlane((int)s
 ((Feature)bottomPlane).Name = "Bottom Plane";
 
 // quick test to see if a point can be created on the bottom surface
+// Create a sketch to add points on
 modulePart.Insert3DSketch();
 // for speed improvements
 modelView.EnableGraphicsUpdate = false;
 modulePart.SketchManager.AddToDB = true;
-List<SketchPoint> bottomSurfaceSketchPointList = new();
+// keep a list of sketch points on the bottom plane
+List<SketchPoint> bottomSurfaceSketchPointList = new( extrusionAxisList.Count );
 foreach (SketchSegment extrusionAxis in extrusionAxisList)
 {
     // create a point at some random location (DO NOT USE 0,0,0, that's the origin). The exact location doesn't matter since we will constraint it any ways
     SketchPoint bottomPlaneSketchPoint = modulePart.SketchManager.CreatePoint(27, 27, 27);
-    bottomSurfaceSketchPointList.Append(bottomPlaneSketchPoint);
+    bottomSurfaceSketchPointList.Add(bottomPlaneSketchPoint);
 
     extrusionAxis.Select4(true, swSelectData);
     MakeSelectedCoincide(ref modulePart);
@@ -357,12 +358,24 @@ foreach (SketchSegment extrusionAxis in extrusionAxisList)
 }
 modelView.EnableGraphicsUpdate = true;
 modulePart.SketchManager.AddToDB = false;
+// close the sketch
+modulePart.Insert3DSketch();
 
-/* Create planes near the bottom plane
+/* Create planes near the bottom plane      - Logic tested. Seems good
  * 1. Try InsertRefPlane Method (IFeatureManager)
  * 2. select a point on the bottom plane, require it to be coincident with the ref plane
  * 3. select the extrusion axis, require it to be perpendicular to the ref plane
- */
+ */        
+ClearSelection(ref modulePart);
+swSelectData.Mark = 0;
+extrusionAxisList[0].Select4(true, swSelectData);
+swSelectData.Mark = 1;
+bottomSurfaceSketchPointList[0].Select4(true, swSelectData);
+RefPlane aBottomRefPlane = (RefPlane)modulePart.FeatureManager.InsertRefPlane((int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Perpendicular, 0,
+                                                                              (int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Coincident, 0, 0, 0);
+ClearSelection(ref modulePart);
+((Feature)aBottomRefPlane).Name = "A Test Plane";
+
 
 
 // wait for user input before closing
