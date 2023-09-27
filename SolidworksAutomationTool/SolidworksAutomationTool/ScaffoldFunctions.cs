@@ -1,5 +1,7 @@
 ﻿
 using SolidWorks.Interop.sldworks;
+using SolidWorks.Interop.swconst;
+using System.Diagnostics;
 
 namespace SolidworksAutomationTool
 {
@@ -58,5 +60,58 @@ namespace SolidworksAutomationTool
         public static void ZoomToFit(ref ModelDoc2 partModelDoc)
             => partModelDoc.ViewZoomtofit2();
 
+        /* A debug function that traverses the sketch segments in a polygon and prints the type of each sketch segment
+         * There's no built-in funciton to get see the structure of the polygon. 
+         */
+        public static void PrintPolygonDataStructure(ref object[] polygon)
+        {
+            Debug.WriteLine($"Found {polygon.Length} sketch segments in the polygon");
+            foreach (SketchSegment triangleSegment in polygon)
+            {
+                string triangleSegmentType = triangleSegment.GetType() switch
+                {
+                    (int)swSketchSegments_e.swSketchARC => triangleSegmentType = "Arc",
+                    (int)swSketchSegments_e.swSketchLINE => triangleSegmentType = "Line",
+                    (int)swSketchSegments_e.swSketchELLIPSE => triangleSegmentType = "Ellipse",
+                    (int)swSketchSegments_e.swSketchPARABOLA => triangleSegmentType = "Parabola",
+                    (int)swSketchSegments_e.swSketchSPLINE => triangleSegmentType = "Spline",
+                    // Actually, why a sketch segment can be of type text??
+                    (int)swSketchSegments_e.swSketchTEXT => triangleSegmentType = "Text",
+                    _ => "Unknown",
+                };
+                Debug.WriteLine($"Segment is of type: {triangleSegmentType}");
+            }
+        }
+
+        /* A function to get the center point of the inscribed construction circle inside the triangle polygon
+         * Returns the center point as a sketch point if the polygon contains a Sketch Arc
+         *          else, returns null.
+         */
+        public static SketchPoint? GetTriangleCenterPoint(ref object[] polygon)
+        {
+            foreach (SketchSegment triangleSegment in polygon.Reverse())
+            {
+                if (triangleSegment.GetType() == (int)swSketchSegments_e.swSketchARC)
+                {
+                    return (SketchPoint)((SketchArc)triangleSegment).GetCenterPoint2(); ;
+                }
+            }
+            return null;
+        }
+
+        /* A function to get one of the sides of a triangle polygon
+         * Returns a side of the triangle if the polygon contains at least a Sketch line
+         */
+        public static SketchLine? GetOneTriangleSide(ref object[] polygon)
+        {
+            foreach(SketchSegment triangleSegment in polygon)
+            {
+                if (triangleSegment.GetType() == (int)swSketchSegments_e.swSketchLINE)
+                {
+                    return (SketchLine)triangleSegment;
+                }
+            }
+            return null;
+        }
     }
 }

@@ -3,6 +3,7 @@
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 using SolidworksAutomationTool;
+using System.Diagnostics;
 using static SolidworksAutomationTool.ScaffoldFunctions;
 
 Console.WriteLine("Welcome to the LASTRO Solidworks Automation Tool!");
@@ -11,7 +12,7 @@ Console.WriteLine("Welcome to the LASTRO Solidworks Automation Tool!");
 /* Uncomment the Console.ReadLine() to restore normal path input. Currently they are commented out for debug purpose */
 Console.WriteLine("Please enter the path of the FRONT grid point cloud txt file");
 //string frontGridPointCloudFilePath = Console.ReadLine();
-string frontGridPointCloudFilePath = @"C:\Users\aiden\Desktop\Astrobots\focal_plane_calc\Results_examples\front_grid_indiv_102.txt";
+string frontGridPointCloudFilePath = @"C:\Users\ad\Desktop\Astrobots\focal_plane_calc\Results_examples\front_grid_indiv_102.txt";
 
 Console.WriteLine("Reading front grid point cloud file ...");
 PointCloud frontGridPointCloud = new();
@@ -20,7 +21,7 @@ Console.WriteLine("Completed reading point cloud file");
 
 Console.WriteLine("Please enter the path of the BACK grid point cloud txt file");
 //string backGridPointCloudFilePath = Console.ReadLine();
-string backGridPointCloudFilePath = @"C:\Users\aiden\Desktop\Astrobots\focal_plane_calc\Results_examples\back_grid_indiv_102.txt";
+string backGridPointCloudFilePath = @"C:\Users\ad\Desktop\Astrobots\focal_plane_calc\Results_examples\back_grid_indiv_102.txt";
 
 Console.WriteLine("Reading back grid point cloud file ...");
 PointCloud backGridPointCloud = new();
@@ -373,10 +374,69 @@ swSelectData.Mark = 1;
 bottomSurfaceSketchPointList[0].Select4(true, swSelectData);
 RefPlane aBottomRefPlane = (RefPlane)modulePart.FeatureManager.InsertRefPlane((int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Perpendicular, 0,
                                                                               (int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Coincident, 0, 0, 0);
-ClearSelection(ref modulePart);
 ((Feature)aBottomRefPlane).Name = "A Test Plane";
+ClearSelection(ref modulePart);
 
 
+/* Create a sketch on the newly created plane and draw a triangle on it
+ */
+// enbale user input box for dimensions
+solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, false);
+modulePart.SketchManager.AddToDB = true;
+
+((Feature)aBottomRefPlane).Select2(true, -1);
+modulePart.SketchManager.InsertSketch(true);
+
+// define where the top vertix of the equilateral triangle is.
+// 0.577350269 is sqrt(3)/3
+// each side of the triangle is 74.5mm long
+double equilateralTriangleSideLength = 74.5e-3;
+SketchPoint someSketchPoint = bottomSurfaceSketchPointList[0];
+Point3D topVertixTriangle = new(someSketchPoint.X, someSketchPoint.Y + 0.577350269 * equilateralTriangleSideLength, someSketchPoint.Z);
+object[] trianglePolygon = (object[])modulePart.SketchManager.CreatePolygon(someSketchPoint.X, someSketchPoint.Y, someSketchPoint.Z,
+                                                                                            topVertixTriangle.x, topVertixTriangle.y, topVertixTriangle.z, 3, true);
+
+
+ClearSelection(ref modulePart);
+
+// DEBUG: check what's in the returned triangle polygon array
+//PrintPolygonDataStructure(ref trianglePolygon);
+
+// constraint the center of the triangle to the extrusion axis
+SketchPoint? triangleCenter = GetTriangleCenterPoint(ref trianglePolygon);
+if (triangleCenter != null)
+{
+    ClearSelection(ref modulePart);
+    triangleCenter.Select4(true, swSelectData);
+    someSketchPoint.Select4(true, swSelectData);
+    MakeSelectedCoincide(ref  modulePart);
+    ClearSelection(ref modulePart);
+}
+
+// make one of the sides horizontal
+SketchLine? oneSideOfTriangle = GetOneTriangleSide(ref trianglePolygon);
+if (oneSideOfTriangle != null)
+{
+    ClearSelection(ref modulePart);
+
+    ((SketchSegment)oneSideOfTriangle).Select4(true, swSelectData);
+    MakeSelectedLineHorizontal(ref modulePart);
+
+    // TODO: reduce this dimensioning boilerplate code
+    DisplayDimension triangleSideDisplayDimension = (DisplayDimension)modulePart.AddDimension2(someSketchPoint.X, someSketchPoint.Y, someSketchPoint.Z);
+    // The Index argument is valid for chamfer display dimensions only. If the display dimension is not a chamfer display dimension, then Index is ignored.
+    Dimension triangleSideDimension = triangleSideDisplayDimension.GetDimension2(0);
+    triangleSideDimension.SetSystemValue3(equilateralTriangleSideLength, (int)swSetValueInConfiguration_e.swSetValue_InThisConfiguration, "");
+
+    ClearSelection(ref modulePart);
+}
+
+modulePart.SketchManager.AddToDB = false;
+
+// enbale user input box for dimensions
+solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, true);
+
+modulePart.SketchManager.InsertSketch(true);
 
 // wait for user input before closing
 PromptAndWait("Press any key to close Solidworks");
