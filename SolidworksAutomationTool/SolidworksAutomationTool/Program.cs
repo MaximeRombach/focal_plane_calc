@@ -3,7 +3,6 @@
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 using SolidworksAutomationTool;
-using System.Diagnostics;
 using static SolidworksAutomationTool.ScaffoldFunctions;
 
 Console.WriteLine("Welcome to the LASTRO Solidworks Automation Tool!");
@@ -368,12 +367,7 @@ modulePart.Insert3DSketch();
  * 3. select the extrusion axis, require it to be perpendicular to the ref plane
  */        
 ClearSelection(ref modulePart);
-swSelectData.Mark = 0;
-extrusionAxisList[0].Select4(true, swSelectData);
-swSelectData.Mark = 1;
-bottomSurfaceSketchPointList[0].Select4(true, swSelectData);
-RefPlane aBottomRefPlane = (RefPlane)modulePart.FeatureManager.InsertRefPlane((int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Perpendicular, 0,
-                                                                              (int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Coincident, 0, 0, 0);
+RefPlane aBottomRefPlane = CreateRefPlaneFromPointAndNormal(bottomSurfaceSketchPointList[0], extrusionAxisList[0], swSelectData, modulePart.FeatureManager);
 ((Feature)aBottomRefPlane).Name = "A Test Plane";
 ClearSelection(ref modulePart);
 
@@ -396,11 +390,7 @@ Point3D topVertixTriangle = new(someSketchPoint.X, someSketchPoint.Y + 0.5773502
 object[] trianglePolygon = (object[])modulePart.SketchManager.CreatePolygon(someSketchPoint.X, someSketchPoint.Y, someSketchPoint.Z,
                                                                                             topVertixTriangle.x, topVertixTriangle.y, topVertixTriangle.z, 3, true);
 
-
 ClearSelection(ref modulePart);
-
-// DEBUG: check what's in the returned triangle polygon array
-//PrintPolygonDataStructure(ref trianglePolygon);
 
 // constraint the center of the triangle to the extrusion axis
 SketchPoint? triangleCenter = GetTriangleCenterPoint(ref trianglePolygon);
@@ -430,6 +420,19 @@ if (oneSideOfTriangle != null)
 
     ClearSelection(ref modulePart);
 }
+
+PromptAndWait("DEBUG WAIT");
+
+// make a block out of the triangle
+foreach ( SketchSegment triangleSegment in trianglePolygon)
+{
+    triangleSegment.Select4(true, swSelectData);
+}
+// Great! The block was sucessfully created. NOTE: for some reasons, MultiSelect2 Method (IModelDocExtension) does NOT select anything in the triangle polygon
+SketchBlockDefinition fullTriangleBlock = modulePart.SketchManager.MakeSketchBlockFromSelected(null);
+ClearSelection(ref modulePart);
+
+
 
 modulePart.SketchManager.AddToDB = false;
 
