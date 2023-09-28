@@ -89,7 +89,7 @@ namespace SolidworksAutomationTool
          */
         public static SketchPoint? GetTriangleCenterPoint(ref object[] polygon)
         {
-            foreach (SketchSegment triangleSegment in polygon.Reverse())
+            foreach (SketchSegment triangleSegment in polygon.Reverse().Cast<SketchSegment>())
             {
                 if (triangleSegment.GetType() == (int)swSketchSegments_e.swSketchARC)
                 {
@@ -104,7 +104,7 @@ namespace SolidworksAutomationTool
          */
         public static SketchLine? GetOneTriangleSide(ref object[] polygon)
         {
-            foreach(SketchSegment triangleSegment in polygon)
+            foreach(SketchSegment triangleSegment in polygon.Cast<SketchSegment>())
             {
                 if (triangleSegment.GetType() == (int)swSketchSegments_e.swSketchLINE)
                 {
@@ -112,6 +112,24 @@ namespace SolidworksAutomationTool
                 }
             }
             return null;
+        }
+
+        /* A wrapper function to reduce the boilerplate code for creating normal planes using the "point and normal" method
+         *  This function first selects an extrusion axis, requiring it to be perpendicular to the ref plane;
+         *  then selects a point which provides the "offset" of the plane, requiring it to be coincident with the ref plane
+         *  NOTE: this method does NOT change the selection list. Users should manually clear the selections.
+         */
+        public static RefPlane CreateRefPlaneFromPointAndNormal(SketchPoint point, SketchSegment normal, SelectData swSelectData, FeatureManager featureManager)
+        {
+            swSelectData.Mark = 0;
+            normal.Select4(true, swSelectData);
+            swSelectData.Mark = 1;
+            point.Select4(true, swSelectData);
+            // although the InsertRefPlane function can take 3 constraints, we don't need to provide the third constraint,
+            // as the 2 constraints are enough for the "point and normal" method
+            RefPlane refPlane = (RefPlane)featureManager.InsertRefPlane((int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Perpendicular, 0,
+                                                                                          (int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Coincident, 0, 0, 0);
+            return refPlane;
         }
     }
 }
