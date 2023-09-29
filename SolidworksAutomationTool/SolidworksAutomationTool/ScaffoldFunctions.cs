@@ -24,9 +24,7 @@ namespace SolidworksAutomationTool
             Note that this function doesn't check if the selected segments are valid to be make coincident with each others.
          */
         public static void MakeSelectedCoincide(ref ModelDoc2 partModelDoc)
-        {
-            partModelDoc.SketchAddConstraints("sgCOINCIDENT");
-        }
+            => partModelDoc.SketchAddConstraints("sgCOINCIDENT");
 
         /*
             Wrapper function to make a selected line vertical. 
@@ -34,9 +32,7 @@ namespace SolidworksAutomationTool
             TODO: add check to make sure the selected item is a valid line
          */
         public static void MakeSelectedLineVertical(ref ModelDoc2 partModelDoc)
-        {
-            partModelDoc.SketchAddConstraints("sgVERTICAL2D");
-        }
+            => partModelDoc.SketchAddConstraints("sgVERTICAL2D");
 
         /*
             Wrapper function to make a selected line horizontal. 
@@ -44,9 +40,7 @@ namespace SolidworksAutomationTool
             TODO: add check to make sure the selected item is a valid line
          */
         public static void MakeSelectedLineHorizontal(ref ModelDoc2 partModelDoc)
-        {
-            partModelDoc.SketchAddConstraints("sgHORIZONTAL2D");
-        }
+            => partModelDoc.SketchAddConstraints("sgHORIZONTAL2D");
 
         // Wrapper function to clear selection
         public static void ClearSelection(ref ModelDoc2 partModelDoc) 
@@ -130,6 +124,40 @@ namespace SolidworksAutomationTool
             RefPlane refPlane = (RefPlane)featureManager.InsertRefPlane((int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Perpendicular, 0,
                                                                                           (int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Coincident, 0, 0, 0);
             return refPlane;
+        }
+
+        /* Wrapper function to add dimension to the selected object. 
+         * Returns the model dimension, NOT the DisplayDimension
+         * NOTE: this function does NOT change the selection list. Users should manually clear the selections.
+         * NOTE: this function can NOT be used to dimension chamfers.
+         */
+        public static Dimension AddDimensionToSelected(ref ModelDoc2 partModelDoc, double dimensionValue, double dimLocationX, double dimLocationY, double dimLocationZ)
+        {
+            // first create a DisplayDimension that 
+            DisplayDimension displayDimension = (DisplayDimension)partModelDoc.AddDimension2(dimLocationX, dimLocationY, dimLocationZ);
+            // The Index argument is valid for chamfer display dimensions only.
+            // If the display dimension is not a chamfer display dimension, then Index is ignored.
+            // To get both chamfer display dimensions, you must call this property twice; specify 0 for Index in the first call and 1 for Index in the second call.
+            Dimension dimension = displayDimension.GetDimension2(0);
+            // not sure if swSetValue_InThisConfiguration is the best parameter to use
+            dimension.SetSystemValue3(dimensionValue, (int)swSetValueInConfiguration_e.swSetValue_InThisConfiguration, "");
+            return dimension;
+        }
+
+        /* Overloaded AddDimensionToSelected function to simplify function calls
+         * Often times we already have a sketch point indicating a position. We should be able to simply pass the point in as a position indicator, instead of having to specify x,y,z coordinates manually
+         */
+        public static Dimension AddDimensionToSelected(ref ModelDoc2 partModelDoc, double dimensionValue, SketchPoint displayDimensionLocation )
+        {
+            // first create a DisplayDimension that 
+            DisplayDimension displayDimension = (DisplayDimension)partModelDoc.AddDimension2(displayDimensionLocation.X, displayDimensionLocation.Y, displayDimensionLocation.Z);
+            // The Index argument is valid for chamfer display dimensions only.
+            // If the display dimension is not a chamfer display dimension, then Index is ignored.
+            // To get both chamfer display dimensions, you must call this property twice; specify 0 for Index in the first call and 1 for Index in the second call.
+            Dimension dimension = displayDimension.GetDimension2(0);
+            // not sure if swSetValue_InThisConfiguration is the best parameter to use
+            dimension.SetSystemValue3(dimensionValue, (int)swSetValueInConfiguration_e.swSetValue_InThisConfiguration, "");
+            return dimension;
         }
     }
 }
