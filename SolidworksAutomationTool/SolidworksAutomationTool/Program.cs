@@ -3,6 +3,7 @@
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 using SolidworksAutomationTool;
+using System.Diagnostics;
 using static SolidworksAutomationTool.ScaffoldFunctions;
 
 Console.WriteLine("Welcome to the LASTRO Solidworks Automation Tool!");
@@ -157,11 +158,8 @@ foreach ((SketchPoint frontSketchPoint, SketchPoint backSketchPoint, SketchSegme
     // add a length dimension to the small segment
     frontSketchPoint.Select4(true, swSelectData);
     smallSegmentSketchPoint.Select4(true, swSelectData);
-    // add dimension. Maybe there's a cleaner way to access the dimension variable directly
-    DisplayDimension smallSegmentDisplayDimension = (DisplayDimension)modulePart.AddDimension2(frontSketchPoint.X, frontSketchPoint.Y, frontSketchPoint.Z);
-    // The Index argument is valid for chamfer display dimensions only. If the display dimension is not a chamfer display dimension, then Index is ignored.
-    Dimension smallSegmentDimension = smallSegmentDisplayDimension.GetDimension2(0);
-    smallSegmentDimension.SetSystemValue3(smallSegmentLength, (int)swSetValueInConfiguration_e.swSetValue_InThisConfiguration, "");
+
+    AddDimensionToSelected(ref modulePart, smallSegmentLength, frontSketchPoint);
 
     ClearSelection(ref modulePart);
 }
@@ -194,7 +192,6 @@ modulePart.Extension.SelectByID2("Top Plane", "PLANE", 0, 0, 0, false, 0, null, 
 modulePart.SketchManager.InsertSketch(true);
 
 // TODO: find a good way to describe which line is which
-// TODO: create the curved top surface
 solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, false);
 
 SketchArc arc = (SketchArc)modulePart.SketchManager.CreateArc(arcCenterPoint.x, arcCenterPoint.y, arcCenterPoint.z,
@@ -212,12 +209,10 @@ ClearSelection(ref modulePart);
 
 // Dimension the arc
 ((SketchSegment)arc).Select4(true, swSelectData);
-DisplayDimension arcDisplayDimension = (DisplayDimension)modulePart.AddDimension2(  arcStartPoint.x / 2.0 + arcEndPoint.x / 2.0,
-                                                                                    arcStartPoint.y / 2.0,
-                                                                                    arcStartPoint.z / 2.0 + arcEndPoint.z / 2.0 );
-// The Index argument is valid for chamfer display dimensions only. If the display dimension is not a chamfer display dimension, then Index is ignored.
-Dimension arcDimension = arcDisplayDimension.GetDimension2(0);
-arcDimension.SetSystemValue3(bestFitSphereRadius, (int)swSetValueInConfiguration_e.swSetValue_InThisConfiguration, "");
+
+AddDimensionToSelected(ref modulePart, bestFitSphereRadius, arcStartPoint.x / 2.0 + arcEndPoint.x / 2.0,
+                                                            arcStartPoint.y / 2.0,
+                                                            arcStartPoint.z / 2.0 + arcEndPoint.z / 2.0);
 
 ClearSelection(ref modulePart);
 
@@ -248,13 +243,8 @@ SketchLine horizontalLine = (SketchLine)modulePart.SketchManager.CreateLine(revo
                                                                             bottomSurfaceRadius, revolutionAxisVerticalLineEndPoint.Y, 0);
 MakeSelectedLineHorizontal(ref modulePart);
 
-// TODO: check if it's necessary to create a wrapper functino for setting dimensions
-
-// add dimension constraint for the horizontal line
-DisplayDimension bottonSurfaceRadiusDisplayDimension = (DisplayDimension)modulePart.AddDimension2(revolutionAxisVerticalLineEndPoint.X, revolutionAxisVerticalLineEndPoint.Y, revolutionAxisVerticalLineEndPoint.Z);
-// The Index argument is valid for chamfer display dimensions only. If the display dimension is not a chamfer display dimension, then Index is ignored.
-Dimension bottonSurfaceRadiusDimension = bottonSurfaceRadiusDisplayDimension.GetDimension2(0);
-bottonSurfaceRadiusDimension.SetSystemValue3(bottomSurfaceRadius, (int)swSetValueInConfiguration_e.swSetValue_InThisConfiguration, "");
+// add dimension constraint to the horizontal line
+AddDimensionToSelected(ref modulePart, bottomSurfaceRadius, revolutionAxisVerticalLineEndPoint);
 
 ClearSelection(ref modulePart);
 // create vertical line (outer rim of the boarder) connecting the top line 
@@ -272,13 +262,11 @@ revolutionAxisVerticalLineToArcEndPoint.Select4(true, swSelectData);
 MakeSelectedCoincide(ref modulePart);
 ClearSelection(ref modulePart);
 
-// add constraint to outer rim height
-// Note: before calling AddDimension2(), we must select the entity to be dimensioned
+// add dimension to outer rim height
 ((SketchSegment)revolutionAxisVerticalLineToArc).Select4(true, swSelectData);
-DisplayDimension outerRimHeightDisplayDimension = (DisplayDimension)modulePart.AddDimension2(bottomSurfaceTopRightPoint.X, bottomSurfaceTopRightPoint.Y, bottomSurfaceTopRightPoint.Z);
-// The Index argument is valid for chamfer display dimensions only. If the display dimension is not a chamfer display dimension, then Index is ignored.
-Dimension outerRimHeightDimension = outerRimHeightDisplayDimension.GetDimension2(0);
-outerRimHeightDimension.SetSystemValue3(outerRimHeight, (int)swSetValueInConfiguration_e.swSetValue_InThisConfiguration, "");
+
+AddDimensionToSelected(ref modulePart, outerRimHeight, bottomSurfaceTopRightPoint);
+
 ClearSelection(ref modulePart);
 
 modulePart.SketchManager.AddToDB = false;
@@ -361,7 +349,8 @@ modulePart.SketchManager.AddToDB = false;
 // close the sketch
 modulePart.Insert3DSketch();
 
-/* Create planes near the bottom plane      - Logic tested. Seems good
+/* Create planes near the bottom plane      - looking good!
+ * Steps:
  * 1. Try InsertRefPlane Method (IFeatureManager)
  * 2. select a point on the bottom plane, require it to be coincident with the ref plane
  * 3. select the extrusion axis, require it to be perpendicular to the ref plane
@@ -371,10 +360,9 @@ RefPlane aBottomRefPlane = CreateRefPlaneFromPointAndNormal(bottomSurfaceSketchP
 ((Feature)aBottomRefPlane).Name = "A Test Plane";
 ClearSelection(ref modulePart);
 
-
 /* Create a sketch on the newly created plane and draw a triangle on it
  */
-// enbale user input box for dimensions
+// disable user input box for dimensions. Otherwise solidworks will stuck at waiting for user inputs
 solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, false);
 modulePart.SketchManager.AddToDB = true;
 
@@ -408,31 +396,54 @@ SketchLine? oneSideOfTriangle = GetOneTriangleSide(ref trianglePolygon);
 if (oneSideOfTriangle != null)
 {
     ClearSelection(ref modulePart);
-
     ((SketchSegment)oneSideOfTriangle).Select4(true, swSelectData);
     MakeSelectedLineHorizontal(ref modulePart);
-
-    // TODO: reduce this dimensioning boilerplate code
-    DisplayDimension triangleSideDisplayDimension = (DisplayDimension)modulePart.AddDimension2(someSketchPoint.X, someSketchPoint.Y, someSketchPoint.Z);
-    // The Index argument is valid for chamfer display dimensions only. If the display dimension is not a chamfer display dimension, then Index is ignored.
-    Dimension triangleSideDimension = triangleSideDisplayDimension.GetDimension2(0);
-    triangleSideDimension.SetSystemValue3(equilateralTriangleSideLength, (int)swSetValueInConfiguration_e.swSetValue_InThisConfiguration, "");
-
+    // Dimension the equilateral triangle's side length
+    AddDimensionToSelected(ref modulePart, equilateralTriangleSideLength, someSketchPoint);
     ClearSelection(ref modulePart);
 }
 
-PromptAndWait("DEBUG WAIT");
 
 // make a block out of the triangle
-foreach ( SketchSegment triangleSegment in trianglePolygon)
+// TODO: Reduce boilerplat code and clean up code
+PrintPolygonDataStructure(ref trianglePolygon);
+HashSet<SketchPoint> verticesInTriangleSet = new();
+foreach ( SketchSegment triangleSegment in trianglePolygon.Cast<SketchSegment>())
+{
+    if(triangleSegment.GetType() == (int)swSketchSegments_e.swSketchLINE)
+    {
+        verticesInTriangleSet.Add((SketchPoint)((SketchLine)triangleSegment).GetStartPoint2());
+        verticesInTriangleSet.Add((SketchPoint)((SketchLine)triangleSegment).GetEndPoint2());
+    }
+}
+
+// DEBUG. Checking if an HashSet would pick only the unique vertices - YES!
+ClearSelection(ref modulePart);
+List<SketchSegment> chamferSegments = new(3);
+foreach (SketchPoint vertex in verticesInTriangleSet)
+{
+    Debug.WriteLine($"vertex x: {vertex.X}, y: {vertex.Y}, z: {vertex.Z}");
+    // make chamfers
+    vertex.Select4(true, swSelectData);
+    SketchSegment chamferSegment = modulePart.SketchManager.CreateChamfer((int)swSketchChamferType_e.swSketchChamfer_DistanceEqual, 10.5e-3, 10.5e-3);
+    chamferSegments.Add(chamferSegment);
+}
+// select all chamfer segments
+chamferSegments.ForEach( chamferSegment => chamferSegment.Select4(true, swSelectData));
+
+// Select the triangle polygon
+foreach (SketchSegment triangleSegment in trianglePolygon.Cast<SketchSegment>())
 {
     triangleSegment.Select4(true, swSelectData);
 }
+
+// select the 3 vertices of the original triangle
+verticesInTriangleSet.ToList<SketchPoint>().ForEach( triangleVertex => triangleVertex.Select4(true, swSelectData));
+
 // Great! The block was sucessfully created. NOTE: for some reasons, MultiSelect2 Method (IModelDocExtension) does NOT select anything in the triangle polygon
 SketchBlockDefinition fullTriangleBlock = modulePart.SketchManager.MakeSketchBlockFromSelected(null);
+
 ClearSelection(ref modulePart);
-
-
 
 modulePart.SketchManager.AddToDB = false;
 

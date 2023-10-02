@@ -95,6 +95,7 @@ namespace SolidworksAutomationTool
 
         /* A function to get one of the sides of a triangle polygon
          * Returns a side of the triangle if the polygon contains at least a Sketch line
+         *  else Returns null
          */
         public static SketchLine? GetOneTriangleSide(ref object[] polygon)
         {
