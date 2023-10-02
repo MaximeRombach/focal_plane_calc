@@ -160,5 +160,47 @@ namespace SolidworksAutomationTool
             dimension.SetSystemValue3(dimensionValue, (int)swSetValueInConfiguration_e.swSetValue_InThisConfiguration, "");
             return dimension;
         }
+
+        /* A function to make a block of chamfered triangle from a triangle polygon
+         */
+        public static SketchBlockDefinition MakeChamferedTriangleBlockFromTrianglePolygon(object[] trianglePolygon, double chamferLength, ref ModelDoc2 partModelDoc, SelectData swSelectData)
+        {
+            // get the vertices of the triangle. The hashSet will pick only the unique vertices
+            HashSet<SketchPoint> verticesInTriangleSet = new();
+            foreach (SketchSegment triangleSegment in trianglePolygon.Cast<SketchSegment>())
+            {
+                if (triangleSegment.GetType() == (int)swSketchSegments_e.swSketchLINE)
+                {
+                    verticesInTriangleSet.Add((SketchPoint)((SketchLine)triangleSegment).GetStartPoint2());
+                    verticesInTriangleSet.Add((SketchPoint)((SketchLine)triangleSegment).GetEndPoint2());
+                }
+            }
+            ClearSelection(ref partModelDoc);
+            // make a chamfer at every vertex
+            List<SketchSegment> chamferSegments = new(3);
+            foreach (SketchPoint vertex in verticesInTriangleSet)
+            {
+                // make chamfers
+                vertex.Select4(true, swSelectData);
+                SketchSegment chamferSegment = partModelDoc.SketchManager.CreateChamfer((int)swSketchChamferType_e.swSketchChamfer_DistanceEqual, chamferLength, chamferLength);
+                chamferSegments.Add(chamferSegment);
+            }
+            // select all chamfer segments
+            chamferSegments.ForEach(chamferSegment => chamferSegment.Select4(true, swSelectData));
+
+            // Select the triangle polygon
+            foreach (SketchSegment triangleSegment in trianglePolygon.Cast<SketchSegment>())
+            {
+                triangleSegment.Select4(true, swSelectData);
+            }
+
+            // select the 3 vertices of the original triangle
+            verticesInTriangleSet.ToList<SketchPoint>().ForEach(triangleVertex => triangleVertex.Select4(true, swSelectData));
+
+            // Great! The block was sucessfully created. NOTE: for some reasons, MultiSelect2 Method (IModelDocExtension) does NOT select anything in the triangle polygon
+            SketchBlockDefinition chamferedTriangleBlock = partModelDoc.SketchManager.MakeSketchBlockFromSelected(null);
+
+            return chamferedTriangleBlock;
+        }
     }
 }

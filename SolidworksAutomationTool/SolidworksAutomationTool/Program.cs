@@ -403,45 +403,8 @@ if (oneSideOfTriangle != null)
     ClearSelection(ref modulePart);
 }
 
-
-// make a block out of the triangle
-// TODO: Reduce boilerplat code and clean up code
-PrintPolygonDataStructure(ref trianglePolygon);
-HashSet<SketchPoint> verticesInTriangleSet = new();
-foreach ( SketchSegment triangleSegment in trianglePolygon.Cast<SketchSegment>())
-{
-    if(triangleSegment.GetType() == (int)swSketchSegments_e.swSketchLINE)
-    {
-        verticesInTriangleSet.Add((SketchPoint)((SketchLine)triangleSegment).GetStartPoint2());
-        verticesInTriangleSet.Add((SketchPoint)((SketchLine)triangleSegment).GetEndPoint2());
-    }
-}
-
-// DEBUG. Checking if an HashSet would pick only the unique vertices - YES!
-ClearSelection(ref modulePart);
-List<SketchSegment> chamferSegments = new(3);
-foreach (SketchPoint vertex in verticesInTriangleSet)
-{
-    Debug.WriteLine($"vertex x: {vertex.X}, y: {vertex.Y}, z: {vertex.Z}");
-    // make chamfers
-    vertex.Select4(true, swSelectData);
-    SketchSegment chamferSegment = modulePart.SketchManager.CreateChamfer((int)swSketchChamferType_e.swSketchChamfer_DistanceEqual, 10.5e-3, 10.5e-3);
-    chamferSegments.Add(chamferSegment);
-}
-// select all chamfer segments
-chamferSegments.ForEach( chamferSegment => chamferSegment.Select4(true, swSelectData));
-
-// Select the triangle polygon
-foreach (SketchSegment triangleSegment in trianglePolygon.Cast<SketchSegment>())
-{
-    triangleSegment.Select4(true, swSelectData);
-}
-
-// select the 3 vertices of the original triangle
-verticesInTriangleSet.ToList<SketchPoint>().ForEach( triangleVertex => triangleVertex.Select4(true, swSelectData));
-
-// Great! The block was sucessfully created. NOTE: for some reasons, MultiSelect2 Method (IModelDocExtension) does NOT select anything in the triangle polygon
-SketchBlockDefinition fullTriangleBlock = modulePart.SketchManager.MakeSketchBlockFromSelected(null);
+// make a block out of the triangle. NOTE: for some reasons, MultiSelect2 Method (IModelDocExtension) does NOT select anything in the triangle polygon
+SketchBlockDefinition chamferedTriangleBlock = MakeChamferedTriangleBlockFromTrianglePolygon(trianglePolygon, 10.5e-3, ref modulePart, swSelectData);
 
 ClearSelection(ref modulePart);
 
