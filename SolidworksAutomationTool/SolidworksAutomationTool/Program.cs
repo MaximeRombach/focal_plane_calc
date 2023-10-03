@@ -3,6 +3,7 @@
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 using SolidworksAutomationTool;
+using System.Diagnostics;
 using static SolidworksAutomationTool.ScaffoldFunctions;
 
 Console.WriteLine("Welcome to the LASTRO Solidworks Automation Tool!");
@@ -11,7 +12,7 @@ Console.WriteLine("Welcome to the LASTRO Solidworks Automation Tool!");
 /* Uncomment the Console.ReadLine() to restore normal path input. Currently they are commented out for debug purpose */
 Console.WriteLine("Please enter the path of the FRONT grid point cloud txt file");
 //string frontGridPointCloudFilePath = Console.ReadLine();
-string frontGridPointCloudFilePath = @"C:\Users\aiden\Desktop\Astrobots\focal_plane_calc\Results_examples\front_grid_indiv_102.txt";
+string frontGridPointCloudFilePath = Path.GetFullPath(@"..\..\..\..\..\Results_examples\front_grid_indiv_102.txt"); // For debug use.
 
 Console.WriteLine("Reading front grid point cloud file ...");
 PointCloud frontGridPointCloud = new();
@@ -20,13 +21,12 @@ Console.WriteLine("Completed reading point cloud file");
 
 Console.WriteLine("Please enter the path of the BACK grid point cloud txt file");
 //string backGridPointCloudFilePath = Console.ReadLine();
-string backGridPointCloudFilePath = @"C:\Users\aiden\Desktop\Astrobots\focal_plane_calc\Results_examples\back_grid_indiv_102.txt";
+string backGridPointCloudFilePath = Path.GetFullPath(@"..\..\..\..\..\Results_examples\back_grid_indiv_102.txt"); // For debug use
 
 Console.WriteLine("Reading back grid point cloud file ...");
 PointCloud backGridPointCloud = new();
 backGridPointCloud.ReadPointCloudFromTxt(backGridPointCloudFilePath, Units.Millimeter);
 Console.WriteLine("Completed reading point cloud file");
-
 
 if ( frontGridPointCloud.point3Ds.Count != backGridPointCloud.point3Ds.Count )
 {
@@ -158,11 +158,8 @@ foreach ((SketchPoint frontSketchPoint, SketchPoint backSketchPoint, SketchSegme
     // add a length dimension to the small segment
     frontSketchPoint.Select4(true, swSelectData);
     smallSegmentSketchPoint.Select4(true, swSelectData);
-    // add dimension. Maybe there's a cleaner way to access the dimension variable directly
-    DisplayDimension smallSegmentDisplayDimension = (DisplayDimension)modulePart.AddDimension2(frontSketchPoint.X, frontSketchPoint.Y, frontSketchPoint.Z);
-    // The Index argument is valid for chamfer display dimensions only. If the display dimension is not a chamfer display dimension, then Index is ignored.
-    Dimension smallSegmentDimension = smallSegmentDisplayDimension.GetDimension2(0);
-    smallSegmentDimension.SetSystemValue3(smallSegmentLength, (int)swSetValueInConfiguration_e.swSetValue_InThisConfiguration, "");
+
+    AddDimensionToSelected(ref modulePart, smallSegmentLength, frontSketchPoint);
 
     ClearSelection(ref modulePart);
 }
@@ -195,7 +192,6 @@ modulePart.Extension.SelectByID2("Top Plane", "PLANE", 0, 0, 0, false, 0, null, 
 modulePart.SketchManager.InsertSketch(true);
 
 // TODO: find a good way to describe which line is which
-// TODO: create the curved top surface
 solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, false);
 
 SketchArc arc = (SketchArc)modulePart.SketchManager.CreateArc(arcCenterPoint.x, arcCenterPoint.y, arcCenterPoint.z,
@@ -213,24 +209,22 @@ ClearSelection(ref modulePart);
 
 // Dimension the arc
 ((SketchSegment)arc).Select4(true, swSelectData);
-DisplayDimension arcDisplayDimension = (DisplayDimension)modulePart.AddDimension2(  arcStartPoint.x / 2.0 + arcEndPoint.x / 2.0,
-                                                                                    arcStartPoint.y / 2.0,
-                                                                                    arcStartPoint.z / 2.0 + arcEndPoint.z / 2.0 );
-// The Index argument is valid for chamfer display dimensions only. If the display dimension is not a chamfer display dimension, then Index is ignored.
-Dimension arcDimension = arcDisplayDimension.GetDimension2(0);
-arcDimension.SetSystemValue3(bestFitSphereRadius, (int)swSetValueInConfiguration_e.swSetValue_InThisConfiguration, "");
+
+AddDimensionToSelected(ref modulePart, bestFitSphereRadius, arcStartPoint.x / 2.0 + arcEndPoint.x / 2.0,
+                                                            arcStartPoint.y / 2.0,
+                                                            arcStartPoint.z / 2.0 + arcEndPoint.z / 2.0);
 
 ClearSelection(ref modulePart);
 
 // create vertical line aka the revolution axis
-SketchLine verticalLine = (SketchLine)modulePart.SketchManager.CreateLine(arcStartPoint.x, arcStartPoint.y, arcStartPoint.z, 
+SketchLine revolutionAxisVerticalLine = (SketchLine)modulePart.SketchManager.CreateLine(arcStartPoint.x, arcStartPoint.y, arcStartPoint.z, 
                                                                             arcStartPoint.x, 180e-3, 0);
 MakeSelectedLineVertical(ref modulePart);
 ClearSelection(ref modulePart);
 // try to select the origin and set the revolution axis to be coincident with it
 SelectOrigin(ref modulePart);
-SketchPoint verticalLineStartPoint = (SketchPoint)verticalLine.GetStartPoint2();
-verticalLineStartPoint.Select4(true, swSelectData);
+SketchPoint revolutionAxisVerticalLineStartPoint = (SketchPoint)revolutionAxisVerticalLine.GetStartPoint2();
+revolutionAxisVerticalLineStartPoint.Select4(true, swSelectData);
 MakeSelectedCoincide(ref modulePart);
 
 ClearSelection(ref modulePart);
@@ -238,48 +232,41 @@ ClearSelection(ref modulePart);
 // coincide the center point of the arc to the revolution axis
 SketchPoint arcCenterSketchPoint = (SketchPoint)arc.GetCenterPoint2();
 arcCenterSketchPoint.Select4(true, swSelectData);
-((SketchSegment)verticalLine).Select4(true, swSelectData);
+((SketchSegment)revolutionAxisVerticalLine).Select4(true, swSelectData);
 MakeSelectedCoincide(ref modulePart);
 ClearSelection(ref modulePart);
 
 // create horizontal line (for flat bottom surface)
 double bottomSurfaceRadius = 663.27e-3;
-SketchPoint verticalLineEndPoint = (SketchPoint)verticalLine.GetEndPoint2();
-SketchLine horizontalLine = (SketchLine)modulePart.SketchManager.CreateLine(verticalLineEndPoint.X, verticalLineEndPoint.Y, verticalLineEndPoint.Z,
-                                                                            bottomSurfaceRadius, verticalLineEndPoint.Y, 0);
+SketchPoint revolutionAxisVerticalLineEndPoint = (SketchPoint)revolutionAxisVerticalLine.GetEndPoint2();
+SketchLine horizontalLine = (SketchLine)modulePart.SketchManager.CreateLine(revolutionAxisVerticalLineEndPoint.X, revolutionAxisVerticalLineEndPoint.Y, revolutionAxisVerticalLineEndPoint.Z,
+                                                                            bottomSurfaceRadius, revolutionAxisVerticalLineEndPoint.Y, 0);
 MakeSelectedLineHorizontal(ref modulePart);
 
-// TODO: check if it's necessary to create a wrapper functino for setting dimensions
-
-// add dimension constraint for the horizontal line
-DisplayDimension bottonSurfaceRadiusDisplayDimension = (DisplayDimension)modulePart.AddDimension2(verticalLineEndPoint.X, verticalLineEndPoint.Y, verticalLineEndPoint.Z);
-// The Index argument is valid for chamfer display dimensions only. If the display dimension is not a chamfer display dimension, then Index is ignored.
-Dimension bottonSurfaceRadiusDimension = bottonSurfaceRadiusDisplayDimension.GetDimension2(0);
-bottonSurfaceRadiusDimension.SetSystemValue3(bottomSurfaceRadius, (int)swSetValueInConfiguration_e.swSetValue_InThisConfiguration, "");
+// add dimension constraint to the horizontal line
+AddDimensionToSelected(ref modulePart, bottomSurfaceRadius, revolutionAxisVerticalLineEndPoint);
 
 ClearSelection(ref modulePart);
 // create vertical line (outer rim of the boarder) connecting the top line 
-SketchPoint topSurfaceTopRightPoint = (SketchPoint)horizontalLine.GetEndPoint2();
+SketchPoint bottomSurfaceTopRightPoint = (SketchPoint)horizontalLine.GetEndPoint2();
 double outerRimHeight = 200e-3;
-SketchLine verticalLineToArc = (SketchLine)modulePart.SketchManager.CreateLine(topSurfaceTopRightPoint.X, topSurfaceTopRightPoint.Y, topSurfaceTopRightPoint.Z, 
-                                                                                topSurfaceTopRightPoint.X, -outerRimHeight, 0);
+SketchLine revolutionAxisVerticalLineToArc = (SketchLine)modulePart.SketchManager.CreateLine(bottomSurfaceTopRightPoint.X, bottomSurfaceTopRightPoint.Y, bottomSurfaceTopRightPoint.Z, 
+                                                                                bottomSurfaceTopRightPoint.X, -outerRimHeight, 0);
 MakeSelectedLineVertical(ref modulePart);
 ClearSelection(ref modulePart);
 
 // make vertical line coincide with the arc
-SketchPoint verticalLineToArcEndPoint = (SketchPoint)verticalLineToArc.GetEndPoint2();
-verticalLineToArcEndPoint.Select4(true, swSelectData);
+SketchPoint revolutionAxisVerticalLineToArcEndPoint = (SketchPoint)revolutionAxisVerticalLineToArc.GetEndPoint2();
+revolutionAxisVerticalLineToArcEndPoint.Select4(true, swSelectData);
 ((SketchSegment)arc).Select4(true, swSelectData);
 MakeSelectedCoincide(ref modulePart);
 ClearSelection(ref modulePart);
 
-// add constraint to outer rim height
-// Note: before calling AddDimension2(), we must select the entity to be dimensioned
-((SketchSegment)verticalLineToArc).Select4(true, swSelectData);
-DisplayDimension outerRimHeightDisplayDimension = (DisplayDimension)modulePart.AddDimension2(topSurfaceTopRightPoint.X, topSurfaceTopRightPoint.Y, topSurfaceTopRightPoint.Z);
-// The Index argument is valid for chamfer display dimensions only. If the display dimension is not a chamfer display dimension, then Index is ignored.
-Dimension outerRimHeightDimension = outerRimHeightDisplayDimension.GetDimension2(0);
-outerRimHeightDimension.SetSystemValue3(outerRimHeight, (int)swSetValueInConfiguration_e.swSetValue_InThisConfiguration, "");
+// add dimension to outer rim height
+((SketchSegment)revolutionAxisVerticalLineToArc).Select4(true, swSelectData);
+
+AddDimensionToSelected(ref modulePart, outerRimHeight, bottomSurfaceTopRightPoint);
+
 ClearSelection(ref modulePart);
 
 modulePart.SketchManager.AddToDB = false;
@@ -303,7 +290,7 @@ modulePart.Extension.SelectByID2(pizzaSketchName, "EXTSKETCH", 0, 0, 0, true, 0,
 
 // select the axis to revolve. According to API doc, we must select with a specific mark
 swSelectData.Mark = 4;
-((SketchSegment)verticalLine).Select4(true, swSelectData);
+((SketchSegment)revolutionAxisVerticalLine).Select4(true, swSelectData);
 // Revolve the first pizza slice
 // TODO: check if it's necessary to create a wrapper function for the feature revolve function. The official api takes too many parameters
 Feature pizzaSlice = modulePart.FeatureManager.FeatureRevolve2(true, true, false, false, true, false, 
@@ -314,6 +301,158 @@ ClearSelection(ref modulePart);
 ZoomToFit(ref modulePart);
 // enbale user input box for dimensions
 solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, true);
+
+// TODO: write a function to extrude one triangle. By using this function repetitively, the program remains clean and easy-to-maintain
+/* Extrude triangles in the slice
+ * Steps:
+ * 1. create points that are both on the bottom plane and the extrusion axes    - Done
+ * 2. create reference planes by using "normal and point" method
+ * 3. start sketches on those planes and draw triangles on sketches
+ * 4. extrude triangles
+ */
+// First define the bottom plane, by creating a parallel plane w.r.t the front plane
+double bottomToFrontPlaneDistance = ((SketchSegment)revolutionAxisVerticalLine).GetLength();
+modulePart.Extension.SelectByID2("Front Plane", "PLANE", 0, 0, 0, false, 0, null, 0);
+// A trick to flip the offset orientation when creating a ref plane: https://stackoverflow.com/questions/71885722/how-to-create-a-flip-offset-reference-plane-with-solidworks-vba-api
+RefPlane bottomPlane = (RefPlane)modulePart.FeatureManager.InsertRefPlane((int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Distance 
+                                                                                + (int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_OptionFlip, bottomToFrontPlaneDistance,
+                                                                             0, 0, 0, 0);
+((Feature)bottomPlane).Name = "Bottom Plane";
+
+// quick test to see if a point can be created on the bottom surface
+// Create a sketch to add points on
+modulePart.Insert3DSketch();
+// for speed improvements
+modelView.EnableGraphicsUpdate = false;
+modulePart.SketchManager.AddToDB = true;
+// keep a list of sketch points on the bottom plane
+List<SketchPoint> bottomSurfaceSketchPointList = new( extrusionAxisList.Count );
+foreach (SketchSegment extrusionAxis in extrusionAxisList)
+{
+    // create a point at some random location (DO NOT USE 0,0,0, that's the origin). The exact location doesn't matter since we will constraint it any ways
+    SketchPoint bottomPlaneSketchPoint = modulePart.SketchManager.CreatePoint(27, 27, 27);
+    bottomSurfaceSketchPointList.Add(bottomPlaneSketchPoint);
+
+    extrusionAxis.Select4(true, swSelectData);
+    MakeSelectedCoincide(ref modulePart);
+    ClearSelection(ref modulePart);
+    // TODO: the bottom plane will need to be passed in if this loop is used as a function
+    // using -1 as the mark, meaning that we don't specify the purpose of the selection to Solidworks
+    ((Feature)bottomPlane).Select2(true, -1);
+    bottomPlaneSketchPoint.Select4(true, swSelectData);
+    MakeSelectedCoincide(ref modulePart);
+    ClearSelection(ref modulePart);
+}
+modelView.EnableGraphicsUpdate = true;
+modulePart.SketchManager.AddToDB = false;
+// close the sketch
+modulePart.Insert3DSketch();
+
+/* Create planes near the bottom plane      - looking good!
+ * Steps:
+ * 1. Try InsertRefPlane Method (IFeatureManager)
+ * 2. select a point on the bottom plane, require it to be coincident with the ref plane
+ * 3. select the extrusion axis, require it to be perpendicular to the ref plane
+ */        
+ClearSelection(ref modulePart);
+RefPlane aBottomRefPlane = CreateRefPlaneFromPointAndNormal(bottomSurfaceSketchPointList[0], extrusionAxisList[0], swSelectData, modulePart.FeatureManager);
+((Feature)aBottomRefPlane).Name = "A Test Plane";
+ClearSelection(ref modulePart);
+
+/* Create a sketch on the newly created plane and draw a triangle on it
+ */
+// disable user input box for dimensions. Otherwise solidworks will stuck at waiting for user inputs
+solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, false);
+modulePart.SketchManager.AddToDB = true;
+
+((Feature)aBottomRefPlane).Select2(true, -1);
+modulePart.SketchManager.InsertSketch(true);
+
+// define where the top vertix of the equilateral triangle is.
+// 0.577350269 is sqrt(3)/3
+// each side of the triangle is 74.5mm long
+double equilateralTriangleSideLength = 74.5e-3;
+SketchPoint someSketchPoint = bottomSurfaceSketchPointList[0];
+Point3D topVertixTriangle = new(someSketchPoint.X, someSketchPoint.Y + 0.577350269 * equilateralTriangleSideLength, someSketchPoint.Z);
+object[] trianglePolygon = (object[])modulePart.SketchManager.CreatePolygon(someSketchPoint.X, someSketchPoint.Y, someSketchPoint.Z,
+                                                                            topVertixTriangle.x, topVertixTriangle.y, topVertixTriangle.z, 3, true);
+
+ClearSelection(ref modulePart);
+
+// constraint the center of the triangle to the extrusion axis
+SketchPoint? triangleCenter = GetTriangleCenterPoint(ref trianglePolygon);
+if (triangleCenter != null)
+{
+    ClearSelection(ref modulePart);
+    triangleCenter.Select4(true, swSelectData);
+    someSketchPoint.Select4(true, swSelectData);
+    MakeSelectedCoincide(ref  modulePart);
+    ClearSelection(ref modulePart);
+}
+
+// make one of the sides horizontal
+SketchLine? oneSideOfTriangle = GetOneTriangleSide(ref trianglePolygon);
+if (oneSideOfTriangle != null)
+{
+    ClearSelection(ref modulePart);
+    ((SketchSegment)oneSideOfTriangle).Select4(true, swSelectData);
+    // Dimension the equilateral triangle's side length
+    AddDimensionToSelected(ref modulePart, equilateralTriangleSideLength, someSketchPoint);
+    ClearSelection(ref modulePart);
+}
+
+// make a block out of the triangle. NOTE: for some reasons, MultiSelect2 Method (IModelDocExtension) does NOT select anything in the triangle polygon
+SketchBlockDefinition chamferedTriangleBlock = MakeChamferedTriangleBlockFromTrianglePolygon(trianglePolygon, 10.5e-3, ref modulePart, swSelectData);
+
+//  save the block to disk - tested, fine
+bool saveChamferedTriangleSuccess = chamferedTriangleBlock.Save(Path.GetFullPath(@"..\..\..\chamferedTriangle.sldblk"));
+if (saveChamferedTriangleSuccess)
+{
+    Debug.WriteLine("Save chamfered triangle successfully");
+}
+
+ClearSelection(ref modulePart);
+modulePart.SketchManager.InsertSketch(true);
+ClearSelection(ref modulePart);
+
+((Feature)aBottomRefPlane).Select2(true, -1);
+modulePart.SketchManager.InsertSketch(true);
+
+//PromptAndWait("Press any key to make a full triangle block");
+
+// Now make only the triangle shape then save it as a block
+object[] fullTrianglePolygon = (object[])modulePart.SketchManager.CreatePolygon(someSketchPoint.X, someSketchPoint.Y, someSketchPoint.Z,
+                                                                            topVertixTriangle.x, topVertixTriangle.y, topVertixTriangle.z, 3, true);
+// dimension the sides
+oneSideOfTriangle = GetOneTriangleSide(ref fullTrianglePolygon);
+if (oneSideOfTriangle != null)
+{
+    ClearSelection(ref modulePart);
+    ((SketchSegment)oneSideOfTriangle).Select4(true, swSelectData);
+    // Dimension the equilateral triangle's side length
+    AddDimensionToSelected(ref modulePart, equilateralTriangleSideLength, (SketchPoint)oneSideOfTriangle.GetStartPoint2());
+    ClearSelection(ref modulePart);
+}
+
+SketchBlockDefinition triangleBlock = MakeTriangleBlockFromTrianglePolygon(fullTrianglePolygon, ref modulePart, swSelectData);
+// save the triangle block to disk - tested, fine
+bool triangleBlockSaveSuccess = triangleBlock.Save( Path.GetFullPath(@"..\..\..\fullTriangle.sldblk"));
+if (triangleBlockSaveSuccess)
+{
+    Debug.WriteLine("Save full triangle successfully");
+}
+
+ClearSelection(ref modulePart);
+
+modulePart.SketchManager.AddToDB = false;
+
+// enbale user input box for dimensions
+solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, true);
+
+modulePart.SketchManager.InsertSketch(true);
+
+ClearSelection(ref modulePart);
+
 // wait for user input before closing
 PromptAndWait("Press any key to close Solidworks");
 
