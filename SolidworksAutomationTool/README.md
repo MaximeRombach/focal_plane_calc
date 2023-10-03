@@ -18,6 +18,12 @@ We chose C# because of its high performance, high-level syntax and built-in garb
 
 - Solidworks
 
-- 
+- The `focal_plane_calc` repo, which is the parent directory of the automation tool.
 
-Pending
+# TODOs
+
+- [ ] Make wrapper functions to reduce boilerplat code
+
+- [ ] Make GUI to help the user adjust various parameters easily
+
+- [ ] 
