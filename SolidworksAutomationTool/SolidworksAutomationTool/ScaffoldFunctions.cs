@@ -202,5 +202,18 @@ namespace SolidworksAutomationTool
 
             return chamferedTriangleBlock;
         }
+
+        /* A function to make a block of triangle from a triangle polygon
+         */ 
+        public static SketchBlockDefinition MakeTriangleBlockFromTrianglePolygon(object[] trianglePolygon, ref ModelDoc2 partModelDoc, SelectData swSelectData)
+        {
+            // Select the triangle polygon
+            foreach (SketchSegment triangleSegment in trianglePolygon.Cast<SketchSegment>())
+            {
+                triangleSegment.Select4(true, swSelectData);
+            }
+            SketchBlockDefinition triangleBlock = partModelDoc.SketchManager.MakeSketchBlockFromSelected(null);
+            return triangleBlock;
+        }
     }
 }

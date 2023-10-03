@@ -12,7 +12,7 @@ Console.WriteLine("Welcome to the LASTRO Solidworks Automation Tool!");
 /* Uncomment the Console.ReadLine() to restore normal path input. Currently they are commented out for debug purpose */
 Console.WriteLine("Please enter the path of the FRONT grid point cloud txt file");
 //string frontGridPointCloudFilePath = Console.ReadLine();
-string frontGridPointCloudFilePath = @"C:\Users\ad\Desktop\Astrobots\focal_plane_calc\Results_examples\front_grid_indiv_102.txt";
+string frontGridPointCloudFilePath = Path.GetFullPath(@"..\..\..\..\..\Results_examples\front_grid_indiv_102.txt"); // For debug use.
 
 Console.WriteLine("Reading front grid point cloud file ...");
 PointCloud frontGridPointCloud = new();
@@ -21,7 +21,7 @@ Console.WriteLine("Completed reading point cloud file");
 
 Console.WriteLine("Please enter the path of the BACK grid point cloud txt file");
 //string backGridPointCloudFilePath = Console.ReadLine();
-string backGridPointCloudFilePath = @"C:\Users\ad\Desktop\Astrobots\focal_plane_calc\Results_examples\back_grid_indiv_102.txt";
+string backGridPointCloudFilePath = Path.GetFullPath(@"..\..\..\..\..\Results_examples\back_grid_indiv_102.txt"); // For debug use
 
 Console.WriteLine("Reading back grid point cloud file ...");
 PointCloud backGridPointCloud = new();
@@ -310,7 +310,6 @@ solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimVa
  * 3. start sketches on those planes and draw triangles on sketches
  * 4. extrude triangles
  */
-
 // First define the bottom plane, by creating a parallel plane w.r.t the front plane
 double bottomToFrontPlaneDistance = ((SketchSegment)revolutionAxisVerticalLine).GetLength();
 modulePart.Extension.SelectByID2("Front Plane", "PLANE", 0, 0, 0, false, 0, null, 0);
@@ -376,7 +375,7 @@ double equilateralTriangleSideLength = 74.5e-3;
 SketchPoint someSketchPoint = bottomSurfaceSketchPointList[0];
 Point3D topVertixTriangle = new(someSketchPoint.X, someSketchPoint.Y + 0.577350269 * equilateralTriangleSideLength, someSketchPoint.Z);
 object[] trianglePolygon = (object[])modulePart.SketchManager.CreatePolygon(someSketchPoint.X, someSketchPoint.Y, someSketchPoint.Z,
-                                                                                            topVertixTriangle.x, topVertixTriangle.y, topVertixTriangle.z, 3, true);
+                                                                            topVertixTriangle.x, topVertixTriangle.y, topVertixTriangle.z, 3, true);
 
 ClearSelection(ref modulePart);
 
@@ -397,7 +396,6 @@ if (oneSideOfTriangle != null)
 {
     ClearSelection(ref modulePart);
     ((SketchSegment)oneSideOfTriangle).Select4(true, swSelectData);
-    MakeSelectedLineHorizontal(ref modulePart);
     // Dimension the equilateral triangle's side length
     AddDimensionToSelected(ref modulePart, equilateralTriangleSideLength, someSketchPoint);
     ClearSelection(ref modulePart);
@@ -405,6 +403,44 @@ if (oneSideOfTriangle != null)
 
 // make a block out of the triangle. NOTE: for some reasons, MultiSelect2 Method (IModelDocExtension) does NOT select anything in the triangle polygon
 SketchBlockDefinition chamferedTriangleBlock = MakeChamferedTriangleBlockFromTrianglePolygon(trianglePolygon, 10.5e-3, ref modulePart, swSelectData);
+
+//  save the block to disk - tested, fine
+bool saveChamferedTriangleSuccess = chamferedTriangleBlock.Save(Path.GetFullPath(@"..\..\..\chamferedTriangle.sldblk"));
+if (saveChamferedTriangleSuccess)
+{
+    Debug.WriteLine("Save chamfered triangle successfully");
+}
+
+ClearSelection(ref modulePart);
+modulePart.SketchManager.InsertSketch(true);
+ClearSelection(ref modulePart);
+
+((Feature)aBottomRefPlane).Select2(true, -1);
+modulePart.SketchManager.InsertSketch(true);
+
+//PromptAndWait("Press any key to make a full triangle block");
+
+// Now make only the triangle shape then save it as a block
+object[] fullTrianglePolygon = (object[])modulePart.SketchManager.CreatePolygon(someSketchPoint.X, someSketchPoint.Y, someSketchPoint.Z,
+                                                                            topVertixTriangle.x, topVertixTriangle.y, topVertixTriangle.z, 3, true);
+// dimension the sides
+oneSideOfTriangle = GetOneTriangleSide(ref fullTrianglePolygon);
+if (oneSideOfTriangle != null)
+{
+    ClearSelection(ref modulePart);
+    ((SketchSegment)oneSideOfTriangle).Select4(true, swSelectData);
+    // Dimension the equilateral triangle's side length
+    AddDimensionToSelected(ref modulePart, equilateralTriangleSideLength, (SketchPoint)oneSideOfTriangle.GetStartPoint2());
+    ClearSelection(ref modulePart);
+}
+
+SketchBlockDefinition triangleBlock = MakeTriangleBlockFromTrianglePolygon(fullTrianglePolygon, ref modulePart, swSelectData);
+// save the triangle block to disk - tested, fine
+bool triangleBlockSaveSuccess = triangleBlock.Save( Path.GetFullPath(@"..\..\..\fullTriangle.sldblk"));
+if (triangleBlockSaveSuccess)
+{
+    Debug.WriteLine("Save full triangle successfully");
+}
 
 ClearSelection(ref modulePart);
 
@@ -414,6 +450,8 @@ modulePart.SketchManager.AddToDB = false;
 solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, true);
 
 modulePart.SketchManager.InsertSketch(true);
+
+ClearSelection(ref modulePart);
 
 // wait for user input before closing
 PromptAndWait("Press any key to close Solidworks");
