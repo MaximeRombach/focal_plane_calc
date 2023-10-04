@@ -22,8 +22,28 @@ We chose C# because of its high performance, high-level syntax and built-in garb
 
 # TODOs
 
-- [ ] Make wrapper functions to reduce boilerplat code
+## On the logic inside the Automation Tool
+
+- [x] Complete the routine to import and place point clouds
+
+- [x] Complete the routine to make extrusion axes
+
+- [x] Complete the routine for making a "full pizza slice"
+
+- [x] Complete the routine for making a full-triangle block
+
+- [x] Complete the routine for making a chamfered-triangle block
+
+- [ ] Reliably position the (full and chamfered) triangles on the "full pizza slice"
+
+- [ ] Extrude the modules
+
+- [ ] Repeat the "extruded pizza slice" to make a full focol plane
+
+## On the high-level planning
 
 - [ ] Make GUI to help the user adjust various parameters easily
 
-- [ ] 
+## On optimizations
+
+- [ ] Make wrapper functions to reduce boilerplat code
