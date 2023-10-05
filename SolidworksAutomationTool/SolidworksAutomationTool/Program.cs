@@ -446,6 +446,12 @@ ClearSelection(ref modulePart);
 
 modulePart.SketchManager.AddToDB = false;
 
+// DEBUG: testing selection of segments inside a block - seems fine
+object[] segmentsInTriangle = (object[])triangleBlock.GetSketch().GetSketchSegments();
+segmentsInTriangle.ToList().ForEach( segment => ((SketchSegment)segment).Select4(true, swSelectData));
+
+PromptAndWait("Waiting");
+
 // enbale user input box for dimensions
 solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, true);
 
