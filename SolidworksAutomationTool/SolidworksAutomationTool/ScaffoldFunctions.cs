@@ -109,6 +109,28 @@ namespace SolidworksAutomationTool
             return null;
         }
 
+        /* A function to get one of the longer sides of a chamfered triangle.
+         * Returns a longer side of the chamfered triangle if the polygon contains at least a sketch line
+         *  else Returns null
+         */
+        public static SketchLine? GetOneChamferedTriangleLongSide(ref object[] polygon)
+        {
+            SketchSegment longSide = null;
+            double longestSideLength = 0;
+            foreach (SketchSegment chamferedTriangleSegment in polygon.Cast<SketchSegment>())
+            {
+                if (chamferedTriangleSegment.GetType() == (int)swSketchSegments_e.swSketchLINE)
+                {
+                    if ( longestSideLength < chamferedTriangleSegment.GetLength() )
+                    {
+                        longestSideLength = chamferedTriangleSegment.GetLength();
+                        longSide = chamferedTriangleSegment;
+                    }
+                }
+            }
+            return (SketchLine?)longSide;
+        }
+
         /* A wrapper function to reduce the boilerplate code for creating normal planes using the "point and normal" method
          *  This function first selects an extrusion axis, requiring it to be perpendicular to the ref plane;
          *  then selects a point which provides the "offset" of the plane, requiring it to be coincident with the ref plane
@@ -195,7 +217,7 @@ namespace SolidworksAutomationTool
             }
 
             // select the 3 vertices of the original triangle
-            verticesInTriangleSet.ToList<SketchPoint>().ForEach(triangleVertex => triangleVertex.Select4(true, swSelectData));
+            verticesInTriangleSet.ToList().ForEach(triangleVertex => triangleVertex.Select4(true, swSelectData));
 
             // Great! The block was sucessfully created. NOTE: for some reasons, MultiSelect2 Method (IModelDocExtension) does NOT select anything in the triangle polygon
             SketchBlockDefinition chamferedTriangleBlock = partModelDoc.SketchManager.MakeSketchBlockFromSelected(null);
