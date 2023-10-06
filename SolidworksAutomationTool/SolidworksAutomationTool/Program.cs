@@ -446,21 +446,23 @@ ClearSelection(ref modulePart);
 
 modulePart.SketchManager.AddToDB = false;
 
+PromptAndWait("Test selecting segments in full triangle in a block");
 // DEBUG: testing selection of segments inside a block - seems fine
 object[] segmentsInTriangle = (object[])triangleBlock.GetSketch().GetSketchSegments();
 segmentsInTriangle.ToList().ForEach( segment => ((SketchSegment)segment).Select4(true, swSelectData));
 
-PromptAndWait("Waiting");
-
+PromptAndWait("Test selecting segments in chamfered triangle in a block");
+ClearSelection(ref modulePart);
+object[] segmentsInChamferedTriangle = (object[])chamferedTriangleBlock.GetSketch().GetSketchSegments();
+segmentsInChamferedTriangle.ToList().ForEach(segment => ((SketchSegment)segment).Select4(true, swSelectData));
+// wait for user input before closing
+PromptAndWait("Press any key to close Solidworks");
 // enbale user input box for dimensions
 solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, true);
 
 modulePart.SketchManager.InsertSketch(true);
 
+
 ClearSelection(ref modulePart);
-
-// wait for user input before closing
-PromptAndWait("Press any key to close Solidworks");
-
 // close Solidworks that runs in the background
 solidworksApp.ExitApp();
