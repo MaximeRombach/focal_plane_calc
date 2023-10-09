@@ -44,6 +44,12 @@ class FocalSurf():
           self.vigR = self.focal_surf_param['vigR'] # vignetting radius
           self.BFS = self.focal_surf_param['BFS']
           self.f_number = self.focal_surf_param['f-number']
+
+          if self.project == 'WST' or self.project == 'WST1' or self.project == 'WST2':
+               self.donutR = self.focal_surf_param['donutR']
+
+          self.surfaces_polygon = {} # dictionnary to store the polygons of the focal plane surfaces (main vigR, GFA, donut hole, etc)
+          self.surf_name = self.focal_surf_param['name']
           
      def asph_R2Z(self):
           """ 
@@ -64,35 +70,68 @@ class FocalSurf():
      def set_surface_parameters(self):
 
           if self.project == 'MUST':
-               focal_surf_param = {'R': -11088.4, # [mm], curvature radius
-                                   'vigD': 1047.16,
-                                   'vigR': 1047.16/2, # [mm], vignetting
+               # MUST optical data from 2023-09-06
+               focal_surf_param = {
+                                   'name': 'MUST',
+                                   'R': -11365, # [mm], curvature radius
+                                   'vigD': 589.27 * 2,
+                                   'vigR': 589.27, # [mm], vignetting
                                    'asph_formula': True,
-                                   'k': 0, 
-                                   'a2': -2.18895e-12, 
-                                   'a3': 6.11195e-18,
-                                   'f-number': 3.5,
-                                   'BFS': 11025 # [mm], radius of BFS
+                                   'k': 0,
+                                   'a1': 0, 
+                                   'a2': -6e-12, 
+                                   'a3': 0,
+                                   'f-number': 3.699,
+                                   'BFS': 10921.711 # [mm], radius of BFS # Value calculated with Joe's cal_BFS function with MUST data from 2023-09-06
                                    }
 
           elif self.project == 'MegaMapper':
-               focal_surf_param = {'R': -11067, 
+               focal_surf_param = {
+                                   'name': 'MegaMapper',
+                                   'R': -11067, 
                                    'vigR': 613.2713,
+                                   # 'vigR': 440,
                                    'asph_formula': False,
                                    'BFS': 11045.6, # [mm], radius of BFS
                                    'f-number': 3.57
                                    }
 
           elif self.project == 'DESI':
-               focal_surf_param = {'R': -11067, 
+               focal_surf_param = {
+                                   'name': 'DESI',
+                                   'R': -11067, 
                                    'vigR': 406.,
                                    'asph_formula': False,
-                                   'BFS': 11067 # [mm], radius of BFS,
+                                   'BFS': 11067, # [mm], radius of BFS,
+                                   'f-number': 3.699
                                    }
+               
+          elif self.project == 'WST1':
+               focal_surf_param = {
+                                   'name': r'$\bf{WST - Focal Plane \varnothing: 1.2 m - Center \varnothing: 0.17m}$',
+                                   'R': -11067, 
+                                   'vigR': 600, # [mm], vignetting radius
+                                   'donutR': (0.17/2*1000), # [mm], radius of donut hole
+                                   'asph_formula': False,
+                                   'BFS': 11067, # [mm], radius of BFS,
+                                   'f-number': 3.699, # assumption based on previous telescope designs
+                                   'FoV': 1.8 # [deg]
+                                   }
+               
+          elif self.project == 'WST2':
+               focal_surf_param = {
+                              'name': r'$\bf{WST - Focal Plane \varnothing: 1.4 m - Center \varnothing: 0.2m}$',
+                              'R': -11067, 
+                              'vigR': 700,# [mm], vignetting radius
+                              'donutR': (0.2/2*1000), # [mm], radius of donut hole
+                              'asph_formula': False,
+                              'BFS': 11067, # [mm], radius of BFS,
+                              'f-number': 3.7, # assumption based on previous telescope designs
+                              'FoV': 1.8 # [deg]
+                              }
           else: 
-               logging.error('ERROR setting focal surface param: unknown project')
-
-          
+               logging.error(f'Setting focal surface parameters: {self.project} project is not defined')
+               raise Exception(f'Error in setting focal surface parameters: {self.project} project is not defined')
 
           return focal_surf_param
      
@@ -118,7 +157,7 @@ class FocalSurf():
           return sphR
      
      def make_vigR_polygon(self, pizza_angle = 360,  n_vigR = 500):
-     
+          
           vigR_lim_x = self.vigR * np.cos(np.deg2rad(np.linspace(0,pizza_angle,n_vigR)))
           vigR_lim_y = self.vigR * np.sin(np.deg2rad(np.linspace(0,pizza_angle,n_vigR)))
           if pizza_angle == 360:
@@ -128,6 +167,13 @@ class FocalSurf():
           vigR_lim_x = np.insert(vigR_lim_x, 0, end_point[0])
           vigR_lim_y = np.insert(vigR_lim_y, 0, end_point[1])
           pizza = Polygon(to_polygon_format(vigR_lim_x, vigR_lim_y))
+
+          if self.project == 'WST' or self.project == 'WST1' or self.project == 'WST2':
+                    donut = Polygon(to_polygon_format(vigR_lim_x*self.donutR/self.vigR, vigR_lim_y*self.donutR/self.vigR))
+                    pizza = pizza.difference(donut)
+                    self.surfaces_polygon['donut'] = donut
+
+          self.surfaces_polygon['pizza'] = pizza
 
           return pizza
 
@@ -149,15 +195,26 @@ class SavingResults:
      def __init__(self, saving_df) -> None:
 
           self.results_dir_path = self.path_to_results_dir
-          self.save_plots = saving_df['save_plots']
-          self.save_dxf = saving_df['save_dxf']
-          self.save_csv = saving_df['save_csv']
-          self.save_txt = saving_df['save_txt']
+          if 'save_plots' in saving_df.keys():
+               self.save_plots = saving_df['save_plots']
+
+               
+          if 'save_dxf' in saving_df.keys():
+               self.save_dxf = saving_df['save_dxf']
+
+
+          if 'save_csv' in saving_df.keys():
+               self.save_csv = saving_df['save_csv']
+
+
+          if 'save_txt' in saving_df.keys():     
+               self.save_txt = saving_df['save_txt']   
 
      def path_to_results_dir(self):
 
           script_dir = os.path.dirname(__file__)
-          results_dir_path = os.path.join(script_dir, 'Results_examples/')
+          # results_dir_path = os.path.join(script_dir, 'Results_examples/')
+          results_dir_path = os.path.join(script_dir, 'Results/')
 
           if not os.path.isdir(results_dir_path):
                os.makedirs(results_dir_path)
@@ -193,22 +250,23 @@ class SavingResults:
           now = datetime.now()
           today_filename = now.strftime("%Y-%m-%d-%H-%M-%S_") + suffix_name + ".png"
           plt.savefig(self.results_dir_path() + today_filename, bbox_inches = 'tight', format='png', dpi = dpi)
-          logging.info(f'{suffix_name}.png saved')
+          logging.info(f'{suffix_name}.png successfully saved in in {self.results_dir_path()}')
 
      def save_grid_to_txt(self, grid, filename):
 
           if not self.save_txt:
                return
+          now = datetime.now()
           # grid MUST be a (N,3) numpy array
           x = grid[:,0]
           y = grid[:,1]
           z = grid[:,2]
-          with open(self.results_dir_path() + f'{filename}.txt', 'w') as file:
+          with open(self.results_dir_path() + now.strftime("%Y-%m-%d-%H-%M-%S_") + f'{filename}.txt', 'w') as file:
                file.write("x[mm] y[mm] z[mm]\n")
                for (dx,dy,dz) in zip(x,y,z):
                     file.write(f"{dx:.3f} {dy:.3f} {dz:.3f}\n")
           
-          logging.info(f'{filename}.txt succesfully saved')
+          logging.info(f'{filename}.txt succesfully saved in {self.results_dir_path()}')
 
 """ Module parameters """ 
 
@@ -378,7 +436,7 @@ class Module(SavingResults):
                start_offset_x = self.x_inc * idx + self.x_first
                start_offset_y = self.y_inc * idx + self.y_first
 
-                    # Generate each row of robot: nb robots/row decreases as going upward in triangle
+               # Generate each row of robot: nb robots/row decreases as going upward in triangle
                xx_new = np.linspace(start_offset_x, (self.nb_rows - idx ) * self.pitch + start_offset_x, self.nb_rows - idx + 1)
                yy_new = start_offset_y * np.ones(len(xx_new))
 
@@ -538,11 +596,12 @@ class IntermediateTriangle:
           return intermediate_collection, intermediate_collection_speed, intermediate_coverage, inter_df
 
 class GFA(SavingResults):
-     def __init__(self, length: float, width: float, nb_gfa: int, saving_df, vigR: float) -> None:
+     def __init__(self, length: float, width: float, nb_gfa: int, saving_df, vigR: float, trimming_angle = 360) -> None:
           self.length = length
           self.width = width
           self.vigR = vigR
           self.nb_gfa = nb_gfa
+          self.trimming_angle = trimming_angle
           self.gdf_gfa = self.make_GFA_array()
 
           super().__init__(saving_df)
@@ -792,9 +851,10 @@ def plot_intermediate(intermediate_collection, nb_robots, ignore_points, interme
                continue
           plot_module(mod_collection, label_coverage, label_robots, ignore_points)
                
-def final_title(nb_robots, total_modules, total_robots, inter_frame_thick, global_frame_thick, allow_small_out, out_allowance, disp_robots_info = True):
+def final_title(project: str, nb_robots: int, total_modules: int, total_robots: int, inter_frame_thick, global_frame_thick, allow_small_out: bool, out_allowance: float, disp_robots_info: bool = True):
 
-
+     project_info = r"$\bf{Project:}$" + project
+     
      if allow_small_out:
           small_out_info = f"Out allowance: {out_allowance * 100:0.1f} %"
      else:
@@ -807,7 +867,7 @@ def final_title(nb_robots, total_modules, total_robots, inter_frame_thick, globa
           robots_info = ''
           modules_info = ''
      if inter_frame_thick != global_frame_thick:
-          figtitle = f"Semi frameless - {modules_info} \n Inner gap: {inter_frame_thick} mm - Global gap: {global_frame_thick} mm {robots_info} \n {small_out_info} \n"
+          figtitle = f"{project_info}\n Semi frameless - {modules_info} \n Inner gap: {inter_frame_thick} mm - Global gap: {global_frame_thick} mm {robots_info} \n {small_out_info} \n"
      elif inter_frame_thick == global_frame_thick and global_frame_thick == 0:
           figtitle = f"Frameless - {modules_info} {robots_info} \n {small_out_info} \n"
      else:
