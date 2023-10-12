@@ -115,7 +115,7 @@ namespace SolidworksAutomationTool
          */
         public static SketchLine? GetOneChamferedTriangleLongSide(ref object[] polygon)
         {
-            SketchSegment longSide = null;
+            SketchSegment? longSide = null;
             double longestSideLength = 0;
             foreach (SketchSegment chamferedTriangleSegment in polygon.Cast<SketchSegment>())
             {
@@ -181,6 +181,33 @@ namespace SolidworksAutomationTool
             // not sure if swSetValue_InThisConfiguration is the best parameter to use
             dimension.SetSystemValue3(dimensionValue, (int)swSetValueInConfiguration_e.swSetValue_InThisConfiguration, "");
             return dimension;
+        }
+
+        /* A function to add chamfer to all vertices on a equilateral triangle.
+         * This function add chamfers in the same way as the function MakeChamferedTriangleBlockFromTrianglePolygon but does not create a block
+         * Return: void
+         */
+        public static void MakeChamferedTriangleFromTrianglePolygon(object[] trianglePolygon, double chamferLength, ref ModelDoc2 partModelDoc, SelectData swSelectData)
+        {
+            // get the vertices of the triangle. The hashSet will pick only the unique vertices
+            HashSet<SketchPoint> verticesInTriangleSet = new();
+            foreach (SketchSegment triangleSegment in trianglePolygon.Cast<SketchSegment>())
+            {
+                if (triangleSegment.GetType() == (int)swSketchSegments_e.swSketchLINE)
+                {
+                    verticesInTriangleSet.Add((SketchPoint)((SketchLine)triangleSegment).GetStartPoint2());
+                    verticesInTriangleSet.Add((SketchPoint)((SketchLine)triangleSegment).GetEndPoint2());
+                }
+            }
+            ClearSelection(ref partModelDoc);
+            // make a chamfer at every vertex
+            foreach (SketchPoint vertex in verticesInTriangleSet)
+            {
+                // make chamfers
+                vertex.Select4(true, swSelectData);
+                SketchSegment chamferSegment = partModelDoc.SketchManager.CreateChamfer((int)swSketchChamferType_e.swSketchChamfer_DistanceEqual, chamferLength, chamferLength);
+                ClearSelection(ref partModelDoc);
+            }
         }
 
         /* A function to make a block of chamfered triangle from a triangle polygon

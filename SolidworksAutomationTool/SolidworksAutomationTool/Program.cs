@@ -356,7 +356,7 @@ modulePart.Insert3DSketch();
  */        
 ClearSelection(ref modulePart);
 RefPlane aBottomRefPlane = CreateRefPlaneFromPointAndNormal(bottomSurfaceSketchPointList[0], extrusionAxisList[0], swSelectData, modulePart.FeatureManager);
-((Feature)aBottomRefPlane).Name = "A Test Plane";
+((Feature)aBottomRefPlane).Name = "TestPlane1";
 ClearSelection(ref modulePart);
 
 /* Create a sketch on the newly created plane and draw a triangle on it
@@ -365,6 +365,7 @@ ClearSelection(ref modulePart);
 solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, false);
 modulePart.SketchManager.AddToDB = true;
 
+// Create a new sketch on a close-to-bottom plane
 ((Feature)aBottomRefPlane).Select2(true, -1);
 modulePart.SketchManager.InsertSketch(true);
 
@@ -374,13 +375,13 @@ modulePart.SketchManager.InsertSketch(true);
 double equilateralTriangleSideLength = 74.5e-3;
 SketchPoint someSketchPoint = bottomSurfaceSketchPointList[0];
 Point3D topVertixTriangle = new(someSketchPoint.X, someSketchPoint.Y + 0.577350269 * equilateralTriangleSideLength, someSketchPoint.Z);
-object[] trianglePolygon = (object[])modulePart.SketchManager.CreatePolygon(someSketchPoint.X, someSketchPoint.Y, someSketchPoint.Z,
+object[] unchamferedTrianglePolygon = (object[])modulePart.SketchManager.CreatePolygon(someSketchPoint.X, someSketchPoint.Y, someSketchPoint.Z,
                                                                             topVertixTriangle.x, topVertixTriangle.y, topVertixTriangle.z, 3, true);
 
 ClearSelection(ref modulePart);
 
 // constraint the center of the triangle to the extrusion axis
-SketchPoint? triangleCenter = GetTriangleCenterPoint(ref trianglePolygon);
+SketchPoint? triangleCenter = GetTriangleCenterPoint(ref unchamferedTrianglePolygon);
 if (triangleCenter != null)
 {
     ClearSelection(ref modulePart);
@@ -391,7 +392,7 @@ if (triangleCenter != null)
 }
 
 // make one of the sides horizontal
-SketchLine? oneSideOfTriangle = GetOneTriangleSide(ref trianglePolygon);
+SketchLine? oneSideOfTriangle = GetOneTriangleSide(ref unchamferedTrianglePolygon);
 if (oneSideOfTriangle != null)
 {
     ClearSelection(ref modulePart);
@@ -401,68 +402,59 @@ if (oneSideOfTriangle != null)
     ClearSelection(ref modulePart);
 }
 
-// make a block out of the triangle. NOTE: for some reasons, MultiSelect2 Method (IModelDocExtension) does NOT select anything in the triangle polygon
-SketchBlockDefinition chamferedTriangleBlock = MakeChamferedTriangleBlockFromTrianglePolygon(trianglePolygon, 10.5e-3, ref modulePart, swSelectData);
+// add the chamfers
+MakeChamferedTriangleFromTrianglePolygon(unchamferedTrianglePolygon, 10.5e-3, ref modulePart, swSelectData);
 
-//  save the block to disk - tested, fine
-bool saveChamferedTriangleSuccess = chamferedTriangleBlock.Save(Path.GetFullPath(@"..\..\..\chamferedTriangle.sldblk"));
-if (saveChamferedTriangleSuccess)
-{
-    Debug.WriteLine("Save chamfered triangle successfully");
-}
-
-ClearSelection(ref modulePart);
+// ACTUALLY FORGET ABOUT THE BLOCKS!! .make a block out of the triangle. NOTE: for some reasons, MultiSelect2 Method (IModelDocExtension) does NOT select anything in the triangle polygon
+// DEBUG: remember the name of the unchamfered sketch
+string unchamferedSketchName = ((Feature)modulePart.SketchManager.ActiveSketch).Name;
+Debug.WriteLine($"unchamfered sketch name is: {unchamferedSketchName}");
 modulePart.SketchManager.InsertSketch(true);
 ClearSelection(ref modulePart);
 
+// Create a sketch on the same close-to-bottom plane for the full triangle
 ((Feature)aBottomRefPlane).Select2(true, -1);
 modulePart.SketchManager.InsertSketch(true);
-
-//PromptAndWait("Press any key to make a full triangle block");
 
 // Now make only the triangle shape then save it as a block
 object[] fullTrianglePolygon = (object[])modulePart.SketchManager.CreatePolygon(someSketchPoint.X, someSketchPoint.Y, someSketchPoint.Z,
                                                                             topVertixTriangle.x, topVertixTriangle.y, topVertixTriangle.z, 3, true);
 // dimension the sides
-oneSideOfTriangle = GetOneTriangleSide(ref fullTrianglePolygon);
-if (oneSideOfTriangle != null)
+SketchLine? oneSideOfFullTriangle = GetOneTriangleSide(ref fullTrianglePolygon);
+if (oneSideOfFullTriangle != null)
 {
     ClearSelection(ref modulePart);
-    ((SketchSegment)oneSideOfTriangle).Select4(true, swSelectData);
+    ((SketchSegment)oneSideOfFullTriangle).Select4(true, swSelectData);
     // Dimension the equilateral triangle's side length
-    AddDimensionToSelected(ref modulePart, equilateralTriangleSideLength, (SketchPoint)oneSideOfTriangle.GetStartPoint2());
+    AddDimensionToSelected(ref modulePart, equilateralTriangleSideLength, (SketchPoint)oneSideOfFullTriangle.GetStartPoint2());
     ClearSelection(ref modulePart);
-}
-
-SketchBlockDefinition triangleBlock = MakeTriangleBlockFromTrianglePolygon(fullTrianglePolygon, ref modulePart, swSelectData);
-// save the triangle block to disk - tested, fine
-bool triangleBlockSaveSuccess = triangleBlock.Save( Path.GetFullPath(@"..\..\..\fullTriangle.sldblk"));
-if (triangleBlockSaveSuccess)
-{
-    Debug.WriteLine("Save full triangle successfully");
 }
 
 ClearSelection(ref modulePart);
+
+string fullTriangleSketchName = ((Feature)modulePart.SketchManager.ActiveSketch).Name;
+Debug.WriteLine($"full triangle sketch name is: {fullTriangleSketchName}");
+// quit editing sketch
+modulePart.SketchManager.InsertSketch(true);
+ClearSelection(ref modulePart);
+
+// Debug: Create another test plane near the bottom and insert a sketch on it
+RefPlane anotherTestPlane = CreateRefPlaneFromPointAndNormal(bottomSurfaceSketchPointList[27], extrusionAxisList[27], swSelectData, modulePart.FeatureManager);
+((Feature)anotherTestPlane).Name = "AnotherTestPlane";
+
+// NEW WAY TO COPY SKETCHES: select the sketch to be copied, copy the sketch, select the plane to paste the sketch on, paste the sketch
+ClearSelection(ref modulePart);
+modulePart.Extension.SelectByID2(unchamferedSketchName, "SKETCH", 0, 0, 0, true, 0, null, 0);
+modulePart.EditCopy();
+((Feature)anotherTestPlane).Select2(true, -1);
+modulePart.Paste();
+ClearSelection(ref modulePart);
+
 
 modulePart.SketchManager.AddToDB = false;
-
-PromptAndWait("Test selecting segments in full triangle in a block");
-// DEBUG: testing selection of segments inside a block - seems fine
-object[] segmentsInTriangle = (object[])triangleBlock.GetSketch().GetSketchSegments();
-segmentsInTriangle.ToList().ForEach( segment => ((SketchSegment)segment).Select4(true, swSelectData));
-
-PromptAndWait("Test selecting segments in chamfered triangle in a block");
-ClearSelection(ref modulePart);
-object[] segmentsInChamferedTriangle = (object[])chamferedTriangleBlock.GetSketch().GetSketchSegments();
-segmentsInChamferedTriangle.ToList().ForEach(segment => ((SketchSegment)segment).Select4(true, swSelectData));
-// wait for user input before closing
-PromptAndWait("Press any key to close Solidworks");
 // enbale user input box for dimensions
 solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, true);
-
-modulePart.SketchManager.InsertSketch(true);
-
-
-ClearSelection(ref modulePart);
+// wait for user input before closing
+PromptAndWait("Press any key to close Solidworks");
 // close Solidworks that runs in the background
 solidworksApp.ExitApp();
