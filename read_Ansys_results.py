@@ -23,12 +23,14 @@ Output:
 
 """
 # Fileneame = path to log file from Ansys analyses
-filename = "C:/Users/rombach/Documents/Astrobots/Inosuisse/FEM/True_frame/true_frame_test_files/user_files/DesignPointLog.csv"
-comment_prefix = "#"  # Set this to the comment prefix used in your file
-separator = ","
+# filename = "C:/Users/rombach/Documents/Astrobots/Inosuisse/FEM/True_frame/true_frame_test_files/user_files/DesignPointLog.csv"
+filename = "./Results/turbo_table_data6.csv"
 
-save_plots = False
-num_lines_to_skip = 198 # log file logs since beginning of analyses, skip first rows that are now irrelevant
+comment_prefix = "#"  # Set this to the comment prefix used in your file
+separator = ";"
+
+save_plots = True
+num_lines_to_skip = 6 # log file logs since beginning of analyses, skip first rows that are now irrelevant
 
 saving_df = {"save_plots": save_plots}
 saving = param.SavingResults(saving_df)
@@ -36,9 +38,9 @@ saving = param.SavingResults(saving_df)
 data = []
 
 with open(filename, "r") as csv_file:
-    csv_reader = csv.reader(csv_file)
+    csv_reader = csv.reader(csv_file, delimiter=separator)
     for line_number, row in enumerate(csv_reader):
-        if not row or row[0].startswith(comment_prefix) or line_number <= num_lines_to_skip:
+        if not row or row[0].startswith(comment_prefix) or line_number < num_lines_to_skip:
             continue  # Skip empty rows and comment lines
         data.append(row)
 
@@ -47,11 +49,11 @@ with open(filename, "r") as csv_file:
 df = pd.DataFrame(data)
 print(df) 
 df.drop([0],inplace=True)
-df.drop([0,3,6], axis=1, inplace=True)
+df.drop([0,1,3], axis=1, inplace=True)
 print(df) 
-df.columns = ['Frame thickness', 'maxstress75', 'maxstress102', 'avstress102', 'def63', 'maxstress63', 'avstress63', 'def102', 'avstress75', 'def75']
+df.columns = ['Frame thickness', 'def102', 'maxstress102', 'avstress102', 'maxstress75', 'avstress75', 'def75', 'def63', 'maxstress63', 'avstress63']
 df.sort_values(by=['Frame thickness'], ascending = True, inplace = True)
-
+print(df) 
 
 # Now you can extract columns from the data and create a plot
 x = df['Frame thickness'].astype(float).to_numpy()
