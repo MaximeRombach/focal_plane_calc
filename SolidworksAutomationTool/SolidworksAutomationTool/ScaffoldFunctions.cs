@@ -77,6 +77,13 @@ namespace SolidworksAutomationTool
             }
         }
 
+        /* A wrapper function to get the name of the current active sketch*/
+        public static string GetActiveSketchName(ref ModelDoc2 partModelDoc)
+        {
+            // TODO: add a check on the active status of the active sketch. There could be no active sketch
+            return ((Feature)partModelDoc.SketchManager.ActiveSketch).Name;
+        }
+
         /* A function to get the center point of the inscribed construction circle inside the triangle polygon
          * Returns the center point as a sketch point if the polygon contains a Sketch Arc
          *          else, returns null.
@@ -136,7 +143,7 @@ namespace SolidworksAutomationTool
          *  then selects a point which provides the "offset" of the plane, requiring it to be coincident with the ref plane
          *  NOTE: this method does NOT change the selection list. Users should manually clear the selections.
          */
-        public static RefPlane CreateRefPlaneFromPointAndNormal(SketchPoint point, SketchSegment normal, SelectData swSelectData, FeatureManager featureManager)
+        public static RefPlane CreateRefPlaneFromPointAndNormal(SketchPoint point, SketchSegment normal, string? planeName, SelectData swSelectData, FeatureManager featureManager)
         {
             swSelectData.Mark = 0;
             normal.Select4(true, swSelectData);
@@ -146,6 +153,12 @@ namespace SolidworksAutomationTool
             // as the 2 constraints are enough for the "point and normal" method
             RefPlane refPlane = (RefPlane)featureManager.InsertRefPlane((int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Perpendicular, 0,
                                                                                           (int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Coincident, 0, 0, 0);
+            
+            // The user can decide the name of the plane by passing a string. If null is passed in, the plane's name is left to solidworks to decide
+            if (planeName != null )
+            {
+                ((Feature)refPlane).Name = planeName;
+            }
             return refPlane;
         }
 
@@ -185,6 +198,7 @@ namespace SolidworksAutomationTool
 
         /* A function to add chamfer to all vertices on a equilateral triangle.
          * This function add chamfers in the same way as the function MakeChamferedTriangleBlockFromTrianglePolygon but does not create a block
+         * NOTE: this function WILL clear your previous selections
          * Return: void
          */
         public static void MakeChamferedTriangleFromTrianglePolygon(object[] trianglePolygon, double chamferLength, ref ModelDoc2 partModelDoc, SelectData swSelectData)

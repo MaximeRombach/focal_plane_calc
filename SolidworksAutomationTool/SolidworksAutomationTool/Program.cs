@@ -355,8 +355,7 @@ modulePart.Insert3DSketch();
  * 3. select the extrusion axis, require it to be perpendicular to the ref plane
  */        
 ClearSelection(ref modulePart);
-RefPlane aBottomRefPlane = CreateRefPlaneFromPointAndNormal(bottomSurfaceSketchPointList[0], extrusionAxisList[0], swSelectData, modulePart.FeatureManager);
-((Feature)aBottomRefPlane).Name = "TestPlane1";
+RefPlane aBottomRefPlane = CreateRefPlaneFromPointAndNormal(bottomSurfaceSketchPointList[0], extrusionAxisList[0], "TestPlane1", swSelectData, modulePart.FeatureManager);
 ClearSelection(ref modulePart);
 
 /* Create a sketch on the newly created plane and draw a triangle on it
@@ -407,7 +406,7 @@ MakeChamferedTriangleFromTrianglePolygon(unchamferedTrianglePolygon, 10.5e-3, re
 
 // ACTUALLY FORGET ABOUT THE BLOCKS!! .make a block out of the triangle. NOTE: for some reasons, MultiSelect2 Method (IModelDocExtension) does NOT select anything in the triangle polygon
 // DEBUG: remember the name of the unchamfered sketch
-string unchamferedSketchName = ((Feature)modulePart.SketchManager.ActiveSketch).Name;
+string unchamferedSketchName = GetActiveSketchName(ref modulePart);
 Debug.WriteLine($"unchamfered sketch name is: {unchamferedSketchName}");
 modulePart.SketchManager.InsertSketch(true);
 ClearSelection(ref modulePart);
@@ -439,17 +438,35 @@ modulePart.SketchManager.InsertSketch(true);
 ClearSelection(ref modulePart);
 
 // Debug: Create another test plane near the bottom and insert a sketch on it
-RefPlane anotherTestPlane = CreateRefPlaneFromPointAndNormal(bottomSurfaceSketchPointList[27], extrusionAxisList[27], swSelectData, modulePart.FeatureManager);
-((Feature)anotherTestPlane).Name = "AnotherTestPlane";
+RefPlane anotherTestPlane = CreateRefPlaneFromPointAndNormal(bottomSurfaceSketchPointList[27], extrusionAxisList[27], "AnotherTestPlane", swSelectData, modulePart.FeatureManager);
 
 // NEW WAY TO COPY SKETCHES: select the sketch to be copied, copy the sketch, select the plane to paste the sketch on, paste the sketch
 ClearSelection(ref modulePart);
-modulePart.Extension.SelectByID2(unchamferedSketchName, "SKETCH", 0, 0, 0, true, 0, null, 0);
+modulePart.Extension.SelectByID2(unchamferedSketchName, "SKETCH", 0, 0, 0, false, 0, null, 0);
 modulePart.EditCopy();
 ((Feature)anotherTestPlane).Select2(true, -1);
 modulePart.Paste();
+// TODO: CONTINUE HERE: THIS LINE WILL CRASH BECAUSE THERE'S NO ACTIVE SKETCH
+string pastedSketchName = GetActiveSketchName(ref modulePart);
+Debug.WriteLine($"Name of the newly pasted sketch: {pastedSketchName}");
 ClearSelection(ref modulePart);
+// edit the newly created sketch to add constraints
+modulePart.Extension.SelectByID2(pastedSketchName, "SKETCH", 0, 0, 0, false, 0, null, 0);
+modulePart.EditSketch();
 
+object[] segments = (object[])modulePart.SketchManager.ActiveSketch.GetSketchSegments();
+SketchPoint? anotherTriangleCenterPoint = GetTriangleCenterPoint(ref segments);
+anotherTriangleCenterPoint?.Select4(true, swSelectData);
+bottomSurfaceSketchPointList[27].Select4(true, swSelectData);
+MakeSelectedCoincide(ref modulePart);
+ClearSelection(ref modulePart);
+// make a side horizontal
+SketchLine? aSide = GetOneChamferedTriangleLongSide(ref segments);
+((SketchSegment)aSide).Select4(true, swSelectData);
+MakeSelectedLineHorizontal(ref modulePart);
+// quit editing sketch
+modulePart.InsertSketch2(true);
+ClearSelection(ref modulePart);
 
 modulePart.SketchManager.AddToDB = false;
 // enbale user input box for dimensions
