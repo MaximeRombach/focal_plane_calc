@@ -57,13 +57,13 @@ start_time = time.time()
 """ Global variables """
 
 # nbots = [63, 75, 88, 102] # number of robots per module
-nbots = [63]
+nbots = [75]
 # out_allowances = np.arange(0, 0.95, 0.05) # how much is a module allowed to stick out of vigR (max value)
-out_allowances = [0.05]
+out_allowances = [0.2]
 
 width_increase = 0 # [mm] How much we want to increase the base length of a module
 chanfer_length = 10 # [mm] Size of chanfers of module vertices (base value: 7.5); increase chanfer decreases coverage as it reduces the module size thus patrol area
-centered_on_triangle = True # move the center of the grid (red dot) on the centroid on a triangle instead of the edge
+centered_on_triangle = False # move the center of the grid (red dot) on the centroid on a triangle instead of the edge
 full_framed = False # flag to check wether we are in semi frameless or in full framed case (turns True if inter_gap = global_gap = 0 mm)
 
 """ Intermediate frame parameters """
@@ -82,13 +82,13 @@ if inner_gap == global_gap and inner_gap != 0:
      full_framed = True
 
 """ Drawing parameters """
-draw = False
+draw = True
 is_timer = False # Display time of final plots before automatic closing; stays open if False
 
 plot_time = 20 # [s] plotting time
 ignore_robots_positions = False
 
-save_plots = True # Save most useful plots 
+save_plots = False # Save most useful plots 
 save_all_plots = False  # Save all plots (including intermediate ones)
 save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
 save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
@@ -98,8 +98,8 @@ saving = param.SavingResults(saving_df)
 
 """ Define focal surface """
 
-# Available projects: MUST, Megamapper, DESI
-project_surface = 'WST1'
+# Available projects: MUST, Megamapper, DESI, WST1, WST2
+project_surface = 'MUST'
 surf = param.FocalSurf(project = project_surface)
 R = abs(surf.R)
 vigR = surf.vigR
@@ -235,8 +235,8 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                int_centroid_out = not Point(dx,dy).within(pizza)
                int_overlaps_GFA = new_boundary.overlaps(polygon_gfa) # Is on GFA?
 
-               if project_surface == 'WST1' or project_surface == 'WST2': # Check if portion of int triangle is within center hole of WST
-                    int_overlaps_donut = new_boundary.overlaps(surf.surfaces_polygon['donut'])
+               # if project_surface == 'WST1' or project_surface == 'WST2': # Check if portion of int triangle is within center hole of WST
+               #      int_overlaps_donut = new_boundary.overlaps(surf.surfaces_polygon['donut'])
 
                if not fill_empty and sticks_out:
                     color_boundary = 'red'
@@ -544,21 +544,22 @@ if global_gap > 0:
           ax.set_title('Outline saved to DXF file')     
      
 
-disp_title = False
 figtitle = param.final_title(surf.surf_name, nb_robots, total_modules, total_robots, inner_gap, global_gap, allow_small_out, out_allowance)
 filename = f"Coverage_global_{nb_robots}_rob__Inner_{inner_gap}_mm__Global_{global_gap}_mm"
 f, ax= plt.subplots(figsize=(12, 12), sharex = True, sharey=True)
-if disp_title:
-     f.suptitle(figtitle)
+f.suptitle(figtitle)
 gdf_modules.plot(ax=ax,facecolor='None',edgecolor=gdf_modules['color'])
 gdf_bound.plot(ax=ax,facecolor='None', edgecolor=gdf_bound['color'])
 gdf_coverage.plot(column='label',ax=ax, alpha=0.2, legend=True, legend_kwds={'loc': 'upper right'})
 
-if project_surface == 'WST1' or project_surface == 'WST2':
+if "WST" in project_surface:
      def custom_formatter(x, pos):
           return f"{x*surf.focal_surf_param['FoV']/ (2 * surf.focal_surf_param['vigR'])*60:.1f}"  # Converts y axis from mm to arcmin for WST case
      ax.yaxis.set_major_formatter(ticker.FuncFormatter(custom_formatter))
      ax.set_ylabel('y position [arcmin]')
+     default_ticks = f.gca().get_yticks()
+     desired_ticks = [-vigR, -2/3*vigR, -vigR/3,0, vigR/3, vigR*2/3, vigR, -surf.arcmin2mm(surf.donutR), surf.arcmin2mm(surf.donutR)]
+     ax.yaxis.set_ticks(desired_ticks)
 else:
      ax.set_ylabel('y position [mm]')
 ax.set_xlabel('x position [mm]')

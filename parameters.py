@@ -45,11 +45,12 @@ class FocalSurf():
           self.BFS = self.focal_surf_param['BFS']
           self.f_number = self.focal_surf_param['f-number']
 
-          if self.project == 'WST' or self.project == 'WST1' or self.project == 'WST2':
-               self.donutR = self.focal_surf_param['donutR']
+          if 'WST' in self.project:
+               self.donutR = self.focal_surf_param['donutDiam']/2
 
           self.surfaces_polygon = {} # dictionnary to store the polygons of the focal plane surfaces (main vigR, GFA, donut hole, etc)
           self.surf_name = self.focal_surf_param['name']
+          self.FoV = self.focal_surf_param['FoV']
           
      def asph_R2Z(self):
           """ 
@@ -82,7 +83,8 @@ class FocalSurf():
                                    'a2': -6e-12, 
                                    'a3': 0,
                                    'f-number': 3.699,
-                                   'BFS': 10921.711 # [mm], radius of BFS # Value calculated with Joe's cal_BFS function with MUST data from 2023-09-06
+                                   'BFS': 10921.711, # [mm], radius of BFS # Value calculated with Joe's cal_BFS function with MUST data from 2023-09-06
+                                   'FoV': None # [deg]
                                    }
 
           elif self.project == 'MegaMapper':
@@ -93,7 +95,8 @@ class FocalSurf():
                                    # 'vigR': 440,
                                    'asph_formula': False,
                                    'BFS': 11045.6, # [mm], radius of BFS
-                                   'f-number': 3.57
+                                   'f-number': 3.57,
+                                   'FoV': None # [deg]
                                    }
 
           elif self.project == 'DESI':
@@ -103,7 +106,8 @@ class FocalSurf():
                                    'vigR': 406.,
                                    'asph_formula': False,
                                    'BFS': 11067, # [mm], radius of BFS,
-                                   'f-number': 3.699
+                                   'f-number': 3.699,
+                                   'FoV': None # [deg]
                                    }
                
           elif self.project == 'WST1':
@@ -111,7 +115,7 @@ class FocalSurf():
                                    'name': r'$\bf{WST - Focal Plane \varnothing: 1.2 m - Center \varnothing: 0.17m}$',
                                    'R': -11067, 
                                    'vigR': 600, # [mm], vignetting radius
-                                   'donutR': (0.17/2*1000), # [mm], radius of donut hole
+                                   'donutDiam': 20, # [arcmin], diameter of donut hole
                                    'asph_formula': False,
                                    'BFS': 11067, # [mm], radius of BFS,
                                    'f-number': 3.699, # assumption based on previous telescope designs
@@ -123,7 +127,19 @@ class FocalSurf():
                               'name': r'$\bf{WST - Focal Plane \varnothing: 1.4 m - Center \varnothing: 0.2m}$',
                               'R': -11067, 
                               'vigR': 700,# [mm], vignetting radius
-                              'donutR': (0.2/2*1000), # [mm], radius of donut hole
+                              'donutDiam': 20, # [arcmin], diameter of donut hole
+                              'asph_formula': False,
+                              'BFS': 11067, # [mm], radius of BFS,
+                              'f-number': 3.7, # assumption based on previous telescope designs
+                              'FoV': 1.8 # [deg]
+                              }
+
+          elif self.project == 'WST3':
+               focal_surf_param = {
+                              'name': r'$\bf{WST - Focal Plane \varnothing: 1.3 m - Center \varnothing: 0.24m (20 arcmin)}$',
+                              'R': -11067, 
+                              'vigR': 650,# [mm], vignetting radius
+                              'donutDiam': 20, # [arcmin], diameter of donut hole
                               'asph_formula': False,
                               'BFS': 11067, # [mm], radius of BFS,
                               'f-number': 3.7, # assumption based on previous telescope designs
@@ -168,8 +184,8 @@ class FocalSurf():
           vigR_lim_y = np.insert(vigR_lim_y, 0, end_point[1])
           pizza = Polygon(to_polygon_format(vigR_lim_x, vigR_lim_y))
 
-          if self.project == 'WST' or self.project == 'WST1' or self.project == 'WST2':
-                    donut = Polygon(to_polygon_format(vigR_lim_x*self.donutR/self.vigR, vigR_lim_y*self.donutR/self.vigR))
+          if self.project == 'WST' or self.project == 'WST1' or self.project == 'WST2' or self.project == 'WST3':
+                    donut = Polygon(to_polygon_format(vigR_lim_x*self.arcmin2mm(self.donutR)/self.vigR, vigR_lim_y*self.arcmin2mm(self.donutR)/self.vigR))
                     pizza = pizza.difference(donut)
                     self.surfaces_polygon['donut'] = donut
 
@@ -179,6 +195,12 @@ class FocalSurf():
 
      def plot_vigR_poly(self, pizza, label = None, ax = None):
           plot_polygon(pizza, ax = ax, add_points = False, edgecolor = 'black', linestyle = '--', facecolor= 'None', label = label)
+
+     def arcmin2mm(self, arcmin):
+          return arcmin * 2 * self.vigR / (self.FoV * 60)
+     
+     def mm2arcmin(self, mm):
+          return mm * (self.FoV * 60) / (2 * self.vigR)
 
 class SavingResults:
      """
