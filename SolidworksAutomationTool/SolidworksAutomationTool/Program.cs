@@ -407,7 +407,6 @@ MakeChamferedTriangleFromTrianglePolygon(unchamferedTrianglePolygon, 10.5e-3, re
 // ACTUALLY FORGET ABOUT THE BLOCKS!! .make a block out of the triangle. NOTE: for some reasons, MultiSelect2 Method (IModelDocExtension) does NOT select anything in the triangle polygon
 // DEBUG: remember the name of the unchamfered sketch
 string unchamferedSketchName = GetActiveSketchName(ref modulePart);
-Debug.WriteLine($"unchamfered sketch name is: {unchamferedSketchName}");
 modulePart.SketchManager.InsertSketch(true);
 ClearSelection(ref modulePart);
 
@@ -432,6 +431,7 @@ if (oneSideOfFullTriangle != null)
 ClearSelection(ref modulePart);
 
 string fullTriangleSketchName = ((Feature)modulePart.SketchManager.ActiveSketch).Name;
+// DEBUG: checking the name of the sketch that contains the full triangle
 Debug.WriteLine($"full triangle sketch name is: {fullTriangleSketchName}");
 // quit editing sketch
 modulePart.SketchManager.InsertSketch(true);
@@ -442,19 +442,25 @@ RefPlane anotherTestPlane = CreateRefPlaneFromPointAndNormal(bottomSurfaceSketch
 
 // NEW WAY TO COPY SKETCHES: select the sketch to be copied, copy the sketch, select the plane to paste the sketch on, paste the sketch
 ClearSelection(ref modulePart);
+// DEBUG: check number of features in the design tree
+Debug.WriteLine($"Number of features before paste: {modulePart.GetFeatureCount()}");
+
 modulePart.Extension.SelectByID2(unchamferedSketchName, "SKETCH", 0, 0, 0, false, 0, null, 0);
 modulePart.EditCopy();
 ((Feature)anotherTestPlane).Select2(true, -1);
 modulePart.Paste();
-// TODO: CONTINUE HERE: THIS LINE WILL CRASH BECAUSE THERE'S NO ACTIVE SKETCH
-string pastedSketchName = GetActiveSketchName(ref modulePart);
-Debug.WriteLine($"Name of the newly pasted sketch: {pastedSketchName}");
-ClearSelection(ref modulePart);
+
+// TODO: CONTINUE HERE: let's try to get the last created part
+// select the last pasted sketch
+// TODO: reduce boilerplate code
+Feature lastSketchFeature = (Feature)modulePart.FeatureByPositionReverse(0);
+lastSketchFeature.Select2(false, -1);
+Sketch lastSketch = (Sketch)lastSketchFeature.GetSpecificFeature2();
 // edit the newly created sketch to add constraints
-modulePart.Extension.SelectByID2(pastedSketchName, "SKETCH", 0, 0, 0, false, 0, null, 0);
+((Feature)lastSketch).Select2(false, -1);
 modulePart.EditSketch();
 
-object[] segments = (object[])modulePart.SketchManager.ActiveSketch.GetSketchSegments();
+object[] segments = (object[])lastSketch.GetSketchSegments();
 SketchPoint? anotherTriangleCenterPoint = GetTriangleCenterPoint(ref segments);
 anotherTriangleCenterPoint?.Select4(true, swSelectData);
 bottomSurfaceSketchPointList[27].Select4(true, swSelectData);

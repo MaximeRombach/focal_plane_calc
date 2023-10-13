@@ -77,6 +77,23 @@ namespace SolidworksAutomationTool
             }
         }
 
+        /* Debug function to see the features inside the feature manager design tree
+         * This function can be used to check if a feature is created as expected
+         */
+        public static void PrintFeaturesInFeatureManagerDesignTree(ref ModelDoc2 partModelDoc)
+        {
+            Debug.WriteLine("Printing features in this part:");
+            int numberOfFeatures = partModelDoc.GetFeatureCount();
+            Debug.WriteLine($"Found {numberOfFeatures} features in this design tree");
+            // Solidworks doesn't seem to have an api to traverse the design tree from the beginning. So we do some reverse indexing here
+            for (int featureIdx = numberOfFeatures - 1; featureIdx >= 0; featureIdx--)
+            {
+                Feature aFeature = (Feature)partModelDoc.FeatureByPositionReverse(featureIdx);
+                // format the print a bit to make it easy to read
+                Debug.WriteLine($"feature #{numberOfFeatures -1 - featureIdx, 5}    type: {aFeature.GetTypeName2(), 25},    name: {aFeature.Name, 25}");
+            }
+        }
+
         /* A wrapper function to get the name of the current active sketch*/
         public static string GetActiveSketchName(ref ModelDoc2 partModelDoc)
         {
