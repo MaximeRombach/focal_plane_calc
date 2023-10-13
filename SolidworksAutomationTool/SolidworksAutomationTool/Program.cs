@@ -365,12 +365,11 @@ solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimVa
 modulePart.SketchManager.AddToDB = true;
 
 // Create a new sketch on a close-to-bottom plane
-((Feature)aBottomRefPlane).Select2(true, -1);
+((Feature)aBottomRefPlane).Select2(false, -1);
 modulePart.SketchManager.InsertSketch(true);
 
-// define where the top vertix of the equilateral triangle is.
+// define where the top vertix of the equilateral triangle is. Each side of the triangle is 74.5mm long
 // 0.577350269 is sqrt(3)/3
-// each side of the triangle is 74.5mm long
 double equilateralTriangleSideLength = 74.5e-3;
 SketchPoint someSketchPoint = bottomSurfaceSketchPointList[0];
 Point3D topVertixTriangle = new(someSketchPoint.X, someSketchPoint.Y + 0.577350269 * equilateralTriangleSideLength, someSketchPoint.Z);
@@ -390,7 +389,7 @@ if (triangleCenter != null)
     ClearSelection(ref modulePart);
 }
 
-// make one of the sides horizontal
+// make one of the sides horizontal -  Not necessary
 SketchLine? oneSideOfTriangle = GetOneTriangleSide(ref unchamferedTrianglePolygon);
 if (oneSideOfTriangle != null)
 {
@@ -404,8 +403,8 @@ if (oneSideOfTriangle != null)
 // add the chamfers
 MakeChamferedTriangleFromTrianglePolygon(unchamferedTrianglePolygon, 10.5e-3, ref modulePart, swSelectData);
 
-// ACTUALLY FORGET ABOUT THE BLOCKS!! .make a block out of the triangle. NOTE: for some reasons, MultiSelect2 Method (IModelDocExtension) does NOT select anything in the triangle polygon
 // DEBUG: remember the name of the unchamfered sketch
+((Feature)modulePart.SketchManager.ActiveSketch).Name = "Chamfered Triangle Sketch";
 string unchamferedSketchName = GetActiveSketchName(ref modulePart);
 modulePart.SketchManager.InsertSketch(true);
 ClearSelection(ref modulePart);
@@ -414,7 +413,7 @@ ClearSelection(ref modulePart);
 ((Feature)aBottomRefPlane).Select2(true, -1);
 modulePart.SketchManager.InsertSketch(true);
 
-// Now make only the triangle shape then save it as a block
+// Now make only the triangle shape
 object[] fullTrianglePolygon = (object[])modulePart.SketchManager.CreatePolygon(someSketchPoint.X, someSketchPoint.Y, someSketchPoint.Z,
                                                                             topVertixTriangle.x, topVertixTriangle.y, topVertixTriangle.z, 3, true);
 // dimension the sides
@@ -424,12 +423,14 @@ if (oneSideOfFullTriangle != null)
     ClearSelection(ref modulePart);
     ((SketchSegment)oneSideOfFullTriangle).Select4(true, swSelectData);
     // Dimension the equilateral triangle's side length
-    AddDimensionToSelected(ref modulePart, equilateralTriangleSideLength, (SketchPoint)oneSideOfFullTriangle.GetStartPoint2());
+    AddDimensionToSelected(ref modulePart, equilateralTriangleSideLength, (SketchPoint)oneSideOfFullTriangle.GetEndPoint2());
     ClearSelection(ref modulePart);
 }
 
 ClearSelection(ref modulePart);
 
+// Give the first full triangle sketch a special name. 
+((Feature)modulePart.SketchManager.ActiveSketch).Name = "Full Triangle Sketch";
 string fullTriangleSketchName = ((Feature)modulePart.SketchManager.ActiveSketch).Name;
 // DEBUG: checking the name of the sketch that contains the full triangle
 Debug.WriteLine($"full triangle sketch name is: {fullTriangleSketchName}");
@@ -450,7 +451,6 @@ modulePart.EditCopy();
 ((Feature)anotherTestPlane).Select2(true, -1);
 modulePart.Paste();
 
-// TODO: CONTINUE HERE: let's try to get the last created part
 // select the last pasted sketch
 // TODO: reduce boilerplate code
 Feature lastSketchFeature = (Feature)modulePart.FeatureByPositionReverse(0);
