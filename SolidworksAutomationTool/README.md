@@ -20,6 +20,11 @@ We chose C# because of its high performance, high-level syntax and built-in garb
 
 - The `focal_plane_calc` repo, which is the parent directory of the automation tool.
 
+# Current Progress
+![image](https://github.com/MaximeRombach/focal_plane_calc/assets/85515041/f7f39f5d-9507-4501-9bc2-6f7f0cd8d46a)
+
+Can repeatedly create sketches of modules(both chamfered and unchamfered) and extrude using them.
+
 # TODOs
 
 ## On the logic inside the Automation Tool
