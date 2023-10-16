@@ -95,9 +95,9 @@ modulePart.SketchManager.AddToDB = true;
 modulePart.FeatureManager.EnableFeatureTree = false;
 
 // try to allocate space for front sketchpoints and back sketchpoints
-List<SketchPoint> frontSketchPointList = new List<SketchPoint>(frontGridPointCloud.point3Ds.Count);
-List<SketchPoint> backSketchPointList = new List<SketchPoint>(backGridPointCloud.point3Ds.Count);
-List<SketchSegment> extrusionAxisList = new List<SketchSegment>(frontSketchPointList.Count);
+List<SketchPoint> frontSketchPointList = new(frontGridPointCloud.point3Ds.Count);
+List<SketchPoint> backSketchPointList = new(backGridPointCloud.point3Ds.Count);
+List<SketchSegment> extrusionAxisList = new(frontSketchPointList.Count);
 
 // Try iterating through two point clouds at the same time
 foreach ( (Point3D frontPoint, Point3D backPoint) in frontGridPointCloud.point3Ds.Zip(backGridPointCloud.point3Ds))
@@ -284,9 +284,8 @@ modulePart.SketchManager.InsertSketch(true);
 ClearSelection(ref modulePart);
 
 /* Create the first pizza slice */
-// select the sketch to use
-// TODO: possibly create a wrapper function to select sketches and lines
-modulePart.Extension.SelectByID2(pizzaSketchName, "EXTSKETCH", 0, 0, 0, true, 0, null, 0);
+// select the sketch to revolve with
+SelectSketch(ref modulePart, pizzaSketchName, true);
 
 // select the axis to revolve. According to API doc, we must select with a specific mark
 swSelectData.Mark = 4;
@@ -446,7 +445,8 @@ ClearSelection(ref modulePart);
 // DEBUG: check number of features in the design tree
 Debug.WriteLine($"Number of features before paste: {modulePart.GetFeatureCount()}");
 
-modulePart.Extension.SelectByID2(unchamferedSketchName, "SKETCH", 0, 0, 0, false, 0, null, 0);
+// copy the chamfered triangle sketch
+SelectSketch(ref modulePart, unchamferedSketchName);
 modulePart.EditCopy();
 ((Feature)anotherTestPlane).Select2(true, -1);
 modulePart.Paste();
@@ -459,6 +459,8 @@ Sketch lastSketch = (Sketch)lastSketchFeature.GetSpecificFeature2();
 // edit the newly created sketch to add constraints
 ((Feature)lastSketch).Select2(false, -1);
 modulePart.EditSketch();
+// DEBUG: record the pasted sheet's name
+string pastedChamferedTriangleSheetName = GetActiveSketchName(ref modulePart);
 
 object[] segments = (object[])lastSketch.GetSketchSegments();
 SketchPoint? anotherTriangleCenterPoint = GetTriangleCenterPoint(ref segments);
@@ -472,6 +474,16 @@ SketchLine? aSide = GetOneChamferedTriangleLongSide(ref segments);
 MakeSelectedLineHorizontal(ref modulePart);
 // quit editing sketch
 modulePart.InsertSketch2(true);
+ClearSelection(ref modulePart);
+
+// DEBUG: try extrude the chamfered triangle
+SelectSketch(ref modulePart, pastedChamferedTriangleSheetName);
+Feature chamferedExtrusion = CreateTwoWayExtrusion(ref modulePart);
+ClearSelection(ref modulePart);
+
+// DEBUG: try to extrude another chamfered triangle
+SelectSketch(ref modulePart, unchamferedSketchName);
+Feature anotherChamferedExtrusion = CreateTwoWayExtrusion(ref modulePart);
 ClearSelection(ref modulePart);
 
 modulePart.SketchManager.AddToDB = false;

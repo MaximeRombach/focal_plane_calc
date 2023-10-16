@@ -3,6 +3,7 @@ using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 using System.Diagnostics;
 
+
 namespace SolidworksAutomationTool
 {
     public class ScaffoldFunctions
@@ -49,6 +50,12 @@ namespace SolidworksAutomationTool
         // Wrapper function to select the origin
         public static void SelectOrigin(ref ModelDoc2 partModelDoc)
             => partModelDoc.Extension.SelectByID2("Point1@Origin", "EXTSKETCHPOINT", 0, 0, 0, false, 0, null, 0);
+
+        /* Wrapper function to select the sketch with the given name */
+        public static void SelectSketch(ref ModelDoc2 partModelDoc, string sketchName, bool appendToSelection = false)
+        {
+            partModelDoc.Extension.SelectByID2(sketchName, "SKETCH", 0, 0, 0, appendToSelection, 0, null, 0);
+        }
 
         /* Wrapper function to zoom-to-fit the view */
         public static void ZoomToFit(ref ModelDoc2 partModelDoc)
@@ -177,6 +184,34 @@ namespace SolidworksAutomationTool
                 ((Feature)refPlane).Name = planeName;
             }
             return refPlane;
+        }
+
+        /* A wrapper function to make two-way extrusion on a already selected sketch 
+         * Reuturns the extrusion feature
+         * NOTE: this function does not check if the selected is a valid sketch or something else.
+         */
+        public static Feature CreateTwoWayExtrusion(ref ModelDoc2 partModelDoc)
+        {
+            // the FeatureCut4 api takes a ton of arguments. This wrapper function is to simplify the calling process.
+            // https://help.solidworks.com/2023/english/api/sldworksapi/solidworks.interop.sldworks~solidworks.interop.sldworks.ifeaturemanager~featurecut4.html?verRedirect=1
+            Feature extrusionFeature = partModelDoc.FeatureManager.FeatureCut4(
+                                    false,  // true for single ended cut, false for double-ended cut
+                                    false,  // True to remove material outside of the profile of the flip side to cut, false to not
+                                    false,  // True for Direction 1 to be opposite of the default direction
+                                    (int)swEndConditions_e.swEndCondThroughAllBoth, // Termination type for the first end
+                                    (int)swEndConditions_e.swEndCondThroughAllBoth, // Termination type for the second end 
+                                    1, 1,   // depth of extrusion for 1st and 2nd end in meters
+                                    false, false, // True allows a draft angle in the first/second direction, false does not allow drafting in the first/second direction
+                                    false, false, // True for the first/second draft angle to be inward, false to be outward; only valid when Dchk1/Dchk2 is true
+                                    1, 1,   // Draft angle for the first end; only valid when Dchk1 is true
+                                    false, false, // If you chose to offset the first/second end condition from another face or plane, then true specifies offset in direction away from the sketch, false specifies offset from the face or plane in a direction toward the sketch
+                                    false, false, 
+                                    false, true, true, true, true, false,
+                                    (int)swStartConditions_e.swStartSketchPlane,  // Start conditions as defined in swStartConditions_e
+                                    0,      // If T0 is swStartConditions_e.swStartOffset, then specify an offset value
+                                    false,  // If T0 is swStartConditions_e.swStartOffset, then true to flip the direction of cut, false to not
+                                    false);
+            return extrusionFeature;
         }
 
         /* Wrapper function to add dimension to the selected object. 
