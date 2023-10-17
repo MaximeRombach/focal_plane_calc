@@ -6,6 +6,14 @@ using System.Diagnostics;
 
 namespace SolidworksAutomationTool
 {
+    /* A struct storing the 3 basic reference planes */
+    public struct BasicReferencePlanes
+    {
+        public Feature frontPlane;
+        public Feature topPlane;
+        public Feature rightPlane;
+    }
+
     public class ScaffoldFunctions
     {
         /* Display a prompt to the console and wait for the user's input before continuing */
@@ -106,6 +114,51 @@ namespace SolidworksAutomationTool
         {
             // TODO: add a check on the active status of the active sketch. There could be no active sketch
             return ((Feature)partModelDoc.SketchManager.ActiveSketch).Name;
+        }
+
+        /* Get the under lying basic reference planes: front, top, right.
+         * This function tries to get the basic reference planes without using their names to avoid unexpected behavior on computers using other languages than English 
+         * The effectiveness of this function remains to be tested.
+         */
+        public static BasicReferencePlanes GetBasicReferencePlanes(ref ModelDoc2 partModelDoc)
+        {
+            BasicReferencePlanes basicReferencePlanes = new();
+
+            uint refPlanesTobeLocated = 0;
+            // Solidworks doesn't seem to have an api to traverse the design tree by index from the beginning. So we do some reverse indexing here
+            for (int featureIdx = partModelDoc.GetFeatureCount() - 1; featureIdx >= 0; featureIdx--)
+            {
+                // no need to continue looking into features if already found 3 basic ref planes
+                if ( refPlanesTobeLocated >= 3 )
+                {
+                    break;
+                }
+                // check if the current feature is of type RefPlane. If so, update the basicReferencePlanes struct
+                Feature aFeature = (Feature)partModelDoc.FeatureByPositionReverse(featureIdx);
+                if (aFeature.GetTypeName2() == "RefPlane")
+                {
+                    switch (refPlanesTobeLocated)
+                    {
+                        case 0:
+                            basicReferencePlanes.frontPlane = aFeature;
+                            refPlanesTobeLocated += 1;
+                            break;
+                        case 1:
+                            basicReferencePlanes.topPlane = aFeature;
+                            refPlanesTobeLocated += 1;
+                            break;
+                        case 2:
+                            basicReferencePlanes.rightPlane = aFeature;
+                            refPlanesTobeLocated += 1;
+                            break;
+                    }
+                }
+            }
+            // DEBUG: should have found 3 basic ref planes by here but let's check again.
+            Debug.WriteLine($"default front plane name: {basicReferencePlanes.frontPlane?.Name}");
+            Debug.WriteLine($"default top plane name: {basicReferencePlanes.topPlane?.Name}");
+            Debug.WriteLine($"default right plane name: {basicReferencePlanes.rightPlane?.Name}");
+            return basicReferencePlanes;
         }
 
         /* A function to get the center point of the inscribed construction circle inside the triangle polygon

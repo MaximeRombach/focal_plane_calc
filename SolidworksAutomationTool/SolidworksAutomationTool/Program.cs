@@ -78,6 +78,9 @@ PromptAndWait("Press any key to create the robot-holder from the point clouds");
 // create a part
 modulePart = solidworksApp.INewDocument2( solidworksApp.GetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplatePart), 0, 0, 0);
 
+// Get a handle to the FRONT, TOP, RIGHT planes
+BasicReferencePlanes basicRefPlanes = GetBasicReferencePlanes(ref modulePart);
+
 //PromptAndWait("Press any key to insert 3D sketch");
 modulePart.SketchManager.Insert3DSketch(true);
 
@@ -187,7 +190,9 @@ Point3D arcCenterPoint = new(0, -bestFitSphereRadius, 0);
 Point3D arcStartPoint = new(0, 0, 0);
 Point3D arcEndPoint = new(bestFitSphereRadius * Math.Sin(arcAngle), -bestFitSphereRadius * (1 - Math.Cos(arcAngle)), 0);
 
-modulePart.Extension.SelectByID2("Top Plane", "PLANE", 0, 0, 0, false, 0, null, 0);
+//modulePart.Extension.SelectByID2("Top Plane", "PLANE", 0, 0, 0, false, 0, null, 0);
+// DEBUG: trying new way of selecting planes
+basicRefPlanes.topPlane.Select2(false, -1);
 // create arc to form the curved top surface
 modulePart.SketchManager.InsertSketch(true);
 
@@ -311,7 +316,11 @@ solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimVa
  */
 // First define the bottom plane, by creating a parallel plane w.r.t the front plane
 double bottomToFrontPlaneDistance = ((SketchSegment)revolutionAxisVerticalLine).GetLength();
-modulePart.Extension.SelectByID2("Front Plane", "PLANE", 0, 0, 0, false, 0, null, 0);
+//modulePart.Extension.SelectByID2("Front Plane", "PLANE", 0, 0, 0, false, 0, null, 0);
+
+// DEBUG: trying new way of selecting front plane
+basicRefPlanes.frontPlane.Select2(false, 0);
+
 // A trick to flip the offset orientation when creating a ref plane: https://stackoverflow.com/questions/71885722/how-to-create-a-flip-offset-reference-plane-with-solidworks-vba-api
 RefPlane bottomPlane = (RefPlane)modulePart.FeatureManager.InsertRefPlane((int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Distance 
                                                                                 + (int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_OptionFlip, bottomToFrontPlaneDistance,
@@ -476,19 +485,25 @@ MakeSelectedLineHorizontal(ref modulePart);
 modulePart.InsertSketch2(true);
 ClearSelection(ref modulePart);
 
-// DEBUG: try extrude the chamfered triangle
+// DEBUG: try extrude the chamfered triangle    - fine
 SelectSketch(ref modulePart, pastedChamferedTriangleSheetName);
 Feature chamferedExtrusion = CreateTwoWayExtrusion(ref modulePart);
+chamferedExtrusion.Name = "chamferedExtrusion";
 ClearSelection(ref modulePart);
 
-// DEBUG: try to extrude another chamfered triangle
+// DEBUG: try to extrude another chamfered triangle - fine
 SelectSketch(ref modulePart, unchamferedSketchName);
 Feature anotherChamferedExtrusion = CreateTwoWayExtrusion(ref modulePart);
+anotherChamferedExtrusion.Name = "anotherChamferedExtrusion";
 ClearSelection(ref modulePart);
 
 modulePart.SketchManager.AddToDB = false;
 // enbale user input box for dimensions
 solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, true);
+
+// DEBUG: print the feature tree
+PrintFeaturesInFeatureManagerDesignTree(ref modulePart);
+
 // wait for user input before closing
 PromptAndWait("Press any key to close Solidworks");
 // close Solidworks that runs in the background
