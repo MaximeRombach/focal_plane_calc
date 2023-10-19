@@ -57,9 +57,9 @@ start_time = time.time()
 """ Global variables """
 
 # nbots = [63, 75, 88, 102] # number of robots per module
-nbots = [75]
+nbots = [63]
 # out_allowances = np.arange(0, 0.95, 0.05) # how much is a module allowed to stick out of vigR (max value)
-out_allowances = [0.2]
+out_allowances = [0.5]
 
 width_increase = 0 # [mm] How much we want to increase the base length of a module
 chanfer_length = 10 # [mm] Size of chanfers of module vertices (base value: 7.5); increase chanfer decreases coverage as it reduces the module size thus patrol area
@@ -77,6 +77,10 @@ global_gap = 3 # [mm] spacing between modules in global arrangement
 """ Protective shields on module """
 
 is_wall = True # [bool] puts walls or not on modules (changes greatly coverage); True = walls, False = no walls
+if is_wall:
+     is_wall_string = 'Yes'
+else:
+     is_wall_string = 'No'
 
 if inner_gap == global_gap and inner_gap != 0:
      full_framed = True
@@ -91,15 +95,15 @@ ignore_robots_positions = False
 save_plots = False # Save most useful plots 
 save_all_plots = False  # Save all plots (including intermediate ones)
 save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
-save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
+save_csv = True # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
 save_txt = False # Save positions of modules along curved focal surface
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
 saving = param.SavingResults(saving_df)
 
 """ Define focal surface """
 
-# Available projects: MUST, Megamapper, DESI, WST1, WST2
-project_surface = 'MUST'
+# Available projects: MUST, Megamapper, DESI, WST1, WST2, WST3
+project_surface = 'WST1'
 surf = param.FocalSurf(project = project_surface)
 R = abs(surf.R)
 vigR = surf.vigR
@@ -199,6 +203,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
           total_modules = 0 # total number of modules in vigR
           useless_robots = 0 # robots that are not in the vigR
           # useful_robots = 0 # robots that are in the vigR
+          if 'WST' in project_surface: donut = surf.surfaces_polygon['donut'] # define donut if WST project
           boundaries_df = {'geometry':[], 'color': []}
           modules_df = {'geometry':[], 'color': []}
           coverage_df = {'geometry':[]}
@@ -208,6 +213,9 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                               'robots': {'x': [], 'y': [], 'z': [], 'xyz': [], 'geometry': []}
                               }
                          }
+          
+          
+
           # Create module arrangement from the global grid
           logging.info(f'Arranging focal plane for {nb_robots} robots case')
           for idx, (rotate, dx, dy, dz) in enumerate(zip(flip_global, grid.x_grid, grid.y_grid, grid.z_grid)):
@@ -235,8 +243,8 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                int_centroid_out = not Point(dx,dy).within(pizza)
                int_overlaps_GFA = new_boundary.overlaps(polygon_gfa) # Is on GFA?
 
-               # if project_surface == 'WST1' or project_surface == 'WST2': # Check if portion of int triangle is within center hole of WST
-               #      int_overlaps_donut = new_boundary.overlaps(surf.surfaces_polygon['donut'])
+               # if 'WST' in project_surface: # Check if portion of int triangle is within center hole of WST
+               #      int_overlaps_donut = new_boundary.overlaps(donut)
 
                if not fill_empty and sticks_out:
                     color_boundary = 'red'
@@ -264,7 +272,13 @@ for nb_robots in nbots: # iterate over number of robots/module cases
 
                          centroid_out = not Point(cent[0], cent[1]).within(pizza)
                          mod_overlaps_GFA = mod.overlaps(polygon_gfa)
-                         if not cov.overlaps(pizza) and not centroid_out and not mod_overlaps_GFA:
+
+                         if 'WST' in project_surface:
+                              mod_overlaps_donut = mod.overlaps(donut)
+                         else:
+                              mod_overlaps_donut = False
+                         
+                         if not cov.overlaps(pizza) and not centroid_out and not mod_overlaps_GFA and not mod_overlaps_donut:
                          # If the coverage area of a single module does not stick out of vigR and is within vigR, we keep it
                               temp_mod.append(mod)
                               temp_cov.append(cov)
@@ -275,7 +289,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                               xx.append(mod.exterior.coords.xy[0].tolist())
                               yy.append(mod.exterior.coords.xy[1].tolist())
                               
-                         elif allow_small_out and cov_out.area/cov.area < out_allowance and not mod_overlaps_GFA:
+                         elif allow_small_out and cov_out.area/cov.area < out_allowance and not mod_overlaps_GFA and not mod_overlaps_donut:
                               # If the coverage area of a module sticks out by less than the authorized amount, we keep it
                               plot_polygon(cov)
                               remaining_cov = cov.intersection(pizza)
@@ -554,14 +568,15 @@ gdf_coverage.plot(column='label',ax=ax, alpha=0.2, legend=True, legend_kwds={'lo
 
 if "WST" in project_surface:
      def custom_formatter(x, pos):
-          return f"{x*surf.focal_surf_param['FoV']/ (2 * surf.focal_surf_param['vigR'])*60:.1f}"  # Converts y axis from mm to arcmin for WST case
+          return f"{surf.mm2arcsec(x):.1f}"  # Converts y axis from mm to arcmin for WST case
      ax.yaxis.set_major_formatter(ticker.FuncFormatter(custom_formatter))
-     ax.set_ylabel('y position [arcmin]')
+     ax.set_ylabel('y position [arcsec]')
      default_ticks = f.gca().get_yticks()
      desired_ticks = [-vigR, -2/3*vigR, -vigR/3,0, vigR/3, vigR*2/3, vigR, -surf.arcmin2mm(surf.donutR), surf.arcmin2mm(surf.donutR)]
      ax.yaxis.set_ticks(desired_ticks)
 else:
      ax.set_ylabel('y position [mm]')
+
 ax.set_xlabel('x position [mm]')
 
 
@@ -570,15 +585,25 @@ if not ignore_robots_positions:
      gdf_robots.plot(ax = ax, markersize = 0.05)
 
 if save_csv:
-     indiv_pos_df = {'x [mm]': [], 'y [mm]' :[], 'geometry' : []}
+     indiv_pos_df = {'x [mm]':[], 'y [mm]' :[], 'geometry_mm' : [], 'x [arcsec]':[], 'y [arcsec]' :[], 'geometry_arcsec' : []}
      for idx, point in enumerate(robots_df['geometry'][0].geoms):
+
+          if 'WST' in project_surface:
+               # Convert mm to arcsec for WST case on Andrei Variu's request
+               x_arcsec = surf.mm2arcsec(point.x)
+               y_arcsec = surf.mm2arcsec(point.y)
+               point_arcsec = Point(x_arcsec, y_arcsec)
+               indiv_pos_df['x [arcsec]'].append(point_arcsec.x)
+               indiv_pos_df['y [arcsec]'].append(point_arcsec.y)
+               indiv_pos_df['geometry_arcsec'].append(point_arcsec)
+
           indiv_pos_df['x [mm]'].append(point.x)
           indiv_pos_df['y [mm]'].append(point.y)
-          indiv_pos_df['geometry'].append(point)
+          indiv_pos_df['geometry_mm'].append(point)
      now = datetime.now()
      info_case = f"{nb_robots}_robots-per-module_{total_robots}_robots_{inner_gap}_inner_gap_{global_gap}_global_gap"
      csv_filename = now.strftime("%Y-%m-%d-%H-%M-%S_") + info_case + ".csv"
-     gpd.GeoDataFrame(indiv_pos_df).to_csv(saving.results_dir_path() + csv_filename, index_label = 'robot_number', sep = ";", decimal = ".", header='BONJOUR')
+     # gpd.GeoDataFrame(indiv_pos_df).to_csv(saving.results_dir_path() + csv_filename, index_label = 'robot_number', sep = ";", decimal = ".", header='BONJOUR')
      # TBI: robot pos accounting for focal plane curvature
      logging.info(f'Robots positions saved to .csv file')
 
@@ -642,7 +667,8 @@ gdf_robots_indiv.plot(ax=ax,markersize=0.1)
 if len(out_allowances) > 1:
      fig = plt.figure(figsize=(8,8))
      filename = "Coverage_VS_out_allowance"
-     plt.title(f'Focal plane coverage VS out allowance of modules \n Inner gap {inner_gap} mm - Global gap {global_gap} mm')
+     figtitle = f'Focal plane coverage VS out allowance of modules \n Inner gap {inner_gap} mm - Global gap {global_gap} mm \n Protective walls: {is_wall_string}'
+     plt.title(figtitle)
      for key in keys:
           plt.plot(np.array(out_allowances)*100, global_dict[key]['local_coverages_list'], '.-', label = f"{global_dict[key]['nbots/module']} robots/module")
      plt.xlabel('Out allowance [%]')
@@ -653,7 +679,7 @@ if len(out_allowances) > 1:
 
      fig = plt.figure(figsize=(8,8))
      filename = "Robots_VS_out_allowance"
-     plt.title(f'Total robots VS out allowance of modules \n Inner gap {inner_gap} mm - Global gap {global_gap} mm')
+     plt.title(f'Total robots VS out allowance of modules \n Inner gap {inner_gap} mm - Global gap {global_gap} mm \n Protective walls: {is_wall_string}')
      for key in keys:
           plt.plot(np.array(out_allowances)*100, global_dict[key]['local_total_robots_list'], '.-', label = f"{global_dict[key]['nbots/module']} robots/module")
      plt.xlabel('Out allowance [%]')
@@ -664,7 +690,7 @@ if len(out_allowances) > 1:
 
      fig = plt.figure(figsize=(8,8))
      filename = "Robots_VS_Coverage"
-     plt.title(f'Focal plane coverage VS total robots \n Inner gap {inner_gap} mm - Global gap {global_gap} mm')
+     plt.title(f'Focal plane coverage VS total robots \n Inner gap {inner_gap} mm - Global gap {global_gap} mm \n Protective walls: {is_wall_string}')
      for key in keys:
           plt.plot(global_dict[key]['local_total_robots_list'], global_dict[key]['local_coverages_list'], '.-', label = f"{global_dict[key]['nbots/module']} robots/module")
      plt.xlabel('Total robots [-]')
@@ -675,7 +701,7 @@ if len(out_allowances) > 1:
 
      fig = plt.figure(figsize=(8,8))
      filename = "Useless_VS_total_robots"
-     plt.title(f'Useless robots VS total robots \n Inner gap {inner_gap} mm - Global gap {global_gap} mm')
+     plt.title(f'Useless robots VS total robots \n Inner gap {inner_gap} mm - Global gap {global_gap} mm \n Protective walls: {is_wall_string}')
      for key in keys:
           plt.plot(global_dict[key]['useless_robots_list'], global_dict[key]['local_total_robots_list'], '.-', label = f"{global_dict[key]['nbots/module']} robots/module")
      plt.xlabel('Useless robots [-]')
@@ -686,7 +712,7 @@ if len(out_allowances) > 1:
 
      fig = plt.figure(figsize=(8,8))
      filename = "Useful_robots_VS_total_robots"
-     plt.title(f'Useful robots VS total robots \n Inner gap {inner_gap} mm - Global gap {global_gap} mm')
+     plt.title(f'Useful robots VS total robots \n Inner gap {inner_gap} mm - Global gap {global_gap} mm \n Protective walls: {is_wall_string}')
      for key in keys:
           plt.plot(global_dict[key]['useful_robots_list'], global_dict[key]['local_total_robots_list'], '.-', label = f"{global_dict[key]['nbots/module']} robots/module")
      plt.xlabel('Useful robots')
@@ -697,7 +723,7 @@ if len(out_allowances) > 1:
 
      fig = plt.figure(figsize=(8,8))
      filename = "Efficiency_VS_coverages"
-     plt.title(f'Efficiency VS Coverages \n Inner gap {inner_gap} mm - Global gap {global_gap} mm')
+     plt.title(f'Efficiency VS Coverages \n Inner gap {inner_gap} mm - Global gap {global_gap} mm \n Protective walls: {is_wall_string}')
      for key in keys:
           plt.plot(global_dict[key]['efficiency_list'], global_dict[key]['local_coverages_list'], '.-', label = f"{global_dict[key]['nbots/module']} robots/module")
      plt.xlabel('Useful robots / Total robots [-]')
@@ -708,7 +734,7 @@ if len(out_allowances) > 1:
 
      fig = plt.figure(figsize=(8,8))
      filename = "Useless_robots_VS_coverage"
-     plt.title(f'Useless robots VS total robots \n Inner gap {inner_gap} mm - Global gap {global_gap} mm')
+     plt.title(f'Useless robots VS total robots \n Inner gap {inner_gap} mm - Global gap {global_gap} mm \n Protective walls: {is_wall_string}')
      for key in keys:
           plt.plot(global_dict[key]['useless_robots_list'], global_dict[key]['local_coverages_list'], '.-', label = f"{global_dict[key]['nbots/module']} robots/module")
      plt.xlabel('Useless robots [-]')
@@ -719,7 +745,7 @@ if len(out_allowances) > 1:
      
      fig = plt.figure(figsize=(8,8))
      filename = "Useful_robots_VS_coverage"
-     plt.title(f'Useful robots VS coverage \n Inner gap {inner_gap} mm - Global gap {global_gap} mm')
+     plt.title(f'Useful robots VS coverage \n Inner gap {inner_gap} mm - Global gap {global_gap} mm \n Protective walls: {is_wall_string}')
      for key in keys:
           plt.plot(global_dict[key]['useful_robots_list'], global_dict[key]['local_coverages_list'], '.-', label = f"{global_dict[key]['nbots/module']} robots/module")
      plt.xlabel('Useful robots [-]')

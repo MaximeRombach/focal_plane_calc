@@ -201,6 +201,18 @@ class FocalSurf():
      
      def mm2arcmin(self, mm):
           return mm * (self.FoV * 60) / (2 * self.vigR)
+     
+     def mm2arcsec(self, mm):
+          return mm * (self.FoV * 3600) / (2 * self.vigR)
+     
+     def arcsec2mm(self, arcsec):
+          return arcsec * 2 * self.vigR / (self.FoV * 3600)
+     
+     def arcmin2arcsec(self, arcmin):
+          return arcmin / 60
+     
+     def arcsec2arcmin(self, arcsec):
+          return arcsec * 60
 
 class SavingResults:
      """
