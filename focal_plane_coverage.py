@@ -95,7 +95,7 @@ ignore_robots_positions = False
 save_plots = False # Save most useful plots 
 save_all_plots = False  # Save all plots (including intermediate ones)
 save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
-save_csv = True # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
+save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
 save_txt = False # Save positions of modules along curved focal surface
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
 saving = param.SavingResults(saving_df)
@@ -209,7 +209,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
           coverage_df = {'geometry':[]}
           robots_df = {'geometry':[]}
           final_grid = {'inter': {'x': [], 'y': [], 'z': [], 'xyz': [], 'geometry': []}, 
-                    'indiv': {'x': [], 'y': [], 'z': [], 'xyz': [], 'geometry': [],
+                    'indiv': {'x': [], 'y': [], 'z': [], 'xyz': [], 'upward_tri': [], 'geometry': [],
                               'robots': {'x': [], 'y': [], 'z': [], 'xyz': [], 'geometry': []}
                               }
                          }
@@ -222,8 +222,11 @@ for nb_robots in nbots: # iterate over number of robots/module cases
 
                if rotate:
                     angle = 180
+                    new_upward_tri = [not item for item in inter_df['inter_modules']['upward_tri']]
+                    new_upward_tri = list(map(int, new_upward_tri))
                else:
                     angle = 0
+                    new_upward_tri = list(map(int,inter_df['inter_modules']['upward_tri']))
                # Apply rotation around the inter module centroid and translation to its corresponding position on the grid
                transformed_all = param.rotate_and_translate(intermediate_collection_speed, angle, dx, dy, origin = "centroid")
 
@@ -261,10 +264,11 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                     temp_mod = []
                     temp_cov = []
                     temp_rob = []
+                    temp_up = []
                     xx = []
                     yy = []
                     
-                    for mod, cov, robs in zip(new_modules.geoms, new_coverage.geoms, new_robots.geoms):
+                    for mod, cov, robs, up in zip(new_modules.geoms, new_coverage.geoms, new_robots.geoms, new_upward_tri):
                          # plot_polygon(pizza,add_points=False,facecolor='None')
                          # plot_polygon(mod)
                          cent = np.array(cov.centroid.xy)
@@ -283,6 +287,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                               temp_mod.append(mod)
                               temp_cov.append(cov)
                               temp_rob.append(robs)
+                              temp_up.append(up)
                               color_boundary = 'blue'
 
                               # Log coordinates of boundaries of individual modules to create concave hull later
@@ -319,6 +324,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                               temp_mod.append(mod)
                               temp_cov.append(remaining_cov)
                               temp_rob.append(remaining_robs)
+                              temp_up.append(up)
 
                               # Log coordinates of boundaries of individual modules to create concave hull later
                               xx.append(mod.exterior.coords.xy[0].tolist())
@@ -335,6 +341,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                     new_coverage = MultiPolygon(temp_cov)
                     # new_robots = unary_union(temp_rob)
                     new_robots = GeometryCollection(temp_rob)
+                    new_upward_tri = temp_up
                     convex_hull_modules = new_modules.convex_hull
 
                     # Create concave hull in case of individual module
@@ -351,12 +358,13 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                     new_boundary = new_modules
 
                # Store individual xy location for each module
-               for new_mod, new_rob in zip(new_modules.geoms, new_robots.geoms) :
+               for new_mod, new_rob, new_up in zip(new_modules.geoms, new_robots.geoms, new_upward_tri) :
                     
                     final_grid['indiv']['x'].append(new_mod.centroid.x)
                     final_grid['indiv']['y'].append(new_mod.centroid.y)
                     final_grid['indiv']['z'].append(dz)
                     final_grid['indiv']['xyz'].append([new_mod.centroid.x, new_mod.centroid.y, dz])
+                    final_grid['indiv']['upward_tri'].append(new_up)
                     final_grid['indiv']['geometry'].append(new_mod.centroid)
                     final_grid['indiv']['robots']['geometry'].append(new_rob)
 
@@ -396,7 +404,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
           total_robots = total_modules*nb_robots
 
           gdf_final_grid_int = gpd.GeoDataFrame(final_grid['inter'])
-
+          print(final_grid['indiv']['upward_tri'])
           global_dict[key]['boundaries_df'] = boundaries_df
 
           global_dict[key]['modules_df'] = modules_df

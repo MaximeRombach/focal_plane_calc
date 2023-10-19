@@ -560,7 +560,7 @@ class IntermediateTriangle:
           self.module_collection = module_collection
           self.dist_inter = 2*module_width*np.sqrt(3)/6 + intermediate_frame_thick # distance between each neighbor from center module
           self.angles = np.array([-30, 90, 210])
-          self.flip = [True,False,False,False]
+          self.upward_tri = [False,True,True,True]
 
           self.x_grid_inter = np.cos(np.deg2rad(self.angles))*self.dist_inter
           self.x_grid_inter = np.insert(self.x_grid_inter, 0, 0)
@@ -576,14 +576,14 @@ class IntermediateTriangle:
           inter_coverage = []
           covered_area = 0
           inter_boundaries_df = {'name':[],'geometry':[], 'color': []}
-          inter_modules_df = {'geometry':[], 'centroids': []}
+          inter_modules_df = {'geometry':[], 'centroids': [], 'upward_tri':[]}
           inter_coverage_df = {'geometry':[]}
           inter_robots_df = {'geometry':[]}
           
 
-          for idx, (rotate, dx, dy) in enumerate(zip(self.flip, self.x_grid_inter, self.y_grid_inter)):
+          for idx, (up_tri, dx, dy) in enumerate(zip(self.upward_tri, self.x_grid_inter, self.y_grid_inter)):
 
-               if rotate:
+               if not up_tri:
                     angle = 180
                else:
                     angle = 0
@@ -592,6 +592,7 @@ class IntermediateTriangle:
                boundaries.append(transformed_all.geoms[0]) # log the exterior boundary points of the transformed module
                inter_modules_df['geometry'].append(transformed_all.geoms[0])
                inter_modules_df['centroids'].append([dx, dy])
+               inter_modules_df['upward_tri'].append(up_tri)
                inter_coverage.append(transformed_all.geoms[2])
                inter_coverage_df['geometry'].append(transformed_all.geoms[2])
                intermediate_collection.append(transformed_all)
