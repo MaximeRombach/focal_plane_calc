@@ -23,7 +23,7 @@ logging.basicConfig(level=logging.INFO)
 tan30 = np.tan(np.deg2rad(30))
 
 ## Parameters ##
-
+# NOTE: FocalSurf class
 """ Focal plane parameters """
 class FocalSurf():
      def __init__(self, project: str) -> None:
@@ -214,6 +214,7 @@ class FocalSurf():
      def arcsec2arcmin(self, arcsec):
           return arcsec * 60
 
+# NOTE : Saving results class
 class SavingResults:
      """
      Class for saving the various results produced with focal_plane_coverage.py
@@ -304,6 +305,7 @@ class SavingResults:
 
 """ Module parameters """ 
 
+# NOTE: Individual Module class
 class Module(SavingResults):
 
      def __init__(self, nb_robots, saving_df, is_wall: bool, width_increase = 0, chanfer_length = 7.5):
@@ -550,6 +552,7 @@ class Module(SavingResults):
           
           self.save_figures_to_dir(self.save_plots, figtitle)
 
+# NOTE: Intermediate Triangle class
 class IntermediateTriangle: 
 
      def __init__(self, module_collection, module_width, intermediate_frame_thick):
@@ -700,6 +703,7 @@ class GFA(SavingResults):
           today_filename = now.strftime("%Y-%m-%d-%H-%M-%S_") + "GFA.csv"
           self.gdf_gfa.to_csv(self.results_dir_path() + today_filename)
 
+# NOTE: Grid generation class
 class Grid:
 
      def __init__(self, module_width: float, inter_frame_thick: float, global_frame_thick: float, vigR: float, R: float, centered_on_triangle: bool  = False) -> None:
@@ -854,8 +858,6 @@ def save_figures_to_dir(save, suffix_name, only_frame = False):
           os.makedirs(results_dir)
 
      plt.savefig(results_dir + today_filename, bbox_inches = 'tight', format='png', dpi = 800)
-
-
 
 def plot_module(module_collection, label_coverage, label_robots, ignore_points):
      for jdx, geo in enumerate(module_collection.geoms):

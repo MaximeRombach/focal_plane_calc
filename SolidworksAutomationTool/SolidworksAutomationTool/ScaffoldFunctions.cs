@@ -3,8 +3,17 @@ using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 using System.Diagnostics;
 
+
 namespace SolidworksAutomationTool
 {
+    /* A struct storing the 3 basic reference planes */
+    public struct BasicReferencePlanes
+    {
+        public Feature frontPlane;
+        public Feature topPlane;
+        public Feature rightPlane;
+    }
+
     public class ScaffoldFunctions
     {
         /* Display a prompt to the console and wait for the user's input before continuing */
@@ -50,6 +59,12 @@ namespace SolidworksAutomationTool
         public static void SelectOrigin(ref ModelDoc2 partModelDoc)
             => partModelDoc.Extension.SelectByID2("Point1@Origin", "EXTSKETCHPOINT", 0, 0, 0, false, 0, null, 0);
 
+        /* Wrapper function to select the sketch with the given name */
+        public static void SelectSketch(ref ModelDoc2 partModelDoc, string sketchName, bool appendToSelection = false)
+        {
+            partModelDoc.Extension.SelectByID2(sketchName, "SKETCH", 0, 0, 0, appendToSelection, 0, null, 0);
+        }
+
         /* Wrapper function to zoom-to-fit the view */
         public static void ZoomToFit(ref ModelDoc2 partModelDoc)
             => partModelDoc.ViewZoomtofit2();
@@ -75,6 +90,75 @@ namespace SolidworksAutomationTool
                 };
                 Debug.WriteLine($"Segment is of type: {triangleSegmentType}");
             }
+        }
+
+        /* Debug function to see the features inside the feature manager design tree
+         * This function can be used to check if a feature is created as expected
+         */
+        public static void PrintFeaturesInFeatureManagerDesignTree(ref ModelDoc2 partModelDoc)
+        {
+            Debug.WriteLine("Printing features in this part:");
+            int numberOfFeatures = partModelDoc.GetFeatureCount();
+            Debug.WriteLine($"Found {numberOfFeatures} features in this design tree");
+            // Solidworks doesn't seem to have an api to traverse the design tree from the beginning. So we do some reverse indexing here
+            for (int featureIdx = numberOfFeatures - 1; featureIdx >= 0; featureIdx--)
+            {
+                Feature aFeature = (Feature)partModelDoc.FeatureByPositionReverse(featureIdx);
+                // format the print a bit to make it easy to read
+                Debug.WriteLine($"feature #{numberOfFeatures -1 - featureIdx, 5}    type: {aFeature.GetTypeName2(), 25},    name: {aFeature.Name, 25}");
+            }
+        }
+
+        /* A wrapper function to get the name of the current active sketch*/
+        public static string GetActiveSketchName(ref ModelDoc2 partModelDoc)
+        {
+            // TODO: add a check on the active status of the active sketch. There could be no active sketch
+            return ((Feature)partModelDoc.SketchManager.ActiveSketch).Name;
+        }
+
+        /* Get the under lying basic reference planes: front, top, right.
+         * This function tries to get the basic reference planes without using their names to avoid unexpected behavior on computers using other languages than English 
+         * The effectiveness of this function remains to be tested.
+         */
+        public static BasicReferencePlanes GetBasicReferencePlanes(ref ModelDoc2 partModelDoc)
+        {
+            BasicReferencePlanes basicReferencePlanes = new();
+
+            uint refPlanesTobeLocated = 0;
+            // Solidworks doesn't seem to have an api to traverse the design tree by index from the beginning. So we do some reverse indexing here
+            for (int featureIdx = partModelDoc.GetFeatureCount() - 1; featureIdx >= 0; featureIdx--)
+            {
+                // no need to continue looking into features if already found 3 basic ref planes
+                if ( refPlanesTobeLocated >= 3 )
+                {
+                    break;
+                }
+                // check if the current feature is of type RefPlane. If so, update the basicReferencePlanes struct
+                Feature aFeature = (Feature)partModelDoc.FeatureByPositionReverse(featureIdx);
+                if (aFeature.GetTypeName2() == "RefPlane")
+                {
+                    switch (refPlanesTobeLocated)
+                    {
+                        case 0:
+                            basicReferencePlanes.frontPlane = aFeature;
+                            refPlanesTobeLocated += 1;
+                            break;
+                        case 1:
+                            basicReferencePlanes.topPlane = aFeature;
+                            refPlanesTobeLocated += 1;
+                            break;
+                        case 2:
+                            basicReferencePlanes.rightPlane = aFeature;
+                            refPlanesTobeLocated += 1;
+                            break;
+                    }
+                }
+            }
+            // DEBUG: should have found 3 basic ref planes by here but let's check again.
+            Debug.WriteLine($"default front plane name: {basicReferencePlanes.frontPlane?.Name}");
+            Debug.WriteLine($"default top plane name: {basicReferencePlanes.topPlane?.Name}");
+            Debug.WriteLine($"default right plane name: {basicReferencePlanes.rightPlane?.Name}");
+            return basicReferencePlanes;
         }
 
         /* A function to get the center point of the inscribed construction circle inside the triangle polygon
@@ -109,12 +193,34 @@ namespace SolidworksAutomationTool
             return null;
         }
 
+        /* A function to get one of the longer sides of a chamfered triangle.
+         * Returns a longer side of the chamfered triangle if the polygon contains at least a sketch line
+         *  else Returns null
+         */
+        public static SketchLine? GetOneChamferedTriangleLongSide(ref object[] polygon)
+        {
+            SketchSegment? longSide = null;
+            double longestSideLength = 0;
+            foreach (SketchSegment chamferedTriangleSegment in polygon.Cast<SketchSegment>())
+            {
+                if (chamferedTriangleSegment.GetType() == (int)swSketchSegments_e.swSketchLINE)
+                {
+                    if ( longestSideLength < chamferedTriangleSegment.GetLength() )
+                    {
+                        longestSideLength = chamferedTriangleSegment.GetLength();
+                        longSide = chamferedTriangleSegment;
+                    }
+                }
+            }
+            return (SketchLine?)longSide;
+        }
+
         /* A wrapper function to reduce the boilerplate code for creating normal planes using the "point and normal" method
          *  This function first selects an extrusion axis, requiring it to be perpendicular to the ref plane;
          *  then selects a point which provides the "offset" of the plane, requiring it to be coincident with the ref plane
          *  NOTE: this method does NOT change the selection list. Users should manually clear the selections.
          */
-        public static RefPlane CreateRefPlaneFromPointAndNormal(SketchPoint point, SketchSegment normal, SelectData swSelectData, FeatureManager featureManager)
+        public static RefPlane CreateRefPlaneFromPointAndNormal(SketchPoint point, SketchSegment normal, string? planeName, SelectData swSelectData, FeatureManager featureManager)
         {
             swSelectData.Mark = 0;
             normal.Select4(true, swSelectData);
@@ -124,7 +230,41 @@ namespace SolidworksAutomationTool
             // as the 2 constraints are enough for the "point and normal" method
             RefPlane refPlane = (RefPlane)featureManager.InsertRefPlane((int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Perpendicular, 0,
                                                                                           (int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Coincident, 0, 0, 0);
+            
+            // The user can decide the name of the plane by passing a string. If null is passed in, the plane's name is left to solidworks to decide
+            if (planeName != null )
+            {
+                ((Feature)refPlane).Name = planeName;
+            }
             return refPlane;
+        }
+
+        /* A wrapper function to make two-way extrusion on a already selected sketch 
+         * Reuturns the extrusion feature
+         * NOTE: this function does not check if the selected is a valid sketch or something else.
+         */
+        public static Feature CreateTwoWayExtrusion(ref ModelDoc2 partModelDoc)
+        {
+            // the FeatureCut4 api takes a ton of arguments. This wrapper function is to simplify the calling process.
+            // https://help.solidworks.com/2023/english/api/sldworksapi/solidworks.interop.sldworks~solidworks.interop.sldworks.ifeaturemanager~featurecut4.html?verRedirect=1
+            Feature extrusionFeature = partModelDoc.FeatureManager.FeatureCut4(
+                                    false,  // true for single ended cut, false for double-ended cut
+                                    false,  // True to remove material outside of the profile of the flip side to cut, false to not
+                                    false,  // True for Direction 1 to be opposite of the default direction
+                                    (int)swEndConditions_e.swEndCondThroughAllBoth, // Termination type for the first end
+                                    (int)swEndConditions_e.swEndCondThroughAllBoth, // Termination type for the second end 
+                                    1, 1,   // depth of extrusion for 1st and 2nd end in meters
+                                    false, false, // True allows a draft angle in the first/second direction, false does not allow drafting in the first/second direction
+                                    false, false, // True for the first/second draft angle to be inward, false to be outward; only valid when Dchk1/Dchk2 is true
+                                    1, 1,   // Draft angle for the first end; only valid when Dchk1 is true
+                                    false, false, // If you chose to offset the first/second end condition from another face or plane, then true specifies offset in direction away from the sketch, false specifies offset from the face or plane in a direction toward the sketch
+                                    false, false, 
+                                    false, true, true, true, true, false,
+                                    (int)swStartConditions_e.swStartSketchPlane,  // Start conditions as defined in swStartConditions_e
+                                    0,      // If T0 is swStartConditions_e.swStartOffset, then specify an offset value
+                                    false,  // If T0 is swStartConditions_e.swStartOffset, then true to flip the direction of cut, false to not
+                                    false);
+            return extrusionFeature;
         }
 
         /* Wrapper function to add dimension to the selected object. 
@@ -161,6 +301,34 @@ namespace SolidworksAutomationTool
             return dimension;
         }
 
+        /* A function to add chamfer to all vertices on a equilateral triangle.
+         * This function add chamfers in the same way as the function MakeChamferedTriangleBlockFromTrianglePolygon but does not create a block
+         * NOTE: this function WILL clear your previous selections
+         * Return: void
+         */
+        public static void MakeChamferedTriangleFromTrianglePolygon(object[] trianglePolygon, double chamferLength, ref ModelDoc2 partModelDoc, SelectData swSelectData)
+        {
+            // get the vertices of the triangle. The hashSet will pick only the unique vertices
+            HashSet<SketchPoint> verticesInTriangleSet = new();
+            foreach (SketchSegment triangleSegment in trianglePolygon.Cast<SketchSegment>())
+            {
+                if (triangleSegment.GetType() == (int)swSketchSegments_e.swSketchLINE)
+                {
+                    verticesInTriangleSet.Add((SketchPoint)((SketchLine)triangleSegment).GetStartPoint2());
+                    verticesInTriangleSet.Add((SketchPoint)((SketchLine)triangleSegment).GetEndPoint2());
+                }
+            }
+            ClearSelection(ref partModelDoc);
+            // make a chamfer at every vertex
+            foreach (SketchPoint vertex in verticesInTriangleSet)
+            {
+                // make chamfers
+                vertex.Select4(true, swSelectData);
+                SketchSegment chamferSegment = partModelDoc.SketchManager.CreateChamfer((int)swSketchChamferType_e.swSketchChamfer_DistanceEqual, chamferLength, chamferLength);
+                ClearSelection(ref partModelDoc);
+            }
+        }
+
         /* A function to make a block of chamfered triangle from a triangle polygon
          */
         public static SketchBlockDefinition MakeChamferedTriangleBlockFromTrianglePolygon(object[] trianglePolygon, double chamferLength, ref ModelDoc2 partModelDoc, SelectData swSelectData)
@@ -195,7 +363,7 @@ namespace SolidworksAutomationTool
             }
 
             // select the 3 vertices of the original triangle
-            verticesInTriangleSet.ToList<SketchPoint>().ForEach(triangleVertex => triangleVertex.Select4(true, swSelectData));
+            verticesInTriangleSet.ToList().ForEach(triangleVertex => triangleVertex.Select4(true, swSelectData));
 
             // Great! The block was sucessfully created. NOTE: for some reasons, MultiSelect2 Method (IModelDocExtension) does NOT select anything in the triangle polygon
             SketchBlockDefinition chamferedTriangleBlock = partModelDoc.SketchManager.MakeSketchBlockFromSelected(null);
