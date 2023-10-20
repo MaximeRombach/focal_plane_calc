@@ -145,6 +145,16 @@ class FocalSurf():
                               'f-number': 3.7, # assumption based on previous telescope designs
                               'FoV': 1.8 # [deg]
                               }
+               
+          elif self.project == 'Spec-s5':
+               focal_surf_param = {
+                    'name': r'$\bf{Spec-s5 - Focal Plane \quad \varnothing: 0.8 m$',
+                    'R': -13000, # [mm], main radius of curvature (roughly 13m from Claire's info 20.10.2023)
+                    'vigR': 4.084421E+02,# [mm], vignetting radius
+                    'asph_formula': False,
+                    'BFS': -1.277364E+04, # [mm], radius of BFS,
+                    'f-number': 3.64, # assumption based on previous telescope designs
+                    }
           else: 
                logging.error(f'Setting focal surface parameters: {self.project} project is not defined')
                raise Exception(f'Error in setting focal surface parameters: {self.project} project is not defined')
@@ -248,8 +258,8 @@ class SavingResults:
      def path_to_results_dir(self):
 
           script_dir = os.path.dirname(__file__)
-          # results_dir_path = os.path.join(script_dir, 'Results_examples/')
-          results_dir_path = os.path.join(script_dir, 'Results/')
+          results_dir_path = os.path.join(script_dir, 'Results_examples/')
+          # results_dir_path = os.path.join(script_dir, 'Results/')
 
           if not os.path.isdir(results_dir_path):
                os.makedirs(results_dir_path)
@@ -292,14 +302,15 @@ class SavingResults:
           if not self.save_txt:
                return
           now = datetime.now()
-          # grid MUST be a (N,3) numpy array
+          # grid MUST be a (N,4) numpy array
           x = grid[:,0]
           y = grid[:,1]
           z = grid[:,2]
+          up_tri = grid[:,3]
           with open(self.results_dir_path() + now.strftime("%Y-%m-%d-%H-%M-%S_") + f'{filename}.txt', 'w') as file:
-               file.write("x[mm] y[mm] z[mm]\n")
-               for (dx,dy,dz) in zip(x,y,z):
-                    file.write(f"{dx:.3f} {dy:.3f} {dz:.3f}\n")
+               file.write("x[mm] y[mm] z[mm] upward_tri [bool]\n")
+               for (dx,dy,dz,up) in zip(x,y,z, up_tri):
+                    file.write(f"{dx:.3f} {dy:.3f} {dz:.3f} {int(up)}\n")
           
           logging.info(f'{filename}.txt succesfully saved in {self.results_dir_path()}')
 

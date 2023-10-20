@@ -56,10 +56,10 @@ start_time = time.time()
 
 """ Global variables """
 
-# nbots = [63, 75, 88, 102] # number of robots per module
-nbots = [63]
-# out_allowances = np.arange(0, 0.95, 0.05) # how much is a module allowed to stick out of vigR (max value)
-out_allowances = [0.5]
+nbots = [63, 75, 88, 102] # number of robots per module
+# nbots = [63]
+out_allowances = np.arange(0, 0.95, 0.05) # how much is a module allowed to stick out of vigR (max value)
+# out_allowances = [0.5]
 
 width_increase = 0 # [mm] How much we want to increase the base length of a module
 chanfer_length = 10 # [mm] Size of chanfers of module vertices (base value: 7.5); increase chanfer decreases coverage as it reduces the module size thus patrol area
@@ -92,18 +92,18 @@ is_timer = False # Display time of final plots before automatic closing; stays o
 plot_time = 20 # [s] plotting time
 ignore_robots_positions = False
 
-save_plots = False # Save most useful plots 
-save_all_plots = False  # Save all plots (including intermediate ones)
-save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
-save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
-save_txt = False # Save positions of modules along curved focal surface
+save_plots = True # Save most useful plots 
+save_all_plots = True  # Save all plots (including intermediate ones)
+save_frame_as_dxf = True # Save the outline of the frame for Solidworks integration
+save_csv = True # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
+save_txt = True # Save positions of modules along curved focal surface
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
 saving = param.SavingResults(saving_df)
 
 """ Define focal surface """
 
-# Available projects: MUST, Megamapper, DESI, WST1, WST2, WST3
-project_surface = 'WST1'
+# Available projects: MUST, Megamapper, DESI, WST1, WST2, WST3, Spec-s5
+project_surface = 'MegaMapper'
 surf = param.FocalSurf(project = project_surface)
 R = abs(surf.R)
 vigR = surf.vigR
@@ -209,11 +209,9 @@ for nb_robots in nbots: # iterate over number of robots/module cases
           coverage_df = {'geometry':[]}
           robots_df = {'geometry':[]}
           final_grid = {'inter': {'x': [], 'y': [], 'z': [], 'xyz': [], 'geometry': []}, 
-                    'indiv': {'x': [], 'y': [], 'z': [], 'xyz': [], 'upward_tri': [], 'geometry': [],
-                              'robots': {'x': [], 'y': [], 'z': [], 'xyz': [], 'geometry': []}
-                              }
+                         'indiv': {'x': [], 'y': [], 'z': [], 'xyz': [], 'upward_tri': [], 'geometry': [], 'geometry_modules': []},
+                         'robots': {'x': [], 'y': [], 'z': [], 'xyz': [], 'geometry': []}
                          }
-          
           
 
           # Create module arrangement from the global grid
@@ -366,7 +364,8 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                     final_grid['indiv']['xyz'].append([new_mod.centroid.x, new_mod.centroid.y, dz])
                     final_grid['indiv']['upward_tri'].append(new_up)
                     final_grid['indiv']['geometry'].append(new_mod.centroid)
-                    final_grid['indiv']['robots']['geometry'].append(new_rob)
+                    final_grid['indiv']['geometry_modules'].append(new_mod)
+                    final_grid['robots']['geometry'].append(new_rob)
 
                # Store individual xy location for each intermediate frame
                # final_grid['intermediate']['x'].append(dx)
@@ -394,6 +393,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
 
           global_coverage = round(covered_area/pizza_with_GFA.area*100,1)
           unused_area = round((pizza_with_GFA.area - covered_area),1)
+          # Using GeoDataFrames eases a lot the visualization of the data and the plotting !
           gdf_bound = gpd.GeoDataFrame(boundaries_df)
           gdf_modules = gpd.GeoDataFrame(modules_df)
           gdf_coverage = gpd.GeoDataFrame(coverage_df)
@@ -404,7 +404,10 @@ for nb_robots in nbots: # iterate over number of robots/module cases
           total_robots = total_modules*nb_robots
 
           gdf_final_grid_int = gpd.GeoDataFrame(final_grid['inter'])
-          print(final_grid['indiv']['upward_tri'])
+          
+          gdf_final_grid_indiv = gpd.GeoDataFrame(final_grid['indiv'])
+          print(gdf_final_grid_indiv)
+
           global_dict[key]['boundaries_df'] = boundaries_df
 
           global_dict[key]['modules_df'] = modules_df
@@ -431,7 +434,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
           print(f"Out allowance: {outage} \n", f"Total # modules: {total_modules} \n", f"Total # robots: {total_robots} \n", f"Coverage: {global_coverage} %")
 
 #%% 2)d) Project grid on focal surface (BFS as a first try, aspherical will come later)
-
+# NOTE : Project on BFS and save modules in txt file for Solidworks integration
 projection = {'front': {'x': [], 'y': [], 'z': [], 'xyz': [], 'theta': [], 'phi': []},
               'back': {'x': [], 'y': [], 'z': [], 'xyz': [], 'theta': [], 'phi': []}}
 
@@ -440,22 +443,30 @@ trim_angle = 60 # [deg], put 360° for full grid
 if trim_angle == 360:
      grid_points = np.asarray(final_grid['indiv']['xyz'])
      grid_points_inter = np.asarray(final_grid['inter']['xyz'])
+     module_up = np.asarray(final_grid['indiv']['upward_tri'])
 else:
      pizza_slice = surf.make_vigR_polygon(pizza_angle = trim_angle)
      grid_points = []
      grid_points_inter = []
+     module_up = []
      for idx, point in enumerate(final_grid['indiv']['geometry']):
           if point.within(pizza_slice):
                grid_points.append(final_grid['indiv']['xyz'][idx])
+               module_up.append(final_grid['indiv']['upward_tri'][idx])
      grid_points = np.asarray(grid_points)
+     module_up = np.asarray(module_up)
+
+     # TODO: check if inter grid really needed otherwise delete
      for idx, point in enumerate(final_grid['inter']['geometry']):
           if point.within(pizza_slice):
                grid_points_inter.append(final_grid['inter']['xyz'][idx])
      grid_points_inter = np.asarray(grid_points_inter)
 
 front_proj = grid.project_grid_on_sphere(grid_points, BFS, 'front_proj')
+front_proj = np.hstack((front_proj, module_up.reshape(len(module_up),1)))
 # front_proj[:,2] = front_proj[:,2] - BFS # brings back z coordinates to centered around 0 instead of BFS
 back_proj = grid.project_grid_on_sphere(grid_points, BFS + mod_param.module_length, 'back_proj')
+back_proj = np.hstack((back_proj, module_up.reshape(len(module_up),1)))
 # front_proj[:,2] = front_proj[:,2] - BFS # brings back z coordinates to centered around 0 instead of BFS
 proj = np.vstack((front_proj, back_proj))
 r, lat, lon = cartesian_to_spherical(front_proj[:,0], front_proj[:,1], front_proj[:,2],)
@@ -470,6 +481,7 @@ df = pd.DataFrame(projection['front'], columns = cols)
 print(df)
 
 proj[:,2] = proj[:,2] + BFS
+
 saving.save_grid_to_txt(proj, f'grid_indiv_{nb_robots}')
 saving.save_grid_to_txt(front_proj, f'front_grid_indiv_{nb_robots}')
 saving.save_grid_to_txt(back_proj, f'back_grid_indiv_{nb_robots}')
@@ -587,8 +599,6 @@ else:
 
 ax.set_xlabel('x position [mm]')
 
-
-
 if not ignore_robots_positions:
      gdf_robots.plot(ax = ax, markersize = 0.05)
 
@@ -669,7 +679,7 @@ if len(nbots)>1: # Useless to do multiple plots for only one case
 
 
 fig,ax = plt.subplots(figsize = (8,8))
-gdf_robots_indiv = gpd.GeoDataFrame(geometry=final_grid['indiv']['robots']['geometry'])
+gdf_robots_indiv = gpd.GeoDataFrame(geometry=final_grid['robots']['geometry'])
 gdf_robots_indiv.plot(ax=ax,markersize=0.1)
 
 if len(out_allowances) > 1:
