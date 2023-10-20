@@ -3,15 +3,15 @@ using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 using System.Diagnostics;
 
-
 namespace SolidworksAutomationTool
 {
     /* A struct storing the 3 basic reference planes */
-    public struct BasicReferencePlanes
+    public struct BasicReferenceGeometry
     {
         public Feature frontPlane;
         public Feature topPlane;
         public Feature rightPlane;
+        public SketchPoint origin;
     }
 
     public class ScaffoldFunctions
@@ -116,20 +116,21 @@ namespace SolidworksAutomationTool
             return ((Feature)partModelDoc.SketchManager.ActiveSketch).Name;
         }
 
-        /* Get the under lying basic reference planes: front, top, right.
-         * This function tries to get the basic reference planes without using their names to avoid unexpected behavior on computers using other languages than English 
-         * The effectiveness of this function remains to be tested.
+        /* Get the under lying basic reference geometry: front, top, right, and the origin.
+         * This function tries to get the basic reference planes without using their names to avoid unexpected behavior on computers using other languages than English
+         * For example, when selecting planes using their english names, french-based solidworks will fail to locate the planes
          */
-        public static BasicReferencePlanes GetBasicReferencePlanes(ref ModelDoc2 partModelDoc)
+        public static BasicReferenceGeometry GetBasicReferenceGeometry(ref ModelDoc2 partModelDoc)
         {
-            BasicReferencePlanes basicReferencePlanes = new();
-
-            uint refPlanesTobeLocated = 0;
+            BasicReferenceGeometry basicReferenceGeometry = new();
+            // initalize the reference geometry counters to keep track of the number of found ref geometry. 
+            uint refPlanesLocated = 0;
+            uint originLocated = 0;
             // Solidworks doesn't seem to have an api to traverse the design tree by index from the beginning. So we do some reverse indexing here
             for (int featureIdx = partModelDoc.GetFeatureCount() - 1; featureIdx >= 0; featureIdx--)
             {
-                // no need to continue looking into features if already found 3 basic ref planes
-                if ( refPlanesTobeLocated >= 3 )
+                // no need to continue looking into features if already found 3 basic ref planes and 1 origin
+                if ( refPlanesLocated >= 3 && originLocated >= 1)
                 {
                     break;
                 }
@@ -137,28 +138,39 @@ namespace SolidworksAutomationTool
                 Feature aFeature = (Feature)partModelDoc.FeatureByPositionReverse(featureIdx);
                 if (aFeature.GetTypeName2() == "RefPlane")
                 {
-                    switch (refPlanesTobeLocated)
+                    switch (refPlanesLocated)
                     {
                         case 0:
-                            basicReferencePlanes.frontPlane = aFeature;
-                            refPlanesTobeLocated += 1;
+                            basicReferenceGeometry.frontPlane = aFeature;
+                            refPlanesLocated += 1;
+                            Debug.WriteLine($"default front plane name: {basicReferenceGeometry.frontPlane?.Name}");
                             break;
                         case 1:
-                            basicReferencePlanes.topPlane = aFeature;
-                            refPlanesTobeLocated += 1;
+                            basicReferenceGeometry.topPlane = aFeature;
+                            refPlanesLocated += 1;
+                            Debug.WriteLine($"default top plane name: {basicReferenceGeometry.topPlane?.Name}");
                             break;
                         case 2:
-                            basicReferencePlanes.rightPlane = aFeature;
-                            refPlanesTobeLocated += 1;
+                            basicReferenceGeometry.rightPlane = aFeature;
+                            refPlanesLocated += 1;
+                            Debug.WriteLine($"default right plane name: {basicReferenceGeometry.rightPlane?.Name}");
                             break;
                     }
                 }
+                // origin has the type name "OriginProfileFeature", at least in solidworks 2023
+                else if (aFeature.GetTypeName2() == "OriginProfileFeature")
+                {
+                    if (originLocated == 0)
+                    {
+                        Debug.WriteLine($"default origin name: {aFeature.Name}");
+                        // the surprise here is that the origin is actually a sketch point, instead of a feature. So we need to get the sketch point underneath the "origin feature"
+                        object[] listOfSketchPoints = (object[])((Sketch)aFeature.GetSpecificFeature2()).GetSketchPoints2();
+                        basicReferenceGeometry.origin = (SketchPoint)listOfSketchPoints[0];
+                        originLocated += 1;
+                    }
+                }
             }
-            // DEBUG: should have found 3 basic ref planes by here but let's check again.
-            Debug.WriteLine($"default front plane name: {basicReferencePlanes.frontPlane?.Name}");
-            Debug.WriteLine($"default top plane name: {basicReferencePlanes.topPlane?.Name}");
-            Debug.WriteLine($"default right plane name: {basicReferencePlanes.rightPlane?.Name}");
-            return basicReferencePlanes;
+            return basicReferenceGeometry;
         }
 
         /* A function to get the center point of the inscribed construction circle inside the triangle polygon
