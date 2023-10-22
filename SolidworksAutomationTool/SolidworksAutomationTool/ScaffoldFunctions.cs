@@ -341,7 +341,7 @@ namespace SolidworksAutomationTool
             }
         }
 
-        /* A function to make a block of chamfered triangle from a triangle polygon
+        /* A function to make a block of chamfered triangle from a triangle polygon. Currently not used
          */
         public static SketchBlockDefinition MakeChamferedTriangleBlockFromTrianglePolygon(object[] trianglePolygon, double chamferLength, ref ModelDoc2 partModelDoc, SelectData swSelectData)
         {
@@ -383,7 +383,7 @@ namespace SolidworksAutomationTool
             return chamferedTriangleBlock;
         }
 
-        /* A function to make a block of triangle from a triangle polygon
+        /* A function to make a block of triangle from a triangle polygon. Currently not used
          */ 
         public static SketchBlockDefinition MakeTriangleBlockFromTrianglePolygon(object[] trianglePolygon, ref ModelDoc2 partModelDoc, SelectData swSelectData)
         {
