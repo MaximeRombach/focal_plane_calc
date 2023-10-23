@@ -65,6 +65,13 @@ namespace SolidworksAutomationTool
             partModelDoc.Extension.SelectByID2(sketchName, "SKETCH", 0, 0, 0, appendToSelection, 0, null, 0);
         }
 
+        /*Wrapper function to rotate selected sketch segments by certain angle
+         */
+        public static void RotateSelected(ref ModelDoc2 partModelDoc, double rotationCenterX, double rotationCenterY, double angleInRad)
+        {
+            partModelDoc.Extension.RotateOrCopy( false, 1, false, rotationCenterX, rotationCenterY, 0, 0, 0, 1, angleInRad);
+        }
+
         /* Wrapper function to zoom-to-fit the view */
         public static void ZoomToFit(ref ModelDoc2 partModelDoc)
             => partModelDoc.ViewZoomtofit2();
