@@ -279,6 +279,18 @@ namespace SolidworksAutomationTool
             return extrusionFeature;
         }
 
+        /* A wrapper function to enable the dimension dialog when an operation requires some input */
+        public static void EnableInputDimensionByUser(ref SldWorks solidworks)
+        {
+            solidworks.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, true);
+        }
+
+        /* A wrapper function to disable the dimension dialog when an operation requires user input */
+        public static void DisableInputDimensionByUser(ref SldWorks solidworks)
+        {
+            solidworks.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, false);
+        }
+
         /* Wrapper function to add dimension to the selected object. 
          * Returns the model dimension, NOT the DisplayDimension
          * NOTE: this function does NOT change the selection list. Users should manually clear the selections.

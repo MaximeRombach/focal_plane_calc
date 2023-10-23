@@ -99,7 +99,9 @@ modulePart.SketchManager.Insert3DSketch(true);
 modulePart.ShowNamedView2("", (int)swStandardViews_e.swIsometricView);
 
 // disable user input box when adding dimensions
-solidworksApp.SetUserPreferenceToggle( (int)swUserPreferenceToggle_e.swInputDimValOnCreate, false );
+//solidworksApp.SetUserPreferenceToggle( (int)swUserPreferenceToggle_e.swInputDimValOnCreate, false );
+DisableInputDimensionByUser(ref solidworksApp);
+
 // disable view refreshing until points are created
 modelView =(ModelView)modulePart.GetFirstModelView();
 modelView.EnableGraphicsUpdate = false;
@@ -176,7 +178,7 @@ foreach ((SketchPoint frontSketchPoint, SketchPoint backSketchPoint, SketchSegme
     ClearSelection(ref modulePart);
 }
 // enbale user input box for dimensions
-solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, true);
+EnableInputDimensionByUser(ref solidworksApp);
 
 // restore settings to make solidworks operate as normal
 modulePart.SketchManager.AddToDB = false;
@@ -205,7 +207,7 @@ basicRefGeometry.topPlane.Select2(false, -1);
 modulePart.SketchManager.InsertSketch(true);
 
 // TODO: find a good way to describe which line is which
-solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, false);
+DisableInputDimensionByUser(ref solidworksApp);
 
 SketchArc arc = (SketchArc)modulePart.SketchManager.CreateArc(arcCenterPoint.x, arcCenterPoint.y, arcCenterPoint.z,
                                     arcStartPoint.x, arcStartPoint.y, arcStartPoint.z,
@@ -236,7 +238,6 @@ SketchLine revolutionAxisVerticalLine = (SketchLine)modulePart.SketchManager.Cre
 MakeSelectedLineVertical(ref modulePart);
 ClearSelection(ref modulePart);
 // try to select the origin and set the revolution axis to be coincident with it
-//SelectOrigin(ref modulePart);
 basicRefGeometry.origin.Select4(false, swSelectData);
 SketchPoint revolutionAxisVerticalLineStartPoint = (SketchPoint)revolutionAxisVerticalLine.GetStartPoint2();
 revolutionAxisVerticalLineStartPoint.Select4(true, swSelectData);
@@ -289,7 +290,7 @@ modulePart.SketchManager.AddToDB = false;
 bool trimSuccess = modulePart.SketchManager.SketchTrim((int)swSketchTrimChoice_e.swSketchTrimClosest, arcEndPoint.x, arcEndPoint.y, arcEndPoint.z);
 ClearSelection(ref modulePart);
 
-// DEBUG: try to get the current sketch's name
+// get the current sketch's name
 string pizzaSketchName = ((Feature)modulePart.SketchManager.ActiveSketch).Name;
 
 // quit editing sketch 
@@ -312,7 +313,7 @@ ClearSelection(ref modulePart);
 
 ZoomToFit(ref modulePart);
 // enbale user input box for dimensions
-solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, true);
+EnableInputDimensionByUser(ref solidworksApp);
 
 // TODO: write a function to extrude one triangle. By using this function repetitively, the program remains clean and easy-to-maintain
 /* Extrude triangles in the slice
@@ -365,7 +366,7 @@ modulePart.Insert3DSketch();
 
 /* Create planes near the bottom plane      - looking good!
  * Steps:
- * 1. Try InsertRefPlane Method (IFeatureManager)
+ * 1. Use InsertRefPlane Method (IFeatureManager)
  * 2. select a point on the bottom plane, require it to be coincident with the ref plane
  * 3. select the extrusion axis, require it to be perpendicular to the ref plane
  */        
@@ -376,7 +377,7 @@ ClearSelection(ref modulePart);
 /* Create a sketch on the newly created plane and draw a triangle on it
  */
 // disable user input box for dimensions. Otherwise solidworks will stuck at waiting for user inputs
-solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, false);
+DisableInputDimensionByUser(ref solidworksApp);
 modulePart.SketchManager.AddToDB = true;
 
 // Create a new sketch on a close-to-bottom plane
@@ -506,7 +507,7 @@ ClearSelection(ref modulePart);
 
 modulePart.SketchManager.AddToDB = false;
 // enbale user input box for dimensions
-solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, true);
+EnableInputDimensionByUser(ref solidworksApp);
 
 // DEBUG: print the feature tree
 PrintFeaturesInFeatureManagerDesignTree(ref modulePart);
