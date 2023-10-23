@@ -15,6 +15,8 @@ double outerRimHeight = 200e-3;                     // in meters
 double smallSegmentLength = 30e-3;                  // in meters
 // TODO: create horizontal line (for flat bottom surface). Need a better name here
 double bottomSurfaceRadius = 663.27e-3;
+// TODO: define the side length of the equilateral triangle
+double equilateralTriangleSideLength = 74.5e-3;
 
 Console.WriteLine("Welcome to the LASTRO Solidworks Automation Tool!");
 
@@ -45,7 +47,6 @@ if ( frontGridPointCloud.point3Ds.Count != backGridPointCloud.point3Ds.Count )
 
 // remove the offset in Z direction with the best-fit sphere's radius. Otherwise the points are placed at a super far place
 Console.WriteLine("Removing offsets in Z axis for all points ...");
-
 
 // Using the add operation because the z coordinates in the point clouds are negative. We want to offset them to close to zero
 foreach ((Point3D frontPoint, Point3D backPoint) in frontGridPointCloud.point3Ds.Zip(backGridPointCloud.point3Ds))
@@ -364,14 +365,15 @@ modulePart.SketchManager.AddToDB = false;
 // close the sketch
 modulePart.Insert3DSketch();
 
-/* Create planes near the bottom plane      - looking good!
+/* Create a plane near the bottom plane      - looking good!
  * Steps:
  * 1. Use InsertRefPlane Method (IFeatureManager)
  * 2. select a point on the bottom plane, require it to be coincident with the ref plane
  * 3. select the extrusion axis, require it to be perpendicular to the ref plane
  */        
 ClearSelection(ref modulePart);
-RefPlane aBottomRefPlane = CreateRefPlaneFromPointAndNormal(bottomSurfaceSketchPointList[0], extrusionAxisList[0], "TestPlane1", swSelectData, modulePart.FeatureManager);
+// the primisPlane has the first created full-triangle and chamfered-triangle
+RefPlane primisPlane = CreateRefPlaneFromPointAndNormal(bottomSurfaceSketchPointList[0], extrusionAxisList[0], "PrimisPlane", swSelectData, modulePart.FeatureManager);
 ClearSelection(ref modulePart);
 
 /* Create a sketch on the newly created plane and draw a triangle on it
@@ -381,15 +383,14 @@ DisableInputDimensionByUser(ref solidworksApp);
 modulePart.SketchManager.AddToDB = true;
 
 // Create a new sketch on a close-to-bottom plane
-((Feature)aBottomRefPlane).Select2(false, -1);
+((Feature)primisPlane).Select2(false, -1);
 modulePart.SketchManager.InsertSketch(true);
 
-// define where the top vertix of the equilateral triangle is. Each side of the triangle is 74.5mm long
+// define where the top vertix of the equilateral triangle is. 
 // 0.577350269 is sqrt(3)/3
-double equilateralTriangleSideLength = 74.5e-3;
-SketchPoint someSketchPoint = bottomSurfaceSketchPointList[0];
-Point3D topVertixTriangle = new(someSketchPoint.X, someSketchPoint.Y + 0.577350269 * equilateralTriangleSideLength, someSketchPoint.Z);
-object[] unchamferedTrianglePolygon = (object[])modulePart.SketchManager.CreatePolygon(someSketchPoint.X, someSketchPoint.Y, someSketchPoint.Z,
+SketchPoint firstBottomSurfaceSketchPoint = bottomSurfaceSketchPointList[0];
+Point3D topVertixTriangle = new(firstBottomSurfaceSketchPoint.X, firstBottomSurfaceSketchPoint.Y + 0.577350269 * equilateralTriangleSideLength, firstBottomSurfaceSketchPoint.Z);
+object[] unchamferedTrianglePolygon = (object[])modulePart.SketchManager.CreatePolygon(firstBottomSurfaceSketchPoint.X, firstBottomSurfaceSketchPoint.Y, firstBottomSurfaceSketchPoint.Z,
                                                                             topVertixTriangle.x, topVertixTriangle.y, topVertixTriangle.z, 3, true);
 
 ClearSelection(ref modulePart);
@@ -400,7 +401,7 @@ if (triangleCenter != null)
 {
     ClearSelection(ref modulePart);
     triangleCenter.Select4(true, swSelectData);
-    someSketchPoint.Select4(true, swSelectData);
+    firstBottomSurfaceSketchPoint.Select4(true, swSelectData);
     MakeSelectedCoincide(ref  modulePart);
     ClearSelection(ref modulePart);
 }
@@ -412,25 +413,28 @@ if (oneSideOfTriangle != null)
     ClearSelection(ref modulePart);
     ((SketchSegment)oneSideOfTriangle).Select4(true, swSelectData);
     // Dimension the equilateral triangle's side length
-    AddDimensionToSelected(ref modulePart, equilateralTriangleSideLength, someSketchPoint);
+    AddDimensionToSelected(ref modulePart, equilateralTriangleSideLength, firstBottomSurfaceSketchPoint);
     ClearSelection(ref modulePart);
 }
 
-// add the chamfers
+// TODO: make chamfer length configurable
+// add the chamfers.
 MakeChamferedTriangleFromTrianglePolygon(unchamferedTrianglePolygon, 10.5e-3, ref modulePart, swSelectData);
 
-// DEBUG: remember the name of the unchamfered sketch
+// DEBUG: remember the name of the chamfered sketch
 ((Feature)modulePart.SketchManager.ActiveSketch).Name = "Chamfered Triangle Sketch";
-string unchamferedSketchName = GetActiveSketchName(ref modulePart);
+string chamferedSketchName = GetActiveSketchName(ref modulePart);
+// close chamfered triangle sketch
 modulePart.SketchManager.InsertSketch(true);
 ClearSelection(ref modulePart);
 
 // Create a sketch on the same close-to-bottom plane for the full triangle
-((Feature)aBottomRefPlane).Select2(true, -1);
+((Feature)primisPlane).Select2(true, -1);
 modulePart.SketchManager.InsertSketch(true);
 
+
 // Now make only the triangle shape
-object[] fullTrianglePolygon = (object[])modulePart.SketchManager.CreatePolygon(someSketchPoint.X, someSketchPoint.Y, someSketchPoint.Z,
+object[] fullTrianglePolygon = (object[])modulePart.SketchManager.CreatePolygon(firstBottomSurfaceSketchPoint.X, firstBottomSurfaceSketchPoint.Y, firstBottomSurfaceSketchPoint.Z,
                                                                             topVertixTriangle.x, topVertixTriangle.y, topVertixTriangle.z, 3, true);
 // dimension the sides
 SketchLine? oneSideOfFullTriangle = GetOneTriangleSide(ref fullTrianglePolygon);
@@ -463,7 +467,7 @@ ClearSelection(ref modulePart);
 Debug.WriteLine($"Number of features before paste: {modulePart.GetFeatureCount()}");
 
 // copy the chamfered triangle sketch
-SelectSketch(ref modulePart, unchamferedSketchName);
+SelectSketch(ref modulePart, chamferedSketchName);
 modulePart.EditCopy();
 ((Feature)anotherTestPlane).Select2(true, -1);
 modulePart.Paste();
@@ -500,7 +504,7 @@ chamferedExtrusion.Name = "chamferedExtrusion";
 ClearSelection(ref modulePart);
 
 // DEBUG: try to extrude another chamfered triangle - fine
-SelectSketch(ref modulePart, unchamferedSketchName);
+SelectSketch(ref modulePart, chamferedSketchName);
 Feature anotherChamferedExtrusion = CreateTwoWayExtrusion(ref modulePart);
 anotherChamferedExtrusion.Name = "anotherChamferedExtrusion";
 ClearSelection(ref modulePart);
