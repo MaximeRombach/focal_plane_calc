@@ -432,8 +432,7 @@ ClearSelection(ref modulePart);
 ((Feature)primisPlane).Select2(true, -1);
 modulePart.SketchManager.InsertSketch(true);
 
-
-// Now make only the triangle shape
+///// Done with the first chamfered triangle sketch. Now create the full triangle sketch /////
 object[] fullTrianglePolygon = (object[])modulePart.SketchManager.CreatePolygon(firstBottomSurfaceSketchPoint.X, firstBottomSurfaceSketchPoint.Y, firstBottomSurfaceSketchPoint.Z,
                                                                             topVertixTriangle.x, topVertixTriangle.y, topVertixTriangle.z, 3, true);
 // dimension the sides
@@ -446,17 +445,16 @@ if (oneSideOfFullTriangle != null)
     AddDimensionToSelected(ref modulePart, equilateralTriangleSideLength, (SketchPoint)oneSideOfFullTriangle.GetEndPoint2());
     ClearSelection(ref modulePart);
 }
-
 ClearSelection(ref modulePart);
 
 // Give the first full triangle sketch a special name. 
 ((Feature)modulePart.SketchManager.ActiveSketch).Name = "Full Triangle Sketch";
 string fullTriangleSketchName = ((Feature)modulePart.SketchManager.ActiveSketch).Name;
-// DEBUG: checking the name of the sketch that contains the full triangle
-Debug.WriteLine($"full triangle sketch name is: {fullTriangleSketchName}");
 // quit editing sketch
 modulePart.SketchManager.InsertSketch(true);
 ClearSelection(ref modulePart);
+
+// TODO: use for loop to create triangle modules with the right shape for all the modules
 
 // Debug: Create another test plane near the bottom and insert a sketch on it
 RefPlane anotherTestPlane = CreateRefPlaneFromPointAndNormal(bottomSurfaceSketchPointList[27], extrusionAxisList[27], "AnotherTestPlane", swSelectData, modulePart.FeatureManager);
