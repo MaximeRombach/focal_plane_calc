@@ -110,6 +110,8 @@ modulePart.SketchManager.AddToDB = true;
 
 // try diabling feature tree updates to gain performance
 modulePart.FeatureManager.EnableFeatureTree = false;
+// EnableGraphicsUpdate affects whether to refresh the model view during a selection, such as IEntity::Select4 or IFeature::Select2.
+modelView.EnableGraphicsUpdate = false;
 
 // try to allocate space for front sketchpoints and back sketchpoints
 List<SketchPoint> frontSketchPointList = new(frontGridPointCloud.point3Ds.Count);
@@ -150,10 +152,6 @@ PromptAndWait("Press any key to create small segments");
 // According to solidworks api, we need to define a SelectData object and pass it into each selection call.
 SelectionMgr swSelectionManager = (SelectionMgr)modulePart.SelectionManager;
 SelectData swSelectData = swSelectionManager.CreateSelectData();
-
-// EnableGraphicsUpdate affects whether to refresh the model view during a selection, such as IEntity::Select4 or IFeature::Select2.
-modelView.EnableGraphicsUpdate = false;
-
 
 // Create the small segments from the top surface
 foreach ((SketchPoint frontSketchPoint, SketchPoint backSketchPoint, SketchSegment extrusionAxis) in frontSketchPointList.Zip(backSketchPointList, extrusionAxisList))
@@ -252,7 +250,6 @@ arcCenterSketchPoint.Select4(true, swSelectData);
 ((SketchSegment)revolutionAxisVerticalLine).Select4(true, swSelectData);
 MakeSelectedCoincide(ref modulePart);
 ClearSelection(ref modulePart);
-
 
 SketchPoint revolutionAxisVerticalLineEndPoint = (SketchPoint)revolutionAxisVerticalLine.GetEndPoint2();
 SketchLine horizontalLine = (SketchLine)modulePart.SketchManager.CreateLine(revolutionAxisVerticalLineEndPoint.X, revolutionAxisVerticalLineEndPoint.Y, revolutionAxisVerticalLineEndPoint.Z,
@@ -370,7 +367,7 @@ modulePart.Insert3DSketch();
  * 1. Use InsertRefPlane Method (IFeatureManager)
  * 2. select a point on the bottom plane, require it to be coincident with the ref plane
  * 3. select the extrusion axis, require it to be perpendicular to the ref plane
- */        
+ */
 ClearSelection(ref modulePart);
 // the primisPlane has the first created full-triangle and chamfered-triangle
 RefPlane primisPlane = CreateRefPlaneFromPointAndNormal(bottomSurfaceSketchPointList[0], extrusionAxisList[0], "PrimisPlane", swSelectData, modulePart.FeatureManager);
@@ -455,59 +452,55 @@ modulePart.SketchManager.InsertSketch(true);
 ClearSelection(ref modulePart);
 
 // TODO: use for loop to create triangle modules with the right shape for all the modules
+modelView.EnableGraphicsUpdate = false;
+modulePart.SketchManager.DisplayWhenAdded = false;
 
-// Debug: Create another test plane near the bottom and insert a sketch on it
-RefPlane anotherTestPlane = CreateRefPlaneFromPointAndNormal(bottomSurfaceSketchPointList[27], extrusionAxisList[27], "AnotherTestPlane", swSelectData, modulePart.FeatureManager);
-
-// NEW WAY TO COPY SKETCHES: select the sketch to be copied, copy the sketch, select the plane to paste the sketch on, paste the sketch
-ClearSelection(ref modulePart);
-// DEBUG: check number of features in the design tree
-Debug.WriteLine($"Number of features before paste: {modulePart.GetFeatureCount()}");
-
-// copy the chamfered triangle sketch
-SelectSketch(ref modulePart, chamferedSketchName);
-modulePart.EditCopy();
-((Feature)anotherTestPlane).Select2(true, -1);
-modulePart.Paste();
-
-// select the last pasted sketch
-// TODO: reduce boilerplate code
-Feature lastSketchFeature = (Feature)modulePart.FeatureByPositionReverse(0);
-lastSketchFeature.Select2(false, -1);
-Sketch lastSketch = (Sketch)lastSketchFeature.GetSpecificFeature2();
-// edit the newly created sketch to add constraints
-((Feature)lastSketch).Select2(false, -1);
-modulePart.EditSketch();
-// DEBUG: record the pasted sheet's name
-string pastedChamferedTriangleSheetName = GetActiveSketchName(ref modulePart);
-
-object[] segments = (object[])lastSketch.GetSketchSegments();
-SketchPoint? anotherTriangleCenterPoint = GetTriangleCenterPoint(ref segments);
-anotherTriangleCenterPoint?.Select4(true, swSelectData);
-bottomSurfaceSketchPointList[27].Select4(true, swSelectData);
-MakeSelectedCoincide(ref modulePart);
-ClearSelection(ref modulePart);
-// make a side horizontal
-SketchLine? aSide = GetOneChamferedTriangleLongSide(ref segments);
-((SketchSegment)aSide).Select4(true, swSelectData);
-MakeSelectedLineHorizontal(ref modulePart);
-// quit editing sketch
-modulePart.InsertSketch2(true);
-ClearSelection(ref modulePart);
-
-// DEBUG: try extrude the chamfered triangle    - fine
-SelectSketch(ref modulePart, pastedChamferedTriangleSheetName);
-Feature chamferedExtrusion = CreateTwoWayExtrusion(ref modulePart);
-chamferedExtrusion.Name = "chamferedExtrusion";
-ClearSelection(ref modulePart);
-
-// DEBUG: try to extrude another chamfered triangle - fine
-SelectSketch(ref modulePart, chamferedSketchName);
-Feature anotherChamferedExtrusion = CreateTwoWayExtrusion(ref modulePart);
-anotherChamferedExtrusion.Name = "anotherChamferedExtrusion";
-ClearSelection(ref modulePart);
-
+// try to gain speed by locking the user interface
+modulePart.Lock();
+for (int moduleIndex = 1; moduleIndex < bottomSurfaceSketchPointList.Count; moduleIndex++)
+{
+    // Create another test plane near the bottom and insert a sketch on it
+    RefPlane aRefPlane = CreateRefPlaneFromPointAndNormal(bottomSurfaceSketchPointList[moduleIndex], extrusionAxisList[moduleIndex],
+                                                            $"ModulePlane_{moduleIndex}", swSelectData, modulePart.FeatureManager);
+    // hide the reference plane to avoid slowing down sketch creation, hopefully
+    ((Feature)aRefPlane).Select2(true, -1);
+    modulePart.BlankRefGeom();
+    ClearSelection(ref modulePart);
+    // copy the chamfered triangle sketch
+    SelectSketch(ref modulePart, chamferedSketchName);
+    modulePart.EditCopy();
+    ((Feature)aRefPlane).Select2(true, -1);
+    modulePart.Paste();
+    // select the last pasted sketch
+    Feature lastSketchFeature = (Feature)modulePart.FeatureByPositionReverse(0);
+    lastSketchFeature.Select2(false, -1);
+    Sketch lastSketch = (Sketch)lastSketchFeature.GetSpecificFeature2();
+    // edit the newly created sketch to add constraints
+    ((Feature)lastSketch).Select2(false, -1);
+    modulePart.EditSketch();
+    // DEBUG: record the pasted sheet's name
+    string pastedChamferedTriangleSheetName = GetActiveSketchName(ref modulePart);
+    // make the center of the chamfered module coincident with the extrusion axis
+    object[] segments = (object[])lastSketch.GetSketchSegments();
+    SketchPoint? chamferedTriangleCenterPoint = GetTriangleCenterPoint(ref segments);
+    chamferedTriangleCenterPoint?.Select4(true, swSelectData);
+    bottomSurfaceSketchPointList[moduleIndex].Select4(true, swSelectData);
+    MakeSelectedCoincide(ref modulePart);
+    ClearSelection(ref modulePart);
+    // TODO: still need to constraint the orientation
+    // quit editing sketch
+    modulePart.InsertSketch2(true);
+    ClearSelection(ref modulePart);
+    // extrude the chamfered triangle
+    SelectSketch(ref modulePart, pastedChamferedTriangleSheetName);
+    Feature chamferedExtrusion = CreateTwoWayExtrusion(ref modulePart);
+    chamferedExtrusion.Name = $"chamferedExtrusion_{moduleIndex}";
+    ClearSelection(ref modulePart);
+}
+modulePart.UnLock();
+modelView.EnableGraphicsUpdate = true;
 modulePart.SketchManager.AddToDB = false;
+modulePart.SketchManager.DisplayWhenAdded = true;
 // enbale user input box for dimensions
 EnableInputDimensionByUser(ref solidworksApp);
 
