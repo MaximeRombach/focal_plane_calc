@@ -41,7 +41,7 @@ Can repeatedly create sketches of modules(both chamfered and unchamfered) and ex
 
 - [ ] Reliably position the (full and chamfered) triangles on the "full pizza slice"
 
-- [ ] Extrude the modules
+- [x] Extrude the modules
 
 - [ ] Repeat the "extruded pizza slice" to make a full focol plane
 
