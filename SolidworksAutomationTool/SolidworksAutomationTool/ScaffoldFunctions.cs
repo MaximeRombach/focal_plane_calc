@@ -65,6 +65,13 @@ namespace SolidworksAutomationTool
             partModelDoc.Extension.SelectByID2(sketchName, "SKETCH", 0, 0, 0, appendToSelection, 0, null, 0);
         }
 
+        /*Wrapper function to rotate selected sketch segments by certain angle
+         */
+        public static void RotateSelected(ref ModelDoc2 partModelDoc, double rotationCenterX, double rotationCenterY, double angleInRad)
+        {
+            partModelDoc.Extension.RotateOrCopy( false, 1, false, rotationCenterX, rotationCenterY, 0, 0, 0, 1, angleInRad);
+        }
+
         /* Wrapper function to zoom-to-fit the view */
         public static void ZoomToFit(ref ModelDoc2 partModelDoc)
             => partModelDoc.ViewZoomtofit2();
@@ -277,6 +284,18 @@ namespace SolidworksAutomationTool
                                     false,  // If T0 is swStartConditions_e.swStartOffset, then true to flip the direction of cut, false to not
                                     false);
             return extrusionFeature;
+        }
+
+        /* A wrapper function to enable the dimension dialog when an operation requires some input */
+        public static void EnableInputDimensionByUser(ref SldWorks solidworks)
+        {
+            solidworks.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, true);
+        }
+
+        /* A wrapper function to disable the dimension dialog when an operation requires user input */
+        public static void DisableInputDimensionByUser(ref SldWorks solidworks)
+        {
+            solidworks.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, false);
         }
 
         /* Wrapper function to add dimension to the selected object. 
