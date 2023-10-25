@@ -447,9 +447,20 @@ if (oneSideOfFullTriangle != null)
 }
 ClearSelection(ref modulePart);
 
+// constraint the center of the full triangle to the extrusion axis
+SketchPoint? fullTriangleCenter = GetTriangleCenterPoint(ref fullTrianglePolygon);
+if (fullTriangleCenter != null)
+{
+    fullTriangleCenter.Select4(true, swSelectData);
+    firstBottomSurfaceSketchPoint.Select4(true, swSelectData);
+    MakeSelectedCoincide(ref modulePart);
+    ClearSelection(ref modulePart);
+}
+
 // Give the first full triangle sketch a special name. 
 ((Feature)modulePart.SketchManager.ActiveSketch).Name = "Full Triangle Sketch";
 string fullTriangleSketchName = ((Feature)modulePart.SketchManager.ActiveSketch).Name;
+
 // quit editing sketch
 modulePart.SketchManager.InsertSketch(true);
 ClearSelection(ref modulePart);
@@ -515,6 +526,9 @@ for (int moduleIndex = 1; moduleIndex < bottomSurfaceSketchPointList.Count; modu
     chamferedExtrusion.Name = $"chamferedExtrusion_{moduleIndex}";
     ClearSelection(ref modulePart);
 }
+
+// TODO: finally extrude the "reference sketches"
+
 
 //modulePart.UnLock();
 modelView.EnableGraphicsUpdate = true;
