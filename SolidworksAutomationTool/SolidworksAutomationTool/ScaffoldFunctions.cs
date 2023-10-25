@@ -55,7 +55,7 @@ namespace SolidworksAutomationTool
         public static void ClearSelection(ref ModelDoc2 partModelDoc) 
             => partModelDoc.ClearSelection2(true);
 
-        // Wrapper function to select the origin
+        // Wrapper function to select the origin. ONLY WORKS IN THE ENGLISH VERSION OF SOLIDWORKS
         public static void SelectOrigin(ref ModelDoc2 partModelDoc)
             => partModelDoc.Extension.SelectByID2("Point1@Origin", "EXTSKETCHPOINT", 0, 0, 0, false, 0, null, 0);
 
@@ -65,11 +65,13 @@ namespace SolidworksAutomationTool
             partModelDoc.Extension.SelectByID2(sketchName, "SKETCH", 0, 0, 0, appendToSelection, 0, null, 0);
         }
 
-        /*Wrapper function to rotate selected sketch segments by certain angle
+        /*Wrapper function to rotate selected sketch segments by certain angle.
+         * NOTE: this function preserves the sketch relations from the source sketch
          */
         public static void RotateSelected(ref ModelDoc2 partModelDoc, double rotationCenterX, double rotationCenterY, double angleInRad)
         {
-            partModelDoc.Extension.RotateOrCopy( false, 1, false, rotationCenterX, rotationCenterY, 0, 0, 0, 1, angleInRad);
+            // preserve the sketch relations when copying a sketch
+            partModelDoc.Extension.RotateOrCopy( false, 1, true, rotationCenterX, rotationCenterY, 0, 0, 0, 1, angleInRad);
         }
 
         /* Wrapper function to zoom-to-fit the view */
