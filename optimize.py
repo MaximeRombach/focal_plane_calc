@@ -10,7 +10,7 @@ import logging
 
 # Choose project
 # Available: MUST, Megamapper
-project = 'MUST'
+project = 'MegaMapper'
 surf = param.FocalSurf(project = project)
 logging.basicConfig(level=logging.INFO)
 logging.info('Project loaded: %s', project)
@@ -26,7 +26,7 @@ if surf.asph_formula: # Check if focal surface defined directly by ashperic coef
 
 else: # If no coefficients load data from csv file and interpolate to get focal plane curve
 
-    filename = "MM1536-cfg1-20210910.csv" # optics data from Zemax
+    filename = "./Data_focal_planes/2021_10_09_MegaMapper.csv" # optics data from Zemax
     comment_character = "#"  # The character that indicates a commented line
     # Read CSV file and ignore commented lines
     optics_data = pd.read_csv(filename, comment=comment_character)
@@ -53,30 +53,30 @@ z = R2Z(r) # Calculate focal plane curve from csv data
 
 #%% Plot 3D focal plane from curve
 
-n = 100
-plt.rcParams["figure.figsize"] = [7.00, 3.50]
-plt.rcParams["figure.autolayout"] = True
-fig = plt.figure(figsize=(12,4))
-# ax1 = fig.add_subplot(121)
-ax2 = plt.subplot(111, projection='3d')
+# n = 100
+# plt.rcParams["figure.figsize"] = [7.00, 3.50]
+# plt.rcParams["figure.autolayout"] = True
+# fig = plt.figure(figsize=(12,4))
+# # ax1 = fig.add_subplot(121)
+# ax2 = plt.subplot(111, projection='3d')
 
-x = np.linspace(0,surf.vigR,n)
-y = R2Z(x)
-t = np.linspace(0, np.pi*2, n)
+# x = np.linspace(0,surf.vigR,n)
+# y = R2Z(x)
+# t = np.linspace(0, np.pi*2, n)
 
-curve = np.array([x,y,np.zeros_like(x)]).reshape(3,n)
-saving.save_grid_to_txt(curve.T, 'curve')
+# curve = np.array([x,y,np.zeros_like(x)]).reshape(3,n)
+# saving.save_grid_to_txt(curve.T, 'curve')
 
-xn = np.outer(x, np.cos(t))
-yn = np.outer(x, np.sin(t))
-zn = np.zeros_like(xn)
+# xn = np.outer(x, np.cos(t))
+# yn = np.outer(x, np.sin(t))
+# zn = np.zeros_like(xn)
 
-for i in range(len(x)):
-    zn[i:i+1,:] = np.full_like(zn[0,:], y[i])
+# for i in range(len(x)):
+#     zn[i:i+1,:] = np.full_like(zn[0,:], y[i])
 
-# ax1.plot(x, y)
-ax2.plot_surface(xn, yn, zn)
-ax2.set_zlim3d(-20, 0)    
+# # ax1.plot(x, y)
+# ax2.plot_surface(xn, yn, zn)
+# ax2.set_zlim3d(-20, 0)    
 
 #%% 2) Define BFS
 
