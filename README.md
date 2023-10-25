@@ -16,16 +16,16 @@ The first output shows the smallest building blovk of this program. It shows the
 
 Individual robots workspaces             |  Summed robots workspace
 :-------------------------:|:-------------------------:
-![Indiv_robots_wks](Results_examples/2023-08-30-10-28-05__Module_coverage_raw__102_robots_per_module.png) |  ![Net_robots_wks](Results_examples/2023-08-30-10-28-07___Module_cov_w_walls__102_robots_per_mod.png)
+![Indiv_robots_wks](Results_examples/2023-10-20-11-39-57_Module_coverage_raw_63_robots_per_module.png) |  ![Net_robots_wks](Results_examples/2023-10-20-11-39-59_Module_cov_w_walls__63_robots_per_mod.png)
 
 ## Robots workspace in intermediate modules
 
 The goal of this program is to study the impact of locally changing the gap between modules on the total coverage. They are thus packed by groups of 4 ideally without physical walls between them. The said gap is the *inner gap* variable in *focal_plane_covergae.py*.
 
-![](Results_examples/2023-08-30-10-28-08___Intermediate_plot_102_robots_per_mod.png)
+![](Results_examples/2023-10-20-11-40-00_Intermediate_plot_63_robots_per_mod.png)
 
 ## Total coverage
 
 The modules are then placed 4 by 4 (in green) in the focal plane bounded by its vignetting radius (*vigR*). Individual modules (in blue) are used as we get closer to the edge of the vigR, more can be inserted as we increase the *out_allowance* parameter, which sets how much the workspace of a module is allowed to stick out of vigR.
 
-![](Results_examples/2023-08-30-10-28-16___Coverage_global_102_rob__Inner_1_mm__Global_3_mm.png)
+![](Results_examples/2023-10-20-11-40-06_Coverage_global_63_rob__Inner_1_mm__Global_3_mm.png)
