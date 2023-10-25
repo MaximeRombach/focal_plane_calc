@@ -153,6 +153,8 @@ PromptAndWait("Press any key to create small segments");
 SelectionMgr swSelectionManager = (SelectionMgr)modulePart.SelectionManager;
 SelectData swSelectData = swSelectionManager.CreateSelectData();
 
+// disable graphics update to boost performance
+modelView.EnableGraphicsUpdate = false;
 // Create the small segments from the top surface
 foreach ((SketchPoint frontSketchPoint, SketchPoint backSketchPoint, SketchSegment extrusionAxis) in frontSketchPointList.Zip(backSketchPointList, extrusionAxisList))
 {
@@ -164,16 +166,13 @@ foreach ((SketchPoint frontSketchPoint, SketchPoint backSketchPoint, SketchSegme
     // constraint the point to be on coincide with the extrusion axis. Assuming the smallSegmentSketchPoint is already selected after creation
     extrusionAxis.Select4(true, swSelectData);
     MakeSelectedCoincide(ref modulePart);
-
     // clear previous selections, so that no unintentional selection
     ClearSelection(ref modulePart);
 
     // add a length dimension to the small segment
     frontSketchPoint.Select4(true, swSelectData);
     smallSegmentSketchPoint.Select4(true, swSelectData);
-
     AddDimensionToSelected(ref modulePart, smallSegmentLength, frontSketchPoint);
-
     ClearSelection(ref modulePart);
 }
 // enbale user input box for dimensions
@@ -456,7 +455,7 @@ modelView.EnableGraphicsUpdate = false;
 modulePart.SketchManager.DisplayWhenAdded = false;
 
 // try to gain speed by locking the user interface
-modulePart.Lock();
+//modulePart.Lock();
 for (int moduleIndex = 1; moduleIndex < bottomSurfaceSketchPointList.Count; moduleIndex++)
 {
     // Create another test plane near the bottom and insert a sketch on it
@@ -497,7 +496,8 @@ for (int moduleIndex = 1; moduleIndex < bottomSurfaceSketchPointList.Count; modu
     chamferedExtrusion.Name = $"chamferedExtrusion_{moduleIndex}";
     ClearSelection(ref modulePart);
 }
-modulePart.UnLock();
+
+//modulePart.UnLock();
 modelView.EnableGraphicsUpdate = true;
 modulePart.SketchManager.AddToDB = false;
 modulePart.SketchManager.DisplayWhenAdded = true;
