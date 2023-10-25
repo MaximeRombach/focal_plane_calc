@@ -85,23 +85,31 @@ namespace SolidworksAutomationTool
 
                 // start actually reading the first line of data
                 lineRead = streamReader.ReadLine() ;
+                // check the number of columns in the the point cloud file
+                string[] splittedLine = lineRead.Split(splitOptions, StringSplitOptions.RemoveEmptyEntries);
+                // if a line contains anything other than 4 numbers, the data format is wrong. We need 3 points to define a point in 3D. 
+                if (splittedLine.Length == 3)
+                {
+                    Console.WriteLine($"Assuming the point cloud file {fileName} has no module orientation info column");
+                }
+                else if (splittedLine.Length == 4)
+                {
+                    Console.WriteLine($"Assuming the point cloud file {fileName} has module orientation info column");
+                }
+                else
+                {
+                    throw new InvalidDataException($"ERROR: Wrong data format in line {currentLine}. This line has {splittedLine.Length} numbers instead of 3 or 4");
+                }
+
                 currentLine += 1;
 
                 while (lineRead != null)
                 {
                     // split the line read by space
-                    string[] splittedLine = lineRead.Split( splitOptions, StringSplitOptions.RemoveEmptyEntries );
+                    splittedLine = lineRead.Split( splitOptions, StringSplitOptions.RemoveEmptyEntries );
 
                     // if a line contains anything other than 4 numbers, the data format is wrong. We need 3 points to define a point in 3D. 
-                    if (splittedLine.Length == 3)
-                    {
-                        Console.WriteLine($"Assuming the point cloud file {fileName} has no module orientation info column");
-                    }
-                    else if (splittedLine.Length == 4)
-                    {
-                        Console.WriteLine($"Assuming the point cloud file {fileName} has module orientation info column");
-                    }
-                    else
+                    if (!(splittedLine.Length == 3 || splittedLine.Length == 4))
                     {
                         throw new InvalidDataException($"ERROR: Wrong data format in line {currentLine}. This line has {splittedLine.Length} numbers instead of 3 or 4");
                     }
