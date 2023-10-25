@@ -86,6 +86,7 @@ Console.WriteLine("Please wait a bit. SolidWorks should appear. If not, there is
 
 /* Start modeling the robot holder in the focal plane */
 PromptAndWait("Press any key to create the robot-holder from the point clouds");
+Console.WriteLine("Creating extrusion axes from point clouds ...");
 
 // create a part
 modulePart = solidworksApp.INewDocument2( solidworksApp.GetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplatePart), 0, 0, 0);
@@ -150,6 +151,7 @@ modulePart.SketchManager.Insert3DSketch(true);
 ClearSelection(ref modulePart);
 
 PromptAndWait("Press any key to create small segments");
+Console.WriteLine("Creating small segments ...");
 
 // According to solidworks api, we need to define a SelectData object and pass it into each selection call.
 SelectionMgr swSelectionManager = (SelectionMgr)modulePart.SelectionManager;
@@ -193,7 +195,8 @@ ZoomToFit(ref modulePart);
 
 modulePart.SketchManager.AddToDB = true;
 
-PromptAndWait("Press any key to revolve a pizza slice");
+PromptAndWait("Press any key to revolve a pizza slice (1/6 of a pizza)");
+Console.WriteLine("Revolving a pizza slice ...");
 
 // define variables needed for pizza creation
 double arcAngle = DegreeToRadian(15);
@@ -374,6 +377,9 @@ modulePart.Insert3DSketch();
 ClearSelection(ref modulePart);
 // the primisPlane has the first created full-triangle and chamfered-triangle
 RefPlane primisPlane = CreateRefPlaneFromPointAndNormal(bottomSurfaceSketchPointList[0], extrusionAxisList[0], "PrimisPlane", swSelectData, modulePart.FeatureManager);
+// make the first reference plane invisible to boost performance
+((Feature)primisPlane).Select2(true, -1);
+modulePart.BlankRefGeom();
 ClearSelection(ref modulePart);
 
 /* Create a sketch on the newly created plane and draw a triangle on it
@@ -529,11 +535,11 @@ for (int moduleIndex = 1; moduleIndex < bottomSurfaceSketchPointList.Count; modu
 
 // TODO: finally extrude the "reference sketches"
 
-
 //modulePart.UnLock();
 modelView.EnableGraphicsUpdate = true;
-modulePart.SketchManager.AddToDB = false;
 modulePart.SketchManager.DisplayWhenAdded = true;
+modulePart.SketchManager.AddToDB = false;
+
 // enbale user input box for dimensions
 EnableInputDimensionByUser(ref solidworksApp);
 
