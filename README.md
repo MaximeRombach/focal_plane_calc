@@ -16,7 +16,7 @@ The first output shows the smallest building blovk of this program. It shows the
 
 Individual robots workspaces             |  Summed robots workspace
 :-------------------------:|:-------------------------:
-![Indiv_robots_wks](Results_examples/2023-10-20-11-39-57_Module_coverage_raw_63_robots_per_module.png) |  ![Net_robots_wks](Results_examples/2023-10-20-11-39-59_Module_cov_w_walls__63_robots_per_mod.png)
+![2023-10-20-11-39-57_Module_coverage_raw_63_robots_per_module](https://github.com/MaximeRombach/focal_plane_calc/assets/73754365/3b3756ea-3b74-4ccb-b611-998703b1c3b1) |  ![Net_robots_wks](Results_examples/2023-10-20-11-39-59_Module_cov_w_walls__63_robots_per_mod.png)
 
 ## Robots workspace in intermediate modules
 
