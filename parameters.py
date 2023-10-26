@@ -148,12 +148,13 @@ class FocalSurf():
                
           elif self.project == 'Spec-s5':
                focal_surf_param = {
-                    'name': r'$\bf{Spec-s5 - Focal Plane \quad \varnothing: 0.8 m$',
+                    'name': r'$\bf{Spec-s5}$',
                     'R': -13000, # [mm], main radius of curvature (roughly 13m from Claire's info 20.10.2023)
                     'vigR': 4.084421E+02,# [mm], vignetting radius
                     'asph_formula': False,
                     'BFS': -1.277364E+04, # [mm], radius of BFS,
                     'f-number': 3.64, # assumption based on previous telescope designs
+                    'FoV': None # [deg]
                     }
           else: 
                logging.error(f'Setting focal surface parameters: {self.project} project is not defined')
@@ -237,9 +238,10 @@ class SavingResults:
      It also creates the "Results/" directory, if not already existing, to store eveything in one place
      """
 
-     def __init__(self, saving_df) -> None:
+     def __init__(self, saving_df, project_name = None) -> None:
 
-          self.results_dir_path = self.path_to_results_dir
+          self.project_name = project_name
+          self.results_dir_path = self.path_to_results_dir()
           if 'save_plots' in saving_df.keys():
                self.save_plots = saving_df['save_plots']
 
@@ -258,9 +260,14 @@ class SavingResults:
      def path_to_results_dir(self):
 
           script_dir = os.path.dirname(__file__)
-          results_dir_path = os.path.join(script_dir, 'Results_examples/')
-          # results_dir_path = os.path.join(script_dir, 'Results/')
+          # results_dir_path = os.path.join(script_dir, 'Results_examples/')
+          results_dir_path = os.path.join(script_dir, 'Results/')
 
+          # Creates a subfolder corresponding to the project name in Results/
+          if self.project_name is not None: 
+               results_dir_path = os.path.join(results_dir_path, self.project_name + '/')
+
+          # Checks if the directory exists, if not creates it
           if not os.path.isdir(results_dir_path):
                os.makedirs(results_dir_path)
           
@@ -285,19 +292,19 @@ class SavingResults:
                     msp.add_entity(entity)
                     entity.set_dxf_attrib('layer', f"{key}")
 
-          doc.saveas(self.results_dir_path() + f"{name_frame}.dxf")
+          doc.saveas(self.results_dir_path + f"{name_frame}.dxf")
 
-     def save_figures_to_dir(self, suffix_name: str, dpi: int = 800):
+     def save_figures_to_dir(self, suffix_name: str, dpi: int = 400):
 
           if not self.save_plots:
                return
 
           now = datetime.now()
           today_filename = now.strftime("%Y-%m-%d-%H-%M-%S_") + suffix_name + ".png"
-          plt.savefig(self.results_dir_path() + today_filename, bbox_inches = 'tight', format='png', dpi = dpi)
-          logging.info(f'{suffix_name}.png successfully saved in in {self.results_dir_path()}')
+          plt.savefig(self.results_dir_path + today_filename, bbox_inches = 'tight', format='png', dpi = dpi)
+          logging.info(f'{suffix_name}.png successfully saved in in {self.results_dir_path}')
 
-     def save_grid_to_txt(self, grid, filename):
+     def save_grid_to_txt(self, grid, filename, direct_SW = False):
 
           if not self.save_txt:
                return
@@ -307,12 +314,18 @@ class SavingResults:
           y = grid[:,1]
           z = grid[:,2]
           up_tri = grid[:,3]
-          with open(self.results_dir_path() + now.strftime("%Y-%m-%d-%H-%M-%S_") + f'{filename}.txt', 'w') as file:
-               file.write("x[mm] y[mm] z[mm] upward_tri [bool]\n")
+          with open(self.results_dir_path + now.strftime("%Y-%m-%d-%H-%M-%S_") + f'{filename}.txt', 'w') as file:
+               if direct_SW: # removes orientation column to directly read cloup point in solidworks
+                    file.write("x[mm] y[mm] z[mm]\n")
+               else:
+                    file.write("x[mm] y[mm] z[mm] upward_tri [bool]\n")
                for (dx,dy,dz,up) in zip(x,y,z, up_tri):
-                    file.write(f"{dx:.3f} {dy:.3f} {dz:.3f} {int(up)}\n")
+                    if direct_SW:
+                         file.write(f"{dx:.3f} {dy:.3f} {dz:.3f}\n")
+                    else:
+                         file.write(f"{dx:.3f} {dy:.3f} {dz:.3f} {int(up)}\n")
           
-          logging.info(f'{filename}.txt succesfully saved in {self.results_dir_path()}')
+          logging.info(f'{filename}.txt succesfully saved in {self.results_dir_path}')
 
 """ Module parameters """ 
 
