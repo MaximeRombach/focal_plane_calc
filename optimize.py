@@ -24,7 +24,7 @@ draw = True
 if surf.asph_formula: # Check if focal surface defined directly by ashperic coefficients (analytical solution)
     R2Z = surf.asph_R2Z()
 
-else: # If no coefficients load data from csv file and interpolate to get focal plane curve
+elif not surf.asph_formula and project == 'MegaMapper': # If no coefficients load data from csv file and interpolate to get focal plane curve
 
     filename = "./Data_focal_planes/2021_10_09_MegaMapper.csv" # optics data from Zemax
     comment_character = "#"  # The character that indicates a commented line
@@ -46,6 +46,9 @@ else: # If no coefficients load data from csv file and interpolate to get focal 
 
     R2Z = interp1d(R,Z,kind='cubic', fill_value = "extrapolate") #leave 'cubic' interpolation for normal vectors calculations
     R2CRD = interp1d(R,CRD,kind='cubic')
+
+elif not surf.asph_formula and project == 'Spec-s5':
+    filename = "./Data_focal_planes/2023_10_16_Spec-s5.txt" # optics data from Zemax
 
 
 r = np.linspace(0,surf.vigR,500) # Define radius vector for focal plane curve

@@ -466,7 +466,6 @@ if (fullTriangleCenter != null)
 // Give the first full triangle sketch a special name. 
 ((Feature)modulePart.SketchManager.ActiveSketch).Name = "Full Triangle Sketch";
 string fullTriangleSketchName = ((Feature)modulePart.SketchManager.ActiveSketch).Name;
-
 // quit editing sketch
 modulePart.SketchManager.InsertSketch(true);
 ClearSelection(ref modulePart);
