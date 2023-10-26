@@ -21,8 +21,8 @@ We chose C# because of its high performance, high-level syntax and built-in garb
 - The `focal_plane_calc` repo, which is the parent directory of the automation tool.
 
 # Current Progress
-![image](https://github.com/MaximeRombach/focal_plane_calc/assets/85515041/a318a5ba-255b-46d2-bc5c-120a5eb87579)
 
+![image](https://github.com/MaximeRombach/focal_plane_calc/assets/85515041/a318a5ba-255b-46d2-bc5c-120a5eb87579)
 
 Can repeatedly create sketches of modules(both chamfered and unchamfered) and extrude using them.
 
@@ -46,6 +46,8 @@ Can repeatedly create sketches of modules(both chamfered and unchamfered) and ex
 
 - [ ] Repeat the "extruded pizza slice" to make a full focol plane
 
+- [ ] Optionally add a function to determine the orientations of the modules based "sorting the rows"
+
 ## On the high-level planning
 
 - [ ] Make GUI to help the user adjust various parameters easily
@@ -53,3 +55,4 @@ Can repeatedly create sketches of modules(both chamfered and unchamfered) and ex
 ## On optimizations
 
 - [ ] Make wrapper functions to reduce boilerplat code
+- [ ] Optionally add a progress bar in the console version of the Automation Tool
