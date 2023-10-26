@@ -327,6 +327,7 @@ EnableInputDimensionByUser(ref solidworksApp);
  * 3. start sketches on those planes and draw triangles on sketches
  * 4. extrude triangles
  */
+Console.WriteLine("Extruding modules ...");
 // First define the bottom plane, by creating a parallel plane w.r.t the front plane
 double bottomToFrontPlaneDistance = ((SketchSegment)revolutionAxisVerticalLine).GetLength();
 
@@ -412,12 +413,14 @@ if (triangleCenter != null)
     ClearSelection(ref modulePart);
 }
 
-// make one of the sides horizontal -  Not necessary
-SketchLine? oneSideOfTriangle = GetOneTriangleSide(ref unchamferedTrianglePolygon);
+// make one of the sides horizontal - not sure if this is the best thing to do
+SketchLine? oneSideOfTriangle = GetMostHorizontalTriangleSide(ref unchamferedTrianglePolygon);
 if (oneSideOfTriangle != null)
 {
     ClearSelection(ref modulePart);
     ((SketchSegment)oneSideOfTriangle).Select4(true, swSelectData);
+    // DEBUG: add horizontal constraint on this side - maybe fine
+    MakeSelectedLineHorizontal(ref modulePart);
     // Dimension the equilateral triangle's side length
     AddDimensionToSelected(ref modulePart, equilateralTriangleSideLength, firstBottomSurfaceSketchPoint);
     ClearSelection(ref modulePart);
@@ -544,6 +547,8 @@ EnableInputDimensionByUser(ref solidworksApp);
 
 // DEBUG: print the feature tree
 PrintFeaturesInFeatureManagerDesignTree(ref modulePart);
+
+Console.WriteLine("Module extrusions completed");
 
 // wait for user input before closing
 PromptAndWait("Press any key to close Solidworks");

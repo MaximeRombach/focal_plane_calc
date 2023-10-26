@@ -214,6 +214,31 @@ namespace SolidworksAutomationTool
             return null;
         }
 
+        /* Get the most horizontal side of a triangle polygon
+         * TODO: add more descriptions on the trick used
+         * */
+        public static SketchLine? GetMostHorizontalTriangleSide(ref object[] polygon)
+        {
+            SketchLine? mostHorizontalSide = null;
+            double smallestSlopeMagnitude = 999;
+            foreach (SketchSegment triangleSegment in polygon.Cast<SketchSegment>())
+            {
+                // calculate the slop of the projection of the side on the xy plane.
+                if (triangleSegment.GetType() == (int)swSketchSegments_e.swSketchLINE)
+                {
+                    SketchPoint startPoint = (SketchPoint)((SketchLine)triangleSegment).GetStartPoint2();
+                    SketchPoint endPoint = (SketchPoint)((SketchLine)triangleSegment).GetEndPoint2();
+                    double sideSlopeMagnitude = Math.Abs((endPoint.Y - startPoint.Y) / (endPoint.X - startPoint.X));
+                    if (sideSlopeMagnitude < smallestSlopeMagnitude)
+                    {
+                        smallestSlopeMagnitude = sideSlopeMagnitude;
+                        mostHorizontalSide = (SketchLine)triangleSegment;
+                    }
+                }
+            }
+            return mostHorizontalSide;
+        }
+
         /* A function to get one of the longer sides of a chamfered triangle.
          * Returns a longer side of the chamfered triangle if the polygon contains at least a sketch line
          *  else Returns null
