@@ -1,5 +1,4 @@
-﻿
-using System.Globalization;
+﻿using System.Globalization;
 
 namespace SolidworksAutomationTool
 {
@@ -13,7 +12,10 @@ namespace SolidworksAutomationTool
     public class PointCloud
     {
         // All 3D points are stored in an array
-        public List<Point3D> point3Ds = new List<Point3D>();
+        public List<Point3D> point3Ds = new();
+        
+        // The orientation of the modules are stored in an array
+        public List<bool> moduleOrientations = new();
 
         /* The backbone of reading a point cloud from a txt file. 
          * Return:  false if the provided txt file does NOT exist / error occurred while reading the txt file.
@@ -33,6 +35,22 @@ namespace SolidworksAutomationTool
             }
         }
 
+        // Simple orientation-printing function. Could be used for debugging
+        public void PrintModuleOrientations()
+        {
+            int moduleOrientationIndex = -1;
+            foreach (bool moduleOrientation in moduleOrientations)
+            {
+                moduleOrientationIndex += 1;
+                string orientation = moduleOrientation switch
+                {
+                    true => "Up",
+                    false => "Down",
+                };
+                Console.WriteLine($"Point {moduleOrientationIndex,5}:    module orientated: {orientation}");
+            }
+        }
+
         /* 
          * Reads a txt file and parse all points into a list of 3D points
          * Returns: true if the parse was sucessful
@@ -43,8 +61,7 @@ namespace SolidworksAutomationTool
             // security check
             if ( !File.Exists(fileName) )
             {
-                Console.WriteLine("ERROR: Cannot read point cloud from txt. Txt file doesn't exist");
-                return false;
+                throw new FileNotFoundException($"ERROR: Cannot read point cloud from {fileName}. File doesn't exist");
             }
 
             if ( !Enum.IsDefined( typeof( Units ), dataUnit ) )
@@ -53,7 +70,7 @@ namespace SolidworksAutomationTool
                 return false;
             }
 
-            using (StreamReader streamReader = new StreamReader(fileName))
+            using (StreamReader streamReader = new(fileName))
             {
                 // create culture info. It will be used to specify number convention during string-to-number conversion
                 CultureInfo usNumberFormatConvention = CultureInfo.CreateSpecificCulture("en-US");
@@ -68,29 +85,43 @@ namespace SolidworksAutomationTool
 
                 // start actually reading the first line of data
                 lineRead = streamReader.ReadLine() ;
+                // check the number of columns in the the point cloud file
+                string[] splittedLine = lineRead.Split(splitOptions, StringSplitOptions.RemoveEmptyEntries);
+                // if a line contains anything other than 4 numbers, the data format is wrong. We need 3 points to define a point in 3D. 
+                if (splittedLine.Length == 3)
+                {
+                    Console.WriteLine($"Assuming the point cloud file {fileName} has no module orientation info column");
+                }
+                else if (splittedLine.Length == 4)
+                {
+                    Console.WriteLine($"Assuming the point cloud file {fileName} has module orientation info column");
+                }
+                else
+                {
+                    throw new InvalidDataException($"ERROR: Wrong data format in line {currentLine}. This line has {splittedLine.Length} numbers instead of 3 or 4");
+                }
+
                 currentLine += 1;
 
                 while (lineRead != null)
                 {
                     // split the line read by space
-                    string[] splittedLine = lineRead.Split( splitOptions, StringSplitOptions.RemoveEmptyEntries );
+                    splittedLine = lineRead.Split( splitOptions, StringSplitOptions.RemoveEmptyEntries );
 
-                    // if a line contains anything other than 3 numbers, the data format is wrong. We need 3 points to define a point in 3D
-                    if (splittedLine.Length != 3)
+                    // if a line contains anything other than 4 numbers, the data format is wrong. We need 3 points to define a point in 3D. 
+                    if (!(splittedLine.Length == 3 || splittedLine.Length == 4))
                     {
-                        Console.WriteLine($"ERROR: Wrong data format in line {currentLine}. This line has {splittedLine.Length} numbers instead of 3");
-                        return false;
+                        throw new InvalidDataException($"ERROR: Wrong data format in line {currentLine}. This line has {splittedLine.Length} numbers instead of 3 or 4");
                     }
 
                     // Try to convert the splitted line into 3 numbers and create a Point3D instance
                     double[] convertedNumbers = new double[3];
-                    for (uint axis = 0; axis < splittedLine.Length; axis ++)
+                    for (uint axis = 0; axis < 3; axis ++)
                     {   
                         // convert strings to numbers using the US number format, a.k.a using dots as decimal points
                         if (!double.TryParse(splittedLine[axis], usNumberFormatConvention, out convertedNumbers[axis]))
                         {
-                            Console.WriteLine($"ERROR: Wrong data format in line {currentLine}. Please check for typos");
-                            return false;
+                            throw new InvalidDataException($"ERROR: Wrong data format in line {currentLine} in file {fileName}. Please check for typos");
                         }
 
                         // Since solidworks's api seems to only take data in meters. We need to convert everything to meters, when the point cloud txt file contains data in mm
@@ -105,6 +136,22 @@ namespace SolidworksAutomationTool
                     // add the create point to the Point3D list
                     point3Ds.Add( new Point3D(convertedNumbers) );
 
+                    // store the module orientation for this "pair of points", if there are 4 columns in the point cloud text
+                    if (splittedLine.Length == 4)
+                    {
+                        int orientationFlag = -1;
+                        if (!int.TryParse(splittedLine[^1], usNumberFormatConvention, out orientationFlag) )
+                        {
+                            throw new InvalidDataException($"ERROR: Wrong orientation flag in line {currentLine} in file {fileName}. Please check for typos");
+                        }
+                        moduleOrientations.Add(orientationFlag switch
+                        {
+                            1 => true,  // upright triangle
+                            0 => false, // upside-down triangle
+                            _ => throw new InvalidDataException($"ERROR: Invalid orientation flag in line {currentLine} in file {fileName}")
+                        });
+                    }
+
                     // read the next line
                     lineRead = streamReader.ReadLine();
                     currentLine += 1;
@@ -113,8 +160,7 @@ namespace SolidworksAutomationTool
             // in the case where the txt file is empty, let the user know.
             if (point3Ds.Count == 0)
             {
-                Console.WriteLine("WARNING: no point cloud found in this txt file");
-                return false;
+                throw new InvalidDataException($"WARNING: no point cloud found in {fileName}");
             }
             Console.WriteLine($"Successfully read {point3Ds.Count} points from txt");
             return true;
