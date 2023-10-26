@@ -56,10 +56,14 @@ start_time = time.time()
 
 """ Global variables """
 
-nbots = [63, 75, 88, 102] # number of robots per module
-# nbots = [63]
-out_allowances = np.arange(0, 0.95, 0.05) # how much is a module allowed to stick out of vigR (max value)
-# out_allowances = [0.5]
+## Study several cases at once
+
+# nbots = [63, 75, 88, 102] # number of robots per module
+# out_allowances = np.arange(0, 0.95, 0.05) # how much is a module allowed to stick out of vigR (max value)
+
+## Study one case at a time
+nbots = [63]
+out_allowances = [0.5]
 
 width_increase = 0 # [mm] How much we want to increase the base length of a module
 chanfer_length = 10 # [mm] Size of chanfers of module vertices (base value: 7.5); increase chanfer decreases coverage as it reduces the module size thus patrol area
@@ -85,21 +89,6 @@ else:
 if inner_gap == global_gap and inner_gap != 0:
      full_framed = True
 
-""" Drawing parameters """
-draw = True
-is_timer = False # Display time of final plots before automatic closing; stays open if False
-
-plot_time = 20 # [s] plotting time
-ignore_robots_positions = False
-
-save_plots = True # Save most useful plots 
-save_all_plots = True  # Save all plots (including intermediate ones)
-save_frame_as_dxf = True # Save the outline of the frame for Solidworks integration
-save_csv = True # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
-save_txt = True # Save positions of modules along curved focal surface
-saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
-saving = param.SavingResults(saving_df)
-
 """ Define focal surface """
 
 # Available projects: MUST, Megamapper, DESI, WST1, WST2, WST3, Spec-s5
@@ -112,12 +101,24 @@ trimming_angle = 360
 
 pizza = surf.make_vigR_polygon(pizza_angle = trimming_angle)
 
-# plot_polygon(pizza_with_GFA)
-# plt.show()
+""" Drawing parameters """
+draw = True
+is_timer = False # Display time of final plots before automatic closing; stays open if False
+
+plot_time = 20 # [s] plotting time
+ignore_robots_positions = False
+
+save_plots = False # Save most useful plots 
+save_all_plots = False  # Save all plots (including intermediate ones)
+save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
+save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
+save_txt = False # Save positions of modules along curved focal surface
+saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
+saving = param.SavingResults(saving_df, project_surface)
 
 """GFA stuff"""
 gfa_tune = 1
-nb_gfa = 8
+nb_gfa = 6
 gfa = param.GFA(length = 33.3*gfa_tune, width = 61*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df)
 gdf_gfa = gfa.gdf_gfa
 polygon_gfa = MultiPolygon(list(gdf_gfa['geometry']))
@@ -145,7 +146,6 @@ to_dxf_dict = {}
 
 for nb_robots in nbots: # iterate over number of robots/module cases
 
-     
      mod_param = param.Module(nb_robots, saving_df, is_wall, width_increase, chanfer_length)
      key = mod_param.key
      keys.append(key)
@@ -480,9 +480,9 @@ cols = ['x', 'y', 'z', 'theta', 'phi']
 df = pd.DataFrame(projection['front'], columns = cols)
 print(df)
 
-proj[:,2] = proj[:,2] + BFS
+# proj[:,2] = proj[:,2] + BFS
 
-saving.save_grid_to_txt(proj, f'grid_indiv_{nb_robots}')
+saving.save_grid_to_txt(proj, f'grid_indiv_{nb_robots}', direct_SW = True)
 saving.save_grid_to_txt(front_proj, f'front_grid_indiv_{nb_robots}')
 saving.save_grid_to_txt(back_proj, f'back_grid_indiv_{nb_robots}')
 # %% Plot plot time 
@@ -577,8 +577,9 @@ if global_gap > 0:
           saving.save_dxf_to_dir(to_dxf_dict, f'frame_{robots}_robots_{modules}_modules')
           ax.set_title('Outline saved to DXF file')     
      
-
+print(surf.surf_name)
 figtitle = param.final_title(surf.surf_name, nb_robots, total_modules, total_robots, inner_gap, global_gap, allow_small_out, out_allowance)
+print(figtitle)
 filename = f"Coverage_global_{nb_robots}_rob__Inner_{inner_gap}_mm__Global_{global_gap}_mm"
 f, ax= plt.subplots(figsize=(12, 12), sharex = True, sharey=True)
 f.suptitle(figtitle)
