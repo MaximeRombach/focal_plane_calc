@@ -2,7 +2,9 @@
 
 # Brief
 
-The Solidworks Automation Tool project aims to automate complex and repetitive modelling tasks. 
+The Solidworks Automation Tool is a project developed by LASTRO from EPFL. 
+
+This project aims to automate complex and repetitive modelling tasks to build a 3D model of the robotic fiber positioner holder. 
 
 Though there are parameter-based CAD software available, we chose to try automating Solidworks, as it is one of the most widely used CAD modelling software. 
 
@@ -16,9 +18,9 @@ We chose C# because of its high performance, high-level syntax and built-in garb
 
 - Visual Studio (the author is using version 2022)
 
-- Solidworks
+- Solidworks, preferrably later than version 2022.
 
-- The `focal_plane_calc` repo, which is the parent directory of the automation tool.
+- The `focal_plane_calc` repository authored by Maxime Rombach. This repo is the parent directory of the automation tool.
 
 # Current Progress
 
@@ -56,3 +58,9 @@ Can repeatedly create sketches of modules(both chamfered and unchamfered) and ex
 
 - [ ] Make wrapper functions to reduce boilerplat code
 - [ ] Optionally add a progress bar in the console version of the Automation Tool
+
+## On documentation
+
+- [ ] Generate documentation using Doxygen or docFX.
+
+- [ ] Add a gif of the whole automation process as part of the readme
