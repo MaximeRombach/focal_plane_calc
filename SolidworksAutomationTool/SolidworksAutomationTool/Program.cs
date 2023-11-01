@@ -7,6 +7,13 @@ using System.Diagnostics;
 using static SolidworksAutomationTool.ScaffoldFunctions;
 
 /* Define some parameters here. These parameters should be configurable in the GUI */
+// TODO: param: chamfer length
+const double chamferLength = 10.5e-3;               // in meters
+// TODO: param: pin hole diameter
+const double pinHoleDiameter = 2.5e-3;              // in meters
+// TODO: param: pin hole depth
+const double pinHoleDepth = 6e-3;                   // in meters
+
 // TODO: param: bestFitSphereRadius.
 const double bestFitSphereRadius = 11045.6e-3;      // in meters
 // TODO: param: focal plane thickness
@@ -368,16 +375,19 @@ modelView.EnableGraphicsUpdate = true;
 modulePart.SketchManager.AddToDB = false;
 // close the sketch
 modulePart.Insert3DSketch();
-
-/* Create a plane near the bottom plane      - looking good!
- * Steps:
- * 1. Use InsertRefPlane Method (IFeatureManager)
- * 2. select a point on the bottom plane, require it to be coincident with the ref plane
- * 3. select the extrusion axis, require it to be perpendicular to the ref plane
- */
 ClearSelection(ref modulePart);
+
+/* First, create "reference sketches". These sketches will be copied and pasted to genereate all the modules
+ * 1. Find the point on the bottom plane that is the closest to the origin. 
+ * 2. Use InsertRefPlane Method (IFeatureManager) on this point and the extrusion axis passing through it to create a reference plane.
+ */
+
+// TODO: find the closest element
+int closestPointIdx = GetIndexSketchPointClosestToOrigin(ref bottomSurfaceSketchPointList);
+SketchPoint pointClosestToOrigin = bottomSurfaceSketchPointList[closestPointIdx];
+
 // the primisPlane has the first created full-triangle and chamfered-triangle
-RefPlane primisPlane = CreateRefPlaneFromPointAndNormal(bottomSurfaceSketchPointList[0], extrusionAxisList[0], "PrimisPlane", swSelectData, modulePart.FeatureManager);
+RefPlane primisPlane = CreateRefPlaneFromPointAndNormal(pointClosestToOrigin, extrusionAxisList[closestPointIdx], "PrimisPlane", swSelectData, modulePart.FeatureManager);
 // make the first reference plane invisible to boost performance
 ((Feature)primisPlane).Select2(true, -1);
 modulePart.BlankRefGeom();
@@ -395,7 +405,7 @@ modulePart.SketchManager.InsertSketch(true);
 
 // define where the top vertix of the equilateral triangle is. 
 // 0.577350269 is sqrt(3)/3
-SketchPoint firstBottomSurfaceSketchPoint = bottomSurfaceSketchPointList[0];
+SketchPoint firstBottomSurfaceSketchPoint = bottomSurfaceSketchPointList[closestPointIdx];
 Point3D topVertixTriangle = new(firstBottomSurfaceSketchPoint.X, firstBottomSurfaceSketchPoint.Y + 0.577350269 * equilateralTriangleSideLength, firstBottomSurfaceSketchPoint.Z);
 object[] unchamferedTrianglePolygon = (object[])modulePart.SketchManager.CreatePolygon(firstBottomSurfaceSketchPoint.X, firstBottomSurfaceSketchPoint.Y, firstBottomSurfaceSketchPoint.Z,
                                                                             topVertixTriangle.x, topVertixTriangle.y, topVertixTriangle.z, 3, true);
@@ -428,7 +438,8 @@ if (oneSideOfTriangle != null)
 
 // TODO: make chamfer length configurable
 // add the chamfers.
-MakeChamferedTriangleFromTrianglePolygon(unchamferedTrianglePolygon, 10.5e-3, ref modulePart, swSelectData);
+
+MakeChamferedTriangleFromTrianglePolygon(unchamferedTrianglePolygon, chamferLength, ref modulePart, swSelectData);
 
 // DEBUG: remember the name of the chamfered sketch
 ((Feature)modulePart.SketchManager.ActiveSketch).Name = "Chamfered Triangle Sketch";
@@ -479,12 +490,18 @@ modulePart.SketchManager.DisplayWhenAdded = false;
 
 // try to gain speed by locking the user interface
 //modulePart.Lock();
-for (int moduleIndex = 1; moduleIndex < bottomSurfaceSketchPointList.Count; moduleIndex++)
+for (int moduleIndex = 0; moduleIndex < bottomSurfaceSketchPointList.Count; moduleIndex++)
 {
+    // skip the point closest to the origin
+    if (moduleIndex == closestPointIdx) 
+    {
+        continue;
+    };
+
     // Create another test plane near the bottom and insert a sketch on it
     RefPlane aRefPlane = CreateRefPlaneFromPointAndNormal(bottomSurfaceSketchPointList[moduleIndex], extrusionAxisList[moduleIndex],
                                                             $"ModulePlane_{moduleIndex}", swSelectData, modulePart.FeatureManager);
-    // hide the reference plane to avoid slowing down sketch creation, hopefully
+    // hide the reference plane to avoid slowing down sketch creation
     ((Feature)aRefPlane).Select2(true, -1);
     modulePart.BlankRefGeom();
     ClearSelection(ref modulePart);
@@ -506,8 +523,7 @@ for (int moduleIndex = 1; moduleIndex < bottomSurfaceSketchPointList.Count; modu
     object[] segments = (object[])lastSketch.GetSketchSegments();
     SketchPoint? chamferedTriangleCenterPoint = GetTriangleCenterPoint(ref segments);
 
-    // orient the module
-    // TODO: add constraints to the chamfered modules
+    // TODO: add constraints to the chamfered modules to orient the module
     if (frontGridPointCloud.moduleOrientations[moduleIndex] == false)
     {
         ClearSelection(ref modulePart);
@@ -524,7 +540,7 @@ for (int moduleIndex = 1; moduleIndex < bottomSurfaceSketchPointList.Count; modu
     bottomSurfaceSketchPointList[moduleIndex].Select4(true, swSelectData);
     MakeSelectedCoincide(ref modulePart);
     ClearSelection(ref modulePart);
-    // TODO: still need to constraint the orientation
+
     // quit editing sketch
     modulePart.InsertSketch2(true);
     ClearSelection(ref modulePart);

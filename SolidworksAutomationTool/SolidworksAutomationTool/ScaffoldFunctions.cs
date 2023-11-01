@@ -182,6 +182,29 @@ namespace SolidworksAutomationTool
             return basicReferenceGeometry;
         }
 
+        /* Get the index of the closest sketch point to the origin. 
+         * Params: sketchPoints: reference to a list of sketchPoints
+         * Returns: the index of the closest sketch point
+         * This function looks for the closest sketchpoint based on the shortest Euclidean distance in 3D (aka L2 norm of 3D vector) from the origin
+         */
+        public static int GetIndexSketchPointClosestToOrigin(ref List<SketchPoint> sketchPoints)
+        {
+            double shortestDistance = double.MaxValue;
+            int closestPointIdx = -1;
+            for (int idx = 0; idx < sketchPoints.Count; idx++)
+            {
+                SketchPoint point = sketchPoints[idx];
+                // not taking the square root to save computation cycles
+                double distance = (point.X * point.X + point.Y * point.Y + point.Z * point.Z);
+                if (distance < shortestDistance)
+                {
+                    shortestDistance = distance;
+                    closestPointIdx = idx;
+                }
+            }
+            return closestPointIdx;
+        }
+
         /* A function to get the center point of the inscribed construction circle inside the triangle polygon
          * Returns the center point as a sketch point if the polygon contains a Sketch Arc
          *          else, returns null.
