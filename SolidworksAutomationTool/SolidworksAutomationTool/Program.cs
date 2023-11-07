@@ -18,8 +18,8 @@ const double pinHoleDepth = 6e-3;                   // in meters
 const double bestFitSphereRadius = 11045.6e-3;      // in meters
 // TODO: param: focal plane thickness
 double outerRimHeight = 200e-3;                     // in meters
-// TODO: param: small segment length definition
-double smallSegmentLength = 30e-3;                  // in meters
+// TODO: param: distance between the support surface to top surface definition
+double supportToTopSurfaceDistance = 30e-3;         // in meters
 // TODO: create horizontal line (for flat bottom surface). Need a better name here
 double bottomSurfaceRadius = 663.27e-3;
 // TODO: define the side length of the equilateral triangle
@@ -183,7 +183,7 @@ foreach ((SketchPoint frontSketchPoint, SketchPoint backSketchPoint, SketchSegme
     // add a length dimension to the small segment
     frontSketchPoint.Select4(true, swSelectData);
     smallSegmentSketchPoint.Select4(true, swSelectData);
-    AddDimensionToSelected(ref modulePart, smallSegmentLength, frontSketchPoint);
+    AddDimensionToSelected(ref modulePart, supportToTopSurfaceDistance, frontSketchPoint);
     ClearSelection(ref modulePart);
 }
 
@@ -326,13 +326,12 @@ ZoomToFit(ref modulePart);
 // enbale user input box for dimensions
 EnableInputDimensionByUser(ref solidworksApp);
 
-// TODO: write a function to extrude one triangle. By using this function repetitively, the program remains clean and easy-to-maintain
-/* Extrude triangles in the slice
+/* Extrude triangles on the pizza slice
  * Steps:
  * 1. create points that are both on the bottom plane and the extrusion axes    - Done
- * 2. create reference planes by using "normal and point" method
- * 3. start sketches on those planes and draw triangles on sketches
- * 4. extrude triangles
+ * 2. create reference planes by using "normal and point" method                - Done
+ * 3. start sketches on those planes and draw triangles on sketches             - Done
+ * 4. extrude triangles                                                         - Done
  */
 Console.WriteLine("Extruding modules ...");
 // First define the bottom plane, by creating a parallel plane w.r.t the front plane
@@ -353,6 +352,7 @@ modulePart.Insert3DSketch();
 // for speed improvements
 modelView.EnableGraphicsUpdate = false;
 modulePart.SketchManager.AddToDB = true;
+
 // keep a list of sketch points on the bottom plane
 List<SketchPoint> bottomSurfaceSketchPointList = new( extrusionAxisList.Count );
 foreach (SketchSegment extrusionAxis in extrusionAxisList)
@@ -382,7 +382,7 @@ ClearSelection(ref modulePart);
  * 2. Use InsertRefPlane Method (IFeatureManager) on this point and the extrusion axis passing through it to create a reference plane.
  */
 
-// TODO: find the closest element
+// find the closest element 
 int closestPointIdx = GetIndexSketchPointClosestToOrigin(ref bottomSurfaceSketchPointList);
 SketchPoint pointClosestToOrigin = bottomSurfaceSketchPointList[closestPointIdx];
 
@@ -436,10 +436,9 @@ if (oneSideOfTriangle != null)
     ClearSelection(ref modulePart);
 }
 
-// TODO: make chamfer length configurable
 // add the chamfers.
-
 MakeChamferedTriangleFromTrianglePolygon(unchamferedTrianglePolygon, chamferLength, ref modulePart, swSelectData);
+ClearSelection(ref modulePart);
 
 // DEBUG: remember the name of the chamfered sketch
 ((Feature)modulePart.SketchManager.ActiveSketch).Name = "Chamfered Triangle Sketch";
@@ -485,10 +484,10 @@ modulePart.SketchManager.InsertSketch(true);
 ClearSelection(ref modulePart);
 
 // TODO: use for loop to create triangle modules with the right shape for all the modules
-modelView.EnableGraphicsUpdate = false;
-modulePart.SketchManager.DisplayWhenAdded = false;
 
 // try to gain speed by locking the user interface
+modelView.EnableGraphicsUpdate = false;
+modulePart.SketchManager.DisplayWhenAdded = false;
 //modulePart.Lock();
 for (int moduleIndex = 0; moduleIndex < bottomSurfaceSketchPointList.Count; moduleIndex++)
 {
@@ -541,6 +540,14 @@ for (int moduleIndex = 0; moduleIndex < bottomSurfaceSketchPointList.Count; modu
     MakeSelectedCoincide(ref modulePart);
     ClearSelection(ref modulePart);
 
+    // TESTING: make one of the sides to be in parallel to the most positively sloped side of the first reference chamfered triangle
+    // TODO: check if can set one side of the chamfered triangle to be in parallel with the first chamfered triangle
+    //SketchSegment? unchamferedTriangleMostPositiveSlopedSide = GetMostPositiveSlopedSideInChamferedTriangle(ref segments);
+    // TODO: temporary workaround, simply set one of the sides to be in horizontal to fully define each chamfered triangle
+    SketchLine aRelativelyFlatSide = GetMostHorizontalTriangleSide(ref segments);
+    ((SketchSegment)aRelativelyFlatSide).Select4(true, swSelectData);
+    MakeSelectedLineHorizontal(ref modulePart);
+
     // quit editing sketch
     modulePart.InsertSketch2(true);
     ClearSelection(ref modulePart);
@@ -549,6 +556,7 @@ for (int moduleIndex = 0; moduleIndex < bottomSurfaceSketchPointList.Count; modu
     Feature chamferedExtrusion = CreateTwoWayExtrusion(ref modulePart);
     chamferedExtrusion.Name = $"chamferedExtrusion_{moduleIndex}";
     ClearSelection(ref modulePart);
+
 }
 
 // TODO: finally extrude the "reference sketches"

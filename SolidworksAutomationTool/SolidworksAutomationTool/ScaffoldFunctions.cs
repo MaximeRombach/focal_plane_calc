@@ -51,6 +51,13 @@ namespace SolidworksAutomationTool
         public static void MakeSelectedLineHorizontal(ref ModelDoc2 partModelDoc)
             => partModelDoc.SketchAddConstraints("sgHORIZONTAL2D");
 
+        /* Wrapper function to make selected two lines parallel - Untested
+         * NOTE: this function does NOT check if the selected objects are just two lines or something else
+         * NOTE: this function does not clear the selection. The user should manually clear selection
+         */
+        public static void MakeSelectedLinesParallel(ref ModelDoc2 partModelDoc)
+            => partModelDoc.SketchConstrainParallel();
+
         // Wrapper function to clear selection
         public static void ClearSelection(ref ModelDoc2 partModelDoc) 
             => partModelDoc.ClearSelection2(true);
@@ -246,7 +253,7 @@ namespace SolidworksAutomationTool
             double smallestSlopeMagnitude = 999;
             foreach (SketchSegment triangleSegment in polygon.Cast<SketchSegment>())
             {
-                // calculate the slop of the projection of the side on the xy plane.
+                // calculate the slope of the projection of the side on the xy plane.
                 if (triangleSegment.GetType() == (int)swSketchSegments_e.swSketchLINE)
                 {
                     SketchPoint startPoint = (SketchPoint)((SketchLine)triangleSegment).GetStartPoint2();
@@ -260,6 +267,36 @@ namespace SolidworksAutomationTool
                 }
             }
             return mostHorizontalSide;
+        }
+
+        /* Get the side with the most positive slope (only considering the projection on the local skecth XY plane) in a chamfered triangle
+         * This function is often used for finding the side used to setting parallel constraints to the first triangle in a pizza slice
+         * This function is designed to be called when the chamfered triangle is relatively upright
+         * Since the chamfered triangle has two side in parallel within itself, we will find two sides having similar slopes.
+         * We choose the side with the most positive slope
+         */
+        public static SketchSegment? GetMostPositiveSlopedSideInChamferedTriangle(ref object[] polygon)
+        {
+            SketchSegment? mostPositiveSlopedSide = null;
+            double mostPositiveSlope = -999;
+            foreach (SketchSegment triangleSegment in polygon.Cast<SketchSegment>())
+            {
+                // calculate the slop of the projection of the side on the xy plane.
+                if (triangleSegment.GetType() == (int)swSketchSegments_e.swSketchLINE)
+                {
+                    SketchPoint startPoint = (SketchPoint)((SketchLine)triangleSegment).GetStartPoint2();
+                    SketchPoint endPoint = (SketchPoint)((SketchLine)triangleSegment).GetEndPoint2();
+                    double sideSlope = (endPoint.Y - startPoint.Y) / (endPoint.X - startPoint.X);
+                    // assuming there will be a side with positive slope
+                    if (sideSlope < 0 || sideSlope < mostPositiveSlope)
+                    {
+                        continue;
+                    }
+                    mostPositiveSlope = sideSlope;
+                    mostPositiveSlopedSide = triangleSegment;
+                }
+            }
+            return mostPositiveSlopedSide;
         }
 
         /* A function to get one of the longer sides of a chamfered triangle.
@@ -283,6 +320,7 @@ namespace SolidworksAutomationTool
             }
             return (SketchLine?)longSide;
         }
+
 
         /* A wrapper function to reduce the boilerplate code for creating normal planes using the "point and normal" method
          *  This function first selects an extrusion axis, requiring it to be perpendicular to the ref plane;
