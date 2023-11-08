@@ -164,6 +164,9 @@ Console.WriteLine("Creating small segments ...");
 SelectionMgr swSelectionManager = (SelectionMgr)modulePart.SelectionManager;
 SelectData swSelectData = swSelectionManager.CreateSelectData();
 
+// Keep a list of the points that defines the positions of the support surfaces
+List<SketchPoint> supportSurfaceMarkerPointList = new(frontSketchPointList.Count);
+
 // disable graphics update to boost performance
 modelView.EnableGraphicsUpdate = false;
 // Create the small segments from the top surface
@@ -185,6 +188,8 @@ foreach ((SketchPoint frontSketchPoint, SketchPoint backSketchPoint, SketchSegme
     smallSegmentSketchPoint.Select4(true, swSelectData);
     AddDimensionToSelected(ref modulePart, supportToTopSurfaceDistance, frontSketchPoint);
     ClearSelection(ref modulePart);
+    // save the support surface marker point to the list. It will be used in the later support surface extrusion
+    supportSurfaceMarkerPointList.Add(smallSegmentSketchPoint);
 }
 
 Console.WriteLine("Small segment creation completed");
@@ -611,7 +616,8 @@ for (int moduleIndex = 0; moduleIndex < bottomSurfaceSketchPointList.Count; modu
     ClearSelection(ref modulePart);
     // extrude the chamfered triangle
     SelectSketch(ref modulePart, pastedFullTriangleSheetName);
-    Feature fullTriangleExtrusion = CreateTwoWayExtrusion(ref modulePart);
+    // extrude the full triangle all the way to the "support surface point"
+    Feature fullTriangleExtrusion = CreateTwoWayExtrusionD1ToPointD2ThroughAll(ref modulePart, supportSurfaceMarkerPointList[moduleIndex], swSelectData);
     fullTriangleExtrusion.Name = $"fullTriangleExtrusion_{moduleIndex}";
     ClearSelection(ref modulePart);
 
