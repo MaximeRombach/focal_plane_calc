@@ -51,6 +51,13 @@ namespace SolidworksAutomationTool
         public static void MakeSelectedLineHorizontal(ref ModelDoc2 partModelDoc)
             => partModelDoc.SketchAddConstraints("sgHORIZONTAL2D");
 
+        /* Wrapper function to make selected two lines parallel - Untested
+         * NOTE: this function does NOT check if the selected objects are just two lines or something else
+         * NOTE: this function does not clear the selection. The user should manually clear selection
+         */
+        public static void MakeSelectedLinesParallel(ref ModelDoc2 partModelDoc)
+            => partModelDoc.SketchAddConstraints("sgPARALLEL");
+
         // Wrapper function to clear selection
         public static void ClearSelection(ref ModelDoc2 partModelDoc) 
             => partModelDoc.ClearSelection2(true);
@@ -182,6 +189,29 @@ namespace SolidworksAutomationTool
             return basicReferenceGeometry;
         }
 
+        /* Get the index of the closest sketch point to the origin. 
+         * Params: sketchPoints: reference to a list of sketchPoints
+         * Returns: the index of the closest sketch point
+         * This function looks for the closest sketchpoint based on the shortest Euclidean distance in 3D (aka L2 norm of 3D vector) from the origin
+         */
+        public static int GetIndexSketchPointClosestToOrigin(ref List<SketchPoint> sketchPoints)
+        {
+            double shortestDistance = double.MaxValue;
+            int closestPointIdx = -1;
+            for (int idx = 0; idx < sketchPoints.Count; idx++)
+            {
+                SketchPoint point = sketchPoints[idx];
+                // not taking the square root to save computation cycles
+                double distance = (point.X * point.X + point.Y * point.Y + point.Z * point.Z);
+                if (distance < shortestDistance)
+                {
+                    shortestDistance = distance;
+                    closestPointIdx = idx;
+                }
+            }
+            return closestPointIdx;
+        }
+
         /* A function to get the center point of the inscribed construction circle inside the triangle polygon
          * Returns the center point as a sketch point if the polygon contains a Sketch Arc
          *          else, returns null.
@@ -214,6 +244,99 @@ namespace SolidworksAutomationTool
             return null;
         }
 
+        /* Get the most horizontal side of a triangle polygon
+         * TODO: add more descriptions on the trick used
+         * */
+        public static SketchLine? GetMostHorizontalTriangleSide(ref object[] polygon)
+        {
+            SketchLine? mostHorizontalSide = null;
+            double smallestSlopeMagnitude = double.MaxValue;
+            foreach (SketchSegment triangleSegment in polygon.Cast<SketchSegment>())
+            {
+                // calculate the slope of the projection of the side on the xy plane.
+                if (triangleSegment.GetType() == (int)swSketchSegments_e.swSketchLINE)
+                {
+                    SketchPoint startPoint = (SketchPoint)((SketchLine)triangleSegment).GetStartPoint2();
+                    SketchPoint endPoint = (SketchPoint)((SketchLine)triangleSegment).GetEndPoint2();
+                    double sideSlopeMagnitude = Math.Abs((endPoint.Y - startPoint.Y) / (endPoint.X - startPoint.X));
+                    if (sideSlopeMagnitude < smallestSlopeMagnitude)
+                    {
+                        smallestSlopeMagnitude = sideSlopeMagnitude;
+                        mostHorizontalSide = (SketchLine)triangleSegment;
+                    }
+                }
+            }
+            return mostHorizontalSide;
+        }
+
+        /* Get the longest horizontal side of a chamfered triangle polygon
+         */
+        public static SketchLine? GetLongestMostHorizontalTriangleSide(ref object[] chamferedTrianglePolygon)
+        {
+            SketchLine? mostHorizontalLongSide = null;
+            double smallestSlopeMagnitude = double.MaxValue;
+            double longestSideLength = -1;
+            foreach (SketchSegment side in chamferedTrianglePolygon.Cast<SketchSegment>())
+            {
+                // calculate the slope of the projection of the side on the xy plane.
+                if (side.GetType() == (int)swSketchSegments_e.swSketchLINE)
+                {
+                    SketchPoint startPoint = (SketchPoint)((SketchLine)side).GetStartPoint2();
+                    SketchPoint endPoint = (SketchPoint)((SketchLine)side).GetEndPoint2();
+                    double sideSlopeMagnitude = Math.Abs((endPoint.Y - startPoint.Y) / (endPoint.X - startPoint.X));
+
+                    double currentSideLength = side.GetLength();
+                    // the slope of the current side is not small enough, continue to check other sides
+                    if (sideSlopeMagnitude > smallestSlopeMagnitude)
+                    {
+                        continue;
+                    }
+                    // found a flatter side than all previous sides. Update the flattest side, longeset side length and slope magnitude trackers
+                    if (sideSlopeMagnitude < smallestSlopeMagnitude)
+                    {
+                        smallestSlopeMagnitude = sideSlopeMagnitude;
+                        mostHorizontalLongSide = (SketchLine)side;
+                    }
+                    // found a side as flat as the flattest side found previously, check if it is longer than the previously found side
+                    else if (sideSlopeMagnitude == smallestSlopeMagnitude && currentSideLength > longestSideLength)
+                    {
+                        mostHorizontalLongSide = (SketchLine)side;
+                    }
+                }
+            }
+            return mostHorizontalLongSide;
+        }
+
+        /* Get the side with the most positive slope (only considering the projection on the local skecth XY plane) in a chamfered triangle
+         * This function is often used for finding the side used to setting parallel constraints to the first triangle in a pizza slice
+         * This function is designed to be called when the chamfered triangle is relatively upright
+         * Since the chamfered triangle has two side in parallel within itself, we will find two sides having similar slopes.
+         * We choose the side with the most positive slope
+         */
+        public static SketchSegment? GetMostPositiveSlopedSideInChamferedTriangle(ref object[] polygon)
+        {
+            SketchSegment? mostPositiveSlopedSide = null;
+            double mostPositiveSlope = -999;
+            foreach (SketchSegment triangleSegment in polygon.Cast<SketchSegment>())
+            {
+                // calculate the slop of the projection of the side on the xy plane.
+                if (triangleSegment.GetType() == (int)swSketchSegments_e.swSketchLINE)
+                {
+                    SketchPoint startPoint = (SketchPoint)((SketchLine)triangleSegment).GetStartPoint2();
+                    SketchPoint endPoint = (SketchPoint)((SketchLine)triangleSegment).GetEndPoint2();
+                    double sideSlope = (endPoint.Y - startPoint.Y) / (endPoint.X - startPoint.X);
+                    // assuming there will be a side with positive slope
+                    if (sideSlope < 0 || sideSlope < mostPositiveSlope)
+                    {
+                        continue;
+                    }
+                    mostPositiveSlope = sideSlope;
+                    mostPositiveSlopedSide = triangleSegment;
+                }
+            }
+            return mostPositiveSlopedSide;
+        }
+
         /* A function to get one of the longer sides of a chamfered triangle.
          * Returns a longer side of the chamfered triangle if the polygon contains at least a sketch line
          *  else Returns null
@@ -235,6 +358,7 @@ namespace SolidworksAutomationTool
             }
             return (SketchLine?)longSide;
         }
+
 
         /* A wrapper function to reduce the boilerplate code for creating normal planes using the "point and normal" method
          *  This function first selects an extrusion axis, requiring it to be perpendicular to the ref plane;
@@ -285,6 +409,40 @@ namespace SolidworksAutomationTool
                                     0,      // If T0 is swStartConditions_e.swStartOffset, then specify an offset value
                                     false,  // If T0 is swStartConditions_e.swStartOffset, then true to flip the direction of cut, false to not
                                     false);
+            return extrusionFeature;
+        }
+
+        /* A wrapper function to make two-way extrusion on a already selected sketch. 
+         * Direction 1 is extruded till the given point,
+         * Direction 2 is extruded all through.
+         */
+        public static Feature CreateTwoWayExtrusionD1ToPointD2ThroughAll(ref ModelDoc2 partModelDoc, SketchPoint vertexD1ExtrudeTo, SelectData swSelectData)
+        {
+            // Magic number 32 is used when selecting up-to surface, up-to vertex, or offset-from surface.
+            // Source: https://help.solidworks.com/2023/english/api/sldworksapi/SOLIDWORKS.Interop.sldworks~SOLIDWORKS.Interop.sldworks.IFeatureManager~FeatureRevolve2.html
+            swSelectData.Mark = 32;
+            vertexD1ExtrudeTo.Select4(true, swSelectData);
+            // the FeatureCut4 api takes a ton of arguments. This wrapper function is to simplify the calling process.
+            // https://help.solidworks.com/2023/english/api/sldworksapi/solidworks.interop.sldworks~solidworks.interop.sldworks.ifeaturemanager~featurecut4.html?verRedirect=1
+            Feature extrusionFeature = partModelDoc.FeatureManager.FeatureCut4(
+                                    false,  // true for single ended cut, false for double-ended cut
+                                    false,  // True to remove material outside of the profile of the flip side to cut, false to not
+                                    false,  // True for Direction 1 to be opposite of the default direction
+                                    (int)swEndConditions_e.swEndCondUpToVertex,  // Termination type for the first end
+                                    (int)swEndConditions_e.swEndCondThroughAll,     // Termination type for the second end 
+                                    0.01, 1,   // depth of extrusion for 1st and 2nd end in meters
+                                    false, false, // True allows a draft angle in the first/second direction, false does not allow drafting in the first/second direction
+                                    false, false, // True for the first/second draft angle to be inward, false to be outward; only valid when Dchk1/Dchk2 is true
+                                    1, 1,   // Draft angle for the first end; only valid when Dchk1 is true
+                                    false, false, // If you chose to offset the first/second end condition from another face or plane, then true specifies offset in direction away from the sketch, false specifies offset from the face or plane in a direction toward the sketch
+                                    false, false,
+                                    false, true, true, true, true, false,
+                                    (int)swStartConditions_e.swStartSketchPlane,  // Start conditions as defined in swStartConditions_e
+                                    0,      // If T0 is swStartConditions_e.swStartOffset, then specify an offset value
+                                    false,  // If T0 is swStartConditions_e.swStartOffset, then true to flip the direction of cut, false to not
+                                    false);
+            // should we reset the select mark?
+            //swSelectData.Mark = -1;
             return extrusionFeature;
         }
 
