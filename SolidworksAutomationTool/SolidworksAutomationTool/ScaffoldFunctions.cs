@@ -56,7 +56,7 @@ namespace SolidworksAutomationTool
          * NOTE: this function does not clear the selection. The user should manually clear selection
          */
         public static void MakeSelectedLinesParallel(ref ModelDoc2 partModelDoc)
-            => partModelDoc.SketchConstrainParallel();
+            => partModelDoc.SketchAddConstraints("sgPARALLEL");
 
         // Wrapper function to clear selection
         public static void ClearSelection(ref ModelDoc2 partModelDoc) 
@@ -250,7 +250,7 @@ namespace SolidworksAutomationTool
         public static SketchLine? GetMostHorizontalTriangleSide(ref object[] polygon)
         {
             SketchLine? mostHorizontalSide = null;
-            double smallestSlopeMagnitude = 999;
+            double smallestSlopeMagnitude = double.MaxValue;
             foreach (SketchSegment triangleSegment in polygon.Cast<SketchSegment>())
             {
                 // calculate the slope of the projection of the side on the xy plane.
@@ -267,6 +267,44 @@ namespace SolidworksAutomationTool
                 }
             }
             return mostHorizontalSide;
+        }
+
+        /* Get the longest horizontal side of a chamfered triangle polygon
+         */
+        public static SketchLine? GetLongestMostHorizontalTriangleSide(ref object[] chamferedTrianglePolygon)
+        {
+            SketchLine? mostHorizontalLongSide = null;
+            double smallestSlopeMagnitude = double.MaxValue;
+            double longestSideLength = -1;
+            foreach (SketchSegment side in chamferedTrianglePolygon.Cast<SketchSegment>())
+            {
+                // calculate the slope of the projection of the side on the xy plane.
+                if (side.GetType() == (int)swSketchSegments_e.swSketchLINE)
+                {
+                    SketchPoint startPoint = (SketchPoint)((SketchLine)side).GetStartPoint2();
+                    SketchPoint endPoint = (SketchPoint)((SketchLine)side).GetEndPoint2();
+                    double sideSlopeMagnitude = Math.Abs((endPoint.Y - startPoint.Y) / (endPoint.X - startPoint.X));
+
+                    double currentSideLength = side.GetLength();
+                    // the slope of the current side is not small enough, continue to check other sides
+                    if (sideSlopeMagnitude > smallestSlopeMagnitude)
+                    {
+                        continue;
+                    }
+                    // found a flatter side than all previous sides. Update the flattest side, longeset side length and slope magnitude trackers
+                    if (sideSlopeMagnitude < smallestSlopeMagnitude)
+                    {
+                        smallestSlopeMagnitude = sideSlopeMagnitude;
+                        mostHorizontalLongSide = (SketchLine)side;
+                    }
+                    // found a side as flat as the flattest side found previously, check if it is longer than the previously found side
+                    else if (sideSlopeMagnitude == smallestSlopeMagnitude && currentSideLength > longestSideLength)
+                    {
+                        mostHorizontalLongSide = (SketchLine)side;
+                    }
+                }
+            }
+            return mostHorizontalLongSide;
         }
 
         /* Get the side with the most positive slope (only considering the projection on the local skecth XY plane) in a chamfered triangle
