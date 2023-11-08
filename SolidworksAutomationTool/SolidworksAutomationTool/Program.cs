@@ -486,8 +486,10 @@ ClearSelection(ref modulePart);
 // TODO: use for loop to create triangle modules with the right shape for all the modules
 
 // try to gain speed by locking the user interface
-modelView.EnableGraphicsUpdate = false;
-modulePart.SketchManager.DisplayWhenAdded = false;
+//modelView.EnableGraphicsUpdate = false;
+//modulePart.SketchManager.DisplayWhenAdded = false;
+// try the magic disable feature manager scroll to view to hopefully boost performance
+solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swFeatureManagerEnsureVisible, false);
 //modulePart.Lock();
 for (int moduleIndex = 0; moduleIndex < bottomSurfaceSketchPointList.Count; moduleIndex++)
 {
@@ -504,7 +506,8 @@ for (int moduleIndex = 0; moduleIndex < bottomSurfaceSketchPointList.Count; modu
     ((Feature)aRefPlane).Select2(true, -1);
     modulePart.BlankRefGeom();
     ClearSelection(ref modulePart);
-    // copy the chamfered triangle sketch
+
+    // copy the chamfered triangle sketch //
     SelectSketch(ref modulePart, chamferedSketchName);
     modulePart.EditCopy();
     ((Feature)aRefPlane).Select2(true, -1);
@@ -512,14 +515,14 @@ for (int moduleIndex = 0; moduleIndex < bottomSurfaceSketchPointList.Count; modu
     // select the last pasted sketch
     Feature lastSketchFeature = (Feature)modulePart.FeatureByPositionReverse(0);
     lastSketchFeature.Select2(false, -1);
-    Sketch lastSketch = (Sketch)lastSketchFeature.GetSpecificFeature2();
+    Sketch lastChamferedSketch = (Sketch)lastSketchFeature.GetSpecificFeature2();
     // edit the newly created sketch to add constraints
-    ((Feature)lastSketch).Select2(false, -1);
+    ((Feature)lastChamferedSketch).Select2(false, -1);
     modulePart.EditSketch();
-    // DEBUG: record the pasted sheet's name
+    // record the pasted sheet's name for the extrusion later
     string pastedChamferedTriangleSheetName = GetActiveSketchName(ref modulePart);
     // make the center of the chamfered module coincident with the extrusion axis
-    object[] segments = (object[])lastSketch.GetSketchSegments();
+    object[] segments = (object[])lastChamferedSketch.GetSketchSegments();
     SketchPoint? chamferedTriangleCenterPoint = GetTriangleCenterPoint(ref segments);
 
     // TODO: add constraints to the chamfered modules to orient the module
@@ -547,6 +550,11 @@ for (int moduleIndex = 0; moduleIndex < bottomSurfaceSketchPointList.Count; modu
     SketchLine aRelativelyFlatSide = GetMostHorizontalTriangleSide(ref segments);
     ((SketchSegment)aRelativelyFlatSide).Select4(true, swSelectData);
     MakeSelectedLineHorizontal(ref modulePart);
+    ClearSelection(ref modulePart);
+
+    // get a handle on the longest most horizontal side of a chamfered triangle.
+    // This side will be used as a reference to set parallel constraint to a side of a full triangle
+    SketchLine? aLongSideChamferedTriangle = GetLongestMostHorizontalTriangleSide(ref segments);
 
     // quit editing sketch
     modulePart.InsertSketch2(true);
@@ -557,11 +565,62 @@ for (int moduleIndex = 0; moduleIndex < bottomSurfaceSketchPointList.Count; modu
     chamferedExtrusion.Name = $"chamferedExtrusion_{moduleIndex}";
     ClearSelection(ref modulePart);
 
+    // Now make the unchamfered/full triangle extrusion //
+    // copy the full triangle sketch //
+    SelectSketch(ref modulePart, fullTriangleSketchName);
+    modulePart.EditCopy();
+    ((Feature)aRefPlane).Select2(true, -1);
+    modulePart.Paste();
+    // select the last pasted full triangle sketch
+    lastSketchFeature = (Feature)modulePart.FeatureByPositionReverse(0);
+    lastSketchFeature.Select2(false, -1);
+    Sketch lastFullTriangleSketch = (Sketch)lastSketchFeature.GetSpecificFeature2();
+    // edit the newly created fully triangle sketch to add constraints
+    ((Feature)lastFullTriangleSketch).Select2(false, -1);
+    modulePart.EditSketch();
+    // DEBUG: record the pasted sheet's name
+    string pastedFullTriangleSheetName = GetActiveSketchName(ref modulePart);
+    // make the center of the full triangle coincident with the extrusion axis
+    object[] fullTriangleSegments = (object[])lastFullTriangleSketch.GetSketchSegments();
+    SketchPoint? fullTriangleCenterPoint = GetTriangleCenterPoint(ref fullTriangleSegments);
+    fullTriangleCenterPoint?.Select4(true, swSelectData);
+    bottomSurfaceSketchPointList[moduleIndex].Select4(true, swSelectData);
+    MakeSelectedCoincide(ref modulePart);
+    ClearSelection(ref modulePart);
+
+    // Rotate the full triangle according to the orientation flag. This step will make aligning the two
+    if (frontGridPointCloud.moduleOrientations[moduleIndex] == false)
+    {
+        // orientation flag is false, meaning the module should be upside-down
+        foreach (SketchSegment fullTriangleSegment in fullTriangleSegments.Cast<SketchSegment>())
+        {
+            fullTriangleSegment.Select4(true, swSelectData);
+        }
+        RotateSelected(ref modulePart, fullTriangleCenterPoint.X, fullTriangleCenterPoint.Y, Math.PI);
+        ClearSelection(ref modulePart);
+    }
+    // make the flattest side parallel to a flattest long side of the chamfered triangle
+    // TODO: find the flattest and longest side in a chamfered triangle
+    SketchLine? aLongSideFullTriangle = GetMostHorizontalTriangleSide(ref fullTriangleSegments);
+    ((SketchSegment)aLongSideChamferedTriangle).Select4(true, swSelectData);
+    ((SketchSegment)aLongSideFullTriangle).Select4(true, swSelectData);
+    MakeSelectedLinesParallel(ref modulePart);
+
+    // quit editing the fully triangle sketch
+    modulePart.InsertSketch2(true);
+    ClearSelection(ref modulePart);
+    // extrude the chamfered triangle
+    SelectSketch(ref modulePart, pastedFullTriangleSheetName);
+    Feature fullTriangleExtrusion = CreateTwoWayExtrusion(ref modulePart);
+    fullTriangleExtrusion.Name = $"fullTriangleExtrusion_{moduleIndex}";
+    ClearSelection(ref modulePart);
+
 }
 
 // TODO: finally extrude the "reference sketches"
 
 //modulePart.UnLock();
+solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swFeatureManagerEnsureVisible, true);
 modelView.EnableGraphicsUpdate = true;
 modulePart.SketchManager.DisplayWhenAdded = true;
 modulePart.SketchManager.AddToDB = false;
