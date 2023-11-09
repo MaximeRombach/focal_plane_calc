@@ -488,7 +488,72 @@ string fullTriangleSketchName = ((Feature)modulePart.SketchManager.ActiveSketch)
 modulePart.SketchManager.InsertSketch(true);
 ClearSelection(ref modulePart);
 
+/// In progress Create a sketch for the 3 pin holes ///
+/// 
+((Feature)primisPlane).Select2(true, -1);
+modulePart.SketchManager.InsertSketch(true);
+///// Done with the first chamfered triangle sketch. Now create the full triangle sketch /////
+object[] pinHoleConstructionTriangle = (object[])modulePart.SketchManager.CreatePolygon(firstBottomSurfaceSketchPoint.X, firstBottomSurfaceSketchPoint.Y, firstBottomSurfaceSketchPoint.Z,
+                                                                            topVertixTriangle.x, topVertixTriangle.y, topVertixTriangle.z, 3, true);
+// Since the whole pin hole triangle is selected, we can directly call the API to make all of it as construction geometries
+modulePart.SketchManager.CreateConstructionGeometry();
+// dimension the sides
+SketchLine? oneSideOfPinHoleTriangle = GetOneTriangleSide(ref pinHoleConstructionTriangle);
+if (oneSideOfPinHoleTriangle != null)
+{
+    ClearSelection(ref modulePart);
+    ((SketchSegment)oneSideOfPinHoleTriangle).Select4(true, swSelectData);
+    // Dimension the equilateral triangle's side length
+    AddDimensionToSelected(ref modulePart, interPinHoleDistance, (SketchPoint)oneSideOfPinHoleTriangle.GetEndPoint2());
+    ClearSelection(ref modulePart);
+}
+// Add the pin holes on 3 vertices
+// first find the vertices in a pin hole triangle
+HashSet<SketchPoint> verticesInPinHoleTriangleSet = new();
+foreach (SketchSegment segment in pinHoleConstructionTriangle.Cast<SketchSegment>())
+{
+    if (segment.GetType() == (int)swSketchSegments_e.swSketchLINE)
+    {
+        verticesInPinHoleTriangleSet.Add((SketchPoint)((SketchLine)segment).GetStartPoint2());
+        verticesInPinHoleTriangleSet.Add((SketchPoint)((SketchLine)segment).GetEndPoint2());
+    }
+}
+// add pin hole at every vertex
+verticesInPinHoleTriangleSet.ToList().ForEach(vertex =>
+{
+    SketchSegment? pinHole = modulePart.SketchManager.CreateCircleByRadius(vertex.X, vertex.Y, 0, pinHoleDiameter);
+    // dimension the pin hole's diammeter
+    pinHole.Select4(true, swSelectData);
+    // dimension the diammeter
+    AddDimensionToSelected(ref modulePart, pinHoleDiameter, vertex);
+    ClearSelection(ref modulePart);
+});
+
+// coincide the center point of the pin hole triangle to the extrusion axis
+SketchPoint? pinHoleTriangleCenterPoint = GetPinHoleTriangleCenterPoint(ref pinHoleConstructionTriangle);
+if (pinHoleTriangleCenterPoint != null)
+{
+    pinHoleTriangleCenterPoint.Select4(true, swSelectData);
+    firstBottomSurfaceSketchPoint.Select4(true, swSelectData);
+    MakeSelectedCoincide(ref modulePart);
+    ClearSelection(ref modulePart);
+}
+
+
+
+
+
+
+
+// Give the first pin hole triangle sketch a special name. 
+((Feature)modulePart.SketchManager.ActiveSketch).Name = "Pin Hole Triangle Sketch";
+string pinHoleTriangleSketchName = ((Feature)modulePart.SketchManager.ActiveSketch).Name;
+// quit editing sketch
+modulePart.SketchManager.InsertSketch(true);
+ClearSelection(ref modulePart);
+
 // TODO: use for loop to create triangle modules with the right shape for all the modules
+// TODO: reduce boilerplat code and move code to scaffold functions
 
 // try to gain speed by locking the user interface
 //modelView.EnableGraphicsUpdate = false;
@@ -570,7 +635,7 @@ for (int moduleIndex = 0; moduleIndex < bottomSurfaceSketchPointList.Count; modu
     chamferedExtrusion.Name = $"chamferedExtrusion_{moduleIndex}";
     ClearSelection(ref modulePart);
 
-    // Now make the unchamfered/full triangle extrusion //
+    /// Now make the unchamfered/full triangle extrusion ///
     // copy the full triangle sketch //
     SelectSketch(ref modulePart, fullTriangleSketchName);
     modulePart.EditCopy();
@@ -593,7 +658,7 @@ for (int moduleIndex = 0; moduleIndex < bottomSurfaceSketchPointList.Count; modu
     MakeSelectedCoincide(ref modulePart);
     ClearSelection(ref modulePart);
 
-    // Rotate the full triangle according to the orientation flag. This step will make aligning the two
+    // Rotate the full triangle according to the orientation flag. This step will make aligning the chamfered & full triangles very easy
     if (frontGridPointCloud.moduleOrientations[moduleIndex] == false)
     {
         // orientation flag is false, meaning the module should be upside-down
@@ -621,6 +686,54 @@ for (int moduleIndex = 0; moduleIndex < bottomSurfaceSketchPointList.Count; modu
     fullTriangleExtrusion.Name = $"fullTriangleExtrusion_{moduleIndex}";
     ClearSelection(ref modulePart);
 
+    /// Make pin holes - first test seems fine! ///
+    // copy the pin hole triangle sketch
+    SelectSketch(ref modulePart, pinHoleTriangleSketchName);
+    modulePart.EditCopy();
+    ((Feature)aRefPlane).Select2(true, -1);
+    modulePart.Paste();
+    // select the last pasted pin hole triangle sketch
+    lastSketchFeature = (Feature)modulePart.FeatureByPositionReverse(0);
+    lastSketchFeature.Select2(false, -1);
+    Sketch lastPinHoleTriangleSketch = (Sketch)lastSketchFeature.GetSpecificFeature2();
+    // edit the newly created pin hole triangle sketch to add constraints
+    ((Feature)lastPinHoleTriangleSketch).Select2(false, -1);
+    modulePart.EditSketch();
+    // record the pasted pin hole triangle's sketch name
+    string pastedPinHoleTriangleSheetname = GetActiveSketchName(ref modulePart);
+    // make the center of the pin hole triangle coincident with the extrusion axis
+    object[] pinHoleTriangleSegments = (object[])lastPinHoleTriangleSketch.GetSketchSegments();
+    SketchPoint? currentPinHoleTriangleCenterPoint = GetPinHoleTriangleCenterPoint(ref pinHoleTriangleSegments);
+    currentPinHoleTriangleCenterPoint?.Select4(true, swSelectData);
+    bottomSurfaceSketchPointList[moduleIndex].Select4(true, swSelectData);
+    MakeSelectedCoincide(ref modulePart);
+    ClearSelection(ref modulePart);
+
+    // rotate the pin hole triangle if necessary, according to the orientation flag
+    if (frontGridPointCloud.moduleOrientations[moduleIndex] == false )
+    {
+        // orientation flag is false, meaning the module should be upside-down
+        foreach (SketchSegment pinHoleTriangleSegment in  pinHoleTriangleSegments.Cast<SketchSegment>())
+        {
+            pinHoleTriangleSegment.Select4(true, swSelectData);
+        }
+        RotateSelected(ref modulePart, pinHoleTriangleCenterPoint.X, pinHoleTriangleCenterPoint.Y, Math.PI);
+        ClearSelection(ref modulePart);
+    }
+    // Make the flattest side parallel to the flattest side of the full triangle
+    SketchLine? aLongSidePinHoleTriangle = GetMostHorizontalTriangleSide(ref pinHoleTriangleSegments);
+    ((SketchSegment)aLongSidePinHoleTriangle).Select4(true, swSelectData);
+    ((SketchSegment)aLongSideFullTriangle).Select4(true, swSelectData);
+    MakeSelectedLinesParallel(ref modulePart);
+
+    // quit editing the pin hole triangle sketch
+    modulePart.InsertSketch2(true);
+    ClearSelection(ref modulePart);
+    // extrude the pin holes
+    SelectSketch(ref modulePart, pastedPinHoleTriangleSheetname);
+    Feature pinHoleExtrusion = CreateTwoWayExtrusion(ref modulePart);
+    pinHoleExtrusion.Name = $"pinHoleExtrusion_{moduleIndex}";
+    ClearSelection(ref modulePart);
 }
 
 // TODO: finally extrude the "reference sketches"
