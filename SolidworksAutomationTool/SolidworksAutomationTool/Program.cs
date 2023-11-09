@@ -13,6 +13,8 @@ const double chamferLength = 10.5e-3;               // in meters
 const double pinHoleDiameter = 2.5e-3;              // in meters
 // TODO: param: pin hole depth
 const double pinHoleDepth = 6e-3;                   // in meters
+// TODO: param: inter pin hole distance 
+const double interPinHoleDistance = 64e-3;          // in meters
 
 // TODO: param: bestFitSphereRadius.
 const double bestFitSphereRadius = 11045.6e-3;      // in meters
@@ -24,6 +26,7 @@ double supportToTopSurfaceDistance = 30e-3;         // in meters
 double bottomSurfaceRadius = 663.27e-3;
 // TODO: define the side length of the equilateral triangle
 double equilateralTriangleSideLength = 74.5e-3;
+
 
 Console.WriteLine("Welcome to the LASTRO Solidworks Automation Tool!");
 
