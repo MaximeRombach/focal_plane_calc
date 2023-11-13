@@ -189,6 +189,12 @@ namespace SolidworksAutomationTool
             return basicReferenceGeometry;
         }
 
+        /* Get the distance between two sketch points */
+        public static double GetDistanceBetweenTwoSketchPoints(SketchPoint p1, SketchPoint p2)
+        {
+            return Math.Sqrt(Math.Pow(p1.X - p2.X, 2.0) + Math.Pow(p1.Y - p2.Y, 2.0) + Math.Pow(p1.Z - p2.Z, 2.0));
+        }
+
         /* Get the index of the closest sketch point to the origin. 
          * Params: sketchPoints: reference to a list of sketchPoints
          * Returns: the index of the closest sketch point
@@ -462,6 +468,34 @@ namespace SolidworksAutomationTool
             //swSelectData.Mark = -1;
             return extrusionFeature;
         }
+
+        /* A wrapper function to make two-way extrusion on a already selected sketch. 
+         * Direction 1 is extruded till the given distance,
+         * Direction 2 is extruded all through.
+         */
+        public static Feature CreateTwoWayExtrusionD1ToDistanceD2ThroughAll(ref ModelDoc2 partModelDoc, double distanceD1ExtrudeTo)
+        { // the FeatureCut4 api takes a ton of arguments. This wrapper function is to simplify the calling process.
+            // https://help.solidworks.com/2023/english/api/sldworksapi/solidworks.interop.sldworks~solidworks.interop.sldworks.ifeaturemanager~featurecut4.html?verRedirect=1
+            Feature extrusionFeature = partModelDoc.FeatureManager.FeatureCut4(
+                                    false,  // true for single ended cut, false for double-ended cut
+                                    false,  // True to remove material outside of the profile of the flip side to cut, false to not
+                                    false,  // True for Direction 1 to be opposite of the default direction
+                                    (int)swEndConditions_e.swEndCondBlind,  // Termination type for the first end
+                                    (int)swEndConditions_e.swEndCondThroughAll,     // Termination type for the second end 
+                                    distanceD1ExtrudeTo, 1,   // depth of extrusion for 1st and 2nd end in meters
+                                    false, false, // True allows a draft angle in the first/second direction, false does not allow drafting in the first/second direction
+                                    false, false, // True for the first/second draft angle to be inward, false to be outward; only valid when Dchk1/Dchk2 is true
+                                    1, 1,   // Draft angle for the first end; only valid when Dchk1 is true
+                                    false, false, // If you chose to offset the first/second end condition from another face or plane, then true specifies offset in direction away from the sketch, false specifies offset from the face or plane in a direction toward the sketch
+                                    false, false,
+                                    false, true, true, true, true, false,
+                                    (int)swStartConditions_e.swStartSketchPlane,  // Start conditions as defined in swStartConditions_e
+                                    0,      // If T0 is swStartConditions_e.swStartOffset, then specify an offset value
+                                    false,  // If T0 is swStartConditions_e.swStartOffset, then true to flip the direction of cut, false to not
+                                    false);
+            return extrusionFeature;
+        }
+
 
         /* A wrapper function to enable the dimension dialog when an operation requires some input */
         public static void EnableInputDimensionByUser(ref SldWorks solidworks)
