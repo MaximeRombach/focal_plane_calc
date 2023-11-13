@@ -768,8 +768,11 @@ using (ProgressBar extrudeModulesProgressBar = new ProgressBar(bottomSurfaceSket
         modulePart.InsertSketch2(true);
         ClearSelection(ref modulePart);
         // extrude the pin holes
+        // TODO: check if the pin hole depth is right
+        double extrusionDepth = GetDistanceBetweenTwoSketchPoints(currentPinHoleTriangleCenterPoint, supportSurfaceMarkerPointList[moduleIndex])
+                                + pinHoleDepth;
         SelectSketch(ref modulePart, pastedPinHoleTriangleSheetname);
-        Feature pinHoleExtrusion = CreateTwoWayExtrusion(ref modulePart);
+        Feature pinHoleExtrusion = CreateTwoWayExtrusionD1ToDistanceD2ThroughAll(ref modulePart, extrusionDepth);
         pinHoleExtrusion.Name = $"pinHoleExtrusion_{moduleIndex}";
         ClearSelection(ref modulePart);
 
