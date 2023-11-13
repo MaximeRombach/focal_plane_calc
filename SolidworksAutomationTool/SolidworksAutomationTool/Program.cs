@@ -188,8 +188,8 @@ List<SketchPoint> supportSurfaceMarkerPointList = new(frontSketchPointList.Count
 // disable graphics update to boost performance
 modelView.EnableGraphicsUpdate = false;
 
-// Create the small segments from the top surface
-using (ProgressBar createSmallSegmentsProgressBar = new ProgressBar(backSketchPointList.Count, "Creating extrusion axes", progressBarOptions))
+// Create the support surface markers from the top surface
+using (ProgressBar createSmallSegmentsProgressBar = new ProgressBar(backSketchPointList.Count, "Creating support surface markers", progressBarOptions))
 {
     foreach ((SketchPoint frontSketchPoint, SketchPoint backSketchPoint, SketchSegment extrusionAxis) in frontSketchPointList.Zip(backSketchPointList, extrusionAxisList))
     {
