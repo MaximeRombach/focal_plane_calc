@@ -3,8 +3,8 @@
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 using SolidworksAutomationTool;
-using System.Diagnostics;
 using static SolidworksAutomationTool.ScaffoldFunctions;
+using ShellProgressBar;
 
 /* Define some parameters here. These parameters should be configurable in the GUI */
 // TODO: param: chamfer length
@@ -129,17 +129,32 @@ List<SketchPoint> frontSketchPointList = new(frontGridPointCloud.point3Ds.Count)
 List<SketchPoint> backSketchPointList = new(backGridPointCloud.point3Ds.Count);
 List<SketchSegment> extrusionAxisList = new(frontSketchPointList.Count);
 
-// Try iterating through two point clouds at the same time
-foreach ( (Point3D frontPoint, Point3D backPoint) in frontGridPointCloud.point3Ds.Zip(backGridPointCloud.point3Ds))
+// default progress bar styling option
+ProgressBarOptions progressBarOptions = new()
 {
-    // create top and bottom points
-    frontSketchPointList.Add( modulePart.SketchManager.CreatePoint(frontPoint.x, frontPoint.y , frontPoint.z ) );
-    backSketchPointList.Add( modulePart.SketchManager.CreatePoint(backPoint.x , backPoint.y  , backPoint.z ) );
+    ProgressCharacter = '#',
+    ProgressBarOnBottom = true,
+    BackgroundColor = ConsoleColor.DarkGray,
+    DisplayTimeInRealTime = false
+};
 
-    // create axis of extrusion as construction lines
-    extrusionAxisList.Add( modulePart.SketchManager.CreateLine(frontPoint.x , frontPoint.y , frontPoint.z, backPoint.x, backPoint.y, backPoint.z) );
-    // using fancy but convenient index-from-end operator (^), which is available in C# 8.0 and later, to get the last element in a list.
-    extrusionAxisList[^1 ].ConstructionGeometry = true;
+using ( ProgressBar createExtrusionAxesProgressBar = new ProgressBar(frontGridPointCloud.point3Ds.Count, "Creating extrusion axes", progressBarOptions))
+{
+    // Try iterating through two point clouds at the same time
+    foreach ((Point3D frontPoint, Point3D backPoint) in frontGridPointCloud.point3Ds.Zip(backGridPointCloud.point3Ds))
+    {
+        // create top and bottom points
+        frontSketchPointList.Add(modulePart.SketchManager.CreatePoint(frontPoint.x, frontPoint.y, frontPoint.z));
+        backSketchPointList.Add(modulePart.SketchManager.CreatePoint(backPoint.x, backPoint.y, backPoint.z));
+
+        // create axis of extrusion as construction lines
+        extrusionAxisList.Add(modulePart.SketchManager.CreateLine(frontPoint.x, frontPoint.y, frontPoint.z, backPoint.x, backPoint.y, backPoint.z));
+        // using fancy but convenient index-from-end operator (^), which is available in C# 8.0 and later, to get the last element in a list.
+        extrusionAxisList[^1].ConstructionGeometry = true;
+
+        // update the progress bar
+        createExtrusionAxesProgressBar.Tick();
+    }
 }
 
 Console.WriteLine("Extrusion axes placement completed");
@@ -160,7 +175,7 @@ ClearSelection(ref modulePart);
 modulePart.SketchManager.Insert3DSketch(true);
 ClearSelection(ref modulePart);
 
-PromptAndWait("Press any key to create small segments");
+//PromptAndWait("Press any key to create small segments");
 Console.WriteLine("Creating small segments ...");
 
 // According to solidworks api, we need to define a SelectData object and pass it into each selection call.
@@ -172,28 +187,36 @@ List<SketchPoint> supportSurfaceMarkerPointList = new(frontSketchPointList.Count
 
 // disable graphics update to boost performance
 modelView.EnableGraphicsUpdate = false;
+
 // Create the small segments from the top surface
-foreach ((SketchPoint frontSketchPoint, SketchPoint backSketchPoint, SketchSegment extrusionAxis) in frontSketchPointList.Zip(backSketchPointList, extrusionAxisList))
+using (ProgressBar createSmallSegmentsProgressBar = new ProgressBar(backSketchPointList.Count, "Creating extrusion axes", progressBarOptions))
 {
-    // first create a small sketch point at the middle of an extrusion axis
-    SketchPoint smallSegmentSketchPoint = modulePart.SketchManager.CreatePoint(   (frontSketchPoint.X + backSketchPoint.X) / 2,
-                                            (frontSketchPoint.Y + backSketchPoint.Y) / 2,
-                                            (frontSketchPoint.Z + backSketchPoint.Z) / 2);
+    foreach ((SketchPoint frontSketchPoint, SketchPoint backSketchPoint, SketchSegment extrusionAxis) in frontSketchPointList.Zip(backSketchPointList, extrusionAxisList))
+    {
+        // first create a small sketch point at the middle of an extrusion axis
+        SketchPoint smallSegmentSketchPoint = modulePart.SketchManager.CreatePoint((frontSketchPoint.X + backSketchPoint.X) / 2,
+                                                (frontSketchPoint.Y + backSketchPoint.Y) / 2,
+                                                (frontSketchPoint.Z + backSketchPoint.Z) / 2);
 
-    // constraint the point to be on coincide with the extrusion axis. Assuming the smallSegmentSketchPoint is already selected after creation
-    extrusionAxis.Select4(true, swSelectData);
-    MakeSelectedCoincide(ref modulePart);
-    // clear previous selections, so that no unintentional selection
-    ClearSelection(ref modulePart);
+        // constraint the point to be on coincide with the extrusion axis. Assuming the smallSegmentSketchPoint is already selected after creation
+        extrusionAxis.Select4(true, swSelectData);
+        MakeSelectedCoincide(ref modulePart);
+        // clear previous selections, so that no unintentional selection
+        ClearSelection(ref modulePart);
 
-    // add a length dimension to the small segment
-    frontSketchPoint.Select4(true, swSelectData);
-    smallSegmentSketchPoint.Select4(true, swSelectData);
-    AddDimensionToSelected(ref modulePart, supportToTopSurfaceDistance, frontSketchPoint);
-    ClearSelection(ref modulePart);
-    // save the support surface marker point to the list. It will be used in the later support surface extrusion
-    supportSurfaceMarkerPointList.Add(smallSegmentSketchPoint);
+        // add a length dimension to the small segment
+        frontSketchPoint.Select4(true, swSelectData);
+        smallSegmentSketchPoint.Select4(true, swSelectData);
+        AddDimensionToSelected(ref modulePart, supportToTopSurfaceDistance, frontSketchPoint);
+        ClearSelection(ref modulePart);
+        // save the support surface marker point to the list. It will be used in the later support surface extrusion
+        supportSurfaceMarkerPointList.Add(smallSegmentSketchPoint);
+
+        // update progress bar
+        createSmallSegmentsProgressBar.Tick();
+    }
 }
+   
 
 Console.WriteLine("Small segment creation completed");
 // enbale user input box for dimensions
@@ -210,7 +233,7 @@ ZoomToFit(ref modulePart);
 
 modulePart.SketchManager.AddToDB = true;
 
-PromptAndWait("Press any key to revolve a pizza slice (1/6 of a pizza)");
+//PromptAndWait("Press any key to revolve a pizza slice (1/6 of a pizza)");
 Console.WriteLine("Revolving a pizza slice ...");
 
 // define variables needed for pizza creation
@@ -363,22 +386,31 @@ modulePart.SketchManager.AddToDB = true;
 
 // keep a list of sketch points on the bottom plane
 List<SketchPoint> bottomSurfaceSketchPointList = new( extrusionAxisList.Count );
-foreach (SketchSegment extrusionAxis in extrusionAxisList)
-{
-    // create a point at some random location (DO NOT USE 0,0,0, that's the origin). The exact location doesn't matter since we will constraint it any ways
-    SketchPoint bottomPlaneSketchPoint = modulePart.SketchManager.CreatePoint(27, 27, 27);
-    bottomSurfaceSketchPointList.Add(bottomPlaneSketchPoint);
 
-    extrusionAxis.Select4(true, swSelectData);
-    MakeSelectedCoincide(ref modulePart);
-    ClearSelection(ref modulePart);
-    // TODO: the bottom plane will need to be passed in if this loop is used as a function
-    // using -1 as the mark, meaning that we don't specify the purpose of the selection to Solidworks
-    ((Feature)bottomPlane).Select2(true, -1);
-    bottomPlaneSketchPoint.Select4(true, swSelectData);
-    MakeSelectedCoincide(ref modulePart);
-    ClearSelection(ref modulePart);
+// 
+using (ProgressBar createBottomSurfacePointsProgressBar = new ProgressBar(extrusionAxisList.Count, "Creating bottom surface points", progressBarOptions))
+{
+    foreach (SketchSegment extrusionAxis in extrusionAxisList)
+    {
+        // create a point at some random location (DO NOT USE 0,0,0, that's the origin). The exact location doesn't matter since we will constraint it any ways
+        SketchPoint bottomPlaneSketchPoint = modulePart.SketchManager.CreatePoint(27, 27, 27);
+        bottomSurfaceSketchPointList.Add(bottomPlaneSketchPoint);
+
+        extrusionAxis.Select4(true, swSelectData);
+        MakeSelectedCoincide(ref modulePart);
+        ClearSelection(ref modulePart);
+        // TODO: the bottom plane will need to be passed in if this loop is used as a function
+        // using -1 as the mark, meaning that we don't specify the purpose of the selection to Solidworks
+        ((Feature)bottomPlane).Select2(true, -1);
+        bottomPlaneSketchPoint.Select4(true, swSelectData);
+        MakeSelectedCoincide(ref modulePart);
+        ClearSelection(ref modulePart);
+
+        // update progress bar
+        createBottomSurfacePointsProgressBar.Tick();
+    }
 }
+
 modelView.EnableGraphicsUpdate = true;
 modulePart.SketchManager.AddToDB = false;
 // close the sketch
@@ -564,179 +596,186 @@ ClearSelection(ref modulePart);
 // try the magic disable feature manager scroll to view to hopefully boost performance
 solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swFeatureManagerEnsureVisible, false);
 //modulePart.Lock();
-for (int moduleIndex = 0; moduleIndex < bottomSurfaceSketchPointList.Count; moduleIndex++)
+
+using (ProgressBar extrudeModulesProgressBar = new ProgressBar(bottomSurfaceSketchPointList.Count, "Extruding modules", progressBarOptions))
 {
-    // skip the point closest to the origin
-    if (moduleIndex == closestPointIdx) 
+    for (int moduleIndex = 0; moduleIndex < bottomSurfaceSketchPointList.Count; moduleIndex++)
     {
-        continue;
-    };
-
-    // Create another test plane near the bottom and insert a sketch on it
-    RefPlane aRefPlane = CreateRefPlaneFromPointAndNormal(bottomSurfaceSketchPointList[moduleIndex], extrusionAxisList[moduleIndex],
-                                                            $"ModulePlane_{moduleIndex}", swSelectData, modulePart.FeatureManager);
-    // hide the reference plane to avoid slowing down sketch creation
-    ((Feature)aRefPlane).Select2(true, -1);
-    modulePart.BlankRefGeom();
-    ClearSelection(ref modulePart);
-
-    // copy the chamfered triangle sketch //
-    SelectSketch(ref modulePart, chamferedSketchName);
-    modulePart.EditCopy();
-    ((Feature)aRefPlane).Select2(true, -1);
-    modulePart.Paste();
-    // select the last pasted sketch
-    Feature lastSketchFeature = (Feature)modulePart.FeatureByPositionReverse(0);
-    lastSketchFeature.Select2(false, -1);
-    Sketch lastChamferedSketch = (Sketch)lastSketchFeature.GetSpecificFeature2();
-    // edit the newly created sketch to add constraints
-    ((Feature)lastChamferedSketch).Select2(false, -1);
-    modulePart.EditSketch();
-    // record the pasted sheet's name for the extrusion later
-    string pastedChamferedTriangleSheetName = GetActiveSketchName(ref modulePart);
-    // make the center of the chamfered module coincident with the extrusion axis
-    object[] segments = (object[])lastChamferedSketch.GetSketchSegments();
-    SketchPoint? chamferedTriangleCenterPoint = GetTriangleCenterPoint(ref segments);
-
-    // TODO: add constraints to the chamfered modules to orient the module
-    if (frontGridPointCloud.moduleOrientations[moduleIndex] == false)
-    {
-        ClearSelection(ref modulePart);
-        // orientation flag is false, meaning the module should be upside-down
-        foreach(SketchSegment segment in segments.Cast<SketchSegment>())
+        // skip the point closest to the origin
+        if (moduleIndex == closestPointIdx) 
         {
-            segment.Select4(true, swSelectData);
-        }
-        RotateSelected(ref modulePart, chamferedTriangleCenterPoint.X, chamferedTriangleCenterPoint.Y, Math.PI);
+            continue;
+        };
+
+        // Create another test plane near the bottom and insert a sketch on it
+        RefPlane aRefPlane = CreateRefPlaneFromPointAndNormal(bottomSurfaceSketchPointList[moduleIndex], extrusionAxisList[moduleIndex],
+                                                                $"ModulePlane_{moduleIndex}", swSelectData, modulePart.FeatureManager);
+        // hide the reference plane to avoid slowing down sketch creation
+        ((Feature)aRefPlane).Select2(true, -1);
+        modulePart.BlankRefGeom();
         ClearSelection(ref modulePart);
-    }
 
-    chamferedTriangleCenterPoint?.Select4(true, swSelectData);
-    bottomSurfaceSketchPointList[moduleIndex].Select4(true, swSelectData);
-    MakeSelectedCoincide(ref modulePart);
-    ClearSelection(ref modulePart);
+        // copy the chamfered triangle sketch //
+        SelectSketch(ref modulePart, chamferedSketchName);
+        modulePart.EditCopy();
+        ((Feature)aRefPlane).Select2(true, -1);
+        modulePart.Paste();
+        // select the last pasted sketch
+        Feature lastSketchFeature = (Feature)modulePart.FeatureByPositionReverse(0);
+        lastSketchFeature.Select2(false, -1);
+        Sketch lastChamferedSketch = (Sketch)lastSketchFeature.GetSpecificFeature2();
+        // edit the newly created sketch to add constraints
+        ((Feature)lastChamferedSketch).Select2(false, -1);
+        modulePart.EditSketch();
+        // record the pasted sheet's name for the extrusion later
+        string pastedChamferedTriangleSheetName = GetActiveSketchName(ref modulePart);
+        // make the center of the chamfered module coincident with the extrusion axis
+        object[] segments = (object[])lastChamferedSketch.GetSketchSegments();
+        SketchPoint? chamferedTriangleCenterPoint = GetTriangleCenterPoint(ref segments);
 
-    // TESTING: make one of the sides to be in parallel to the most positively sloped side of the first reference chamfered triangle
-    // TODO: check if can set one side of the chamfered triangle to be in parallel with the first chamfered triangle
-    //SketchSegment? unchamferedTriangleMostPositiveSlopedSide = GetMostPositiveSlopedSideInChamferedTriangle(ref segments);
-    // TODO: temporary workaround, simply set one of the sides to be in horizontal to fully define each chamfered triangle
-    SketchLine aRelativelyFlatSide = GetMostHorizontalTriangleSide(ref segments);
-    ((SketchSegment)aRelativelyFlatSide).Select4(true, swSelectData);
-    MakeSelectedLineHorizontal(ref modulePart);
-    ClearSelection(ref modulePart);
-
-    // get a handle on the longest most horizontal side of a chamfered triangle.
-    // This side will be used as a reference to set parallel constraint to a side of a full triangle
-    SketchLine? aLongSideChamferedTriangle = GetLongestMostHorizontalTriangleSide(ref segments);
-
-    // quit editing sketch
-    modulePart.InsertSketch2(true);
-    ClearSelection(ref modulePart);
-    // extrude the chamfered triangle
-    SelectSketch(ref modulePart, pastedChamferedTriangleSheetName);
-    Feature chamferedExtrusion = CreateTwoWayExtrusion(ref modulePart);
-    chamferedExtrusion.Name = $"chamferedExtrusion_{moduleIndex}";
-    ClearSelection(ref modulePart);
-
-    /// Now make the unchamfered/full triangle extrusion ///
-    // copy the full triangle sketch //
-    SelectSketch(ref modulePart, fullTriangleSketchName);
-    modulePart.EditCopy();
-    ((Feature)aRefPlane).Select2(true, -1);
-    modulePart.Paste();
-    // select the last pasted full triangle sketch
-    lastSketchFeature = (Feature)modulePart.FeatureByPositionReverse(0);
-    lastSketchFeature.Select2(false, -1);
-    Sketch lastFullTriangleSketch = (Sketch)lastSketchFeature.GetSpecificFeature2();
-    // edit the newly created fully triangle sketch to add constraints
-    ((Feature)lastFullTriangleSketch).Select2(false, -1);
-    modulePart.EditSketch();
-    // DEBUG: record the pasted sheet's name
-    string pastedFullTriangleSheetName = GetActiveSketchName(ref modulePart);
-    // make the center of the full triangle coincident with the extrusion axis
-    object[] fullTriangleSegments = (object[])lastFullTriangleSketch.GetSketchSegments();
-    SketchPoint? fullTriangleCenterPoint = GetTriangleCenterPoint(ref fullTriangleSegments);
-    fullTriangleCenterPoint?.Select4(true, swSelectData);
-    bottomSurfaceSketchPointList[moduleIndex].Select4(true, swSelectData);
-    MakeSelectedCoincide(ref modulePart);
-    ClearSelection(ref modulePart);
-
-    // Rotate the full triangle according to the orientation flag. This step will make aligning the chamfered & full triangles very easy
-    if (frontGridPointCloud.moduleOrientations[moduleIndex] == false)
-    {
-        // orientation flag is false, meaning the module should be upside-down
-        foreach (SketchSegment fullTriangleSegment in fullTriangleSegments.Cast<SketchSegment>())
+        // TODO: add constraints to the chamfered modules to orient the module
+        if (frontGridPointCloud.moduleOrientations[moduleIndex] == false)
         {
-            fullTriangleSegment.Select4(true, swSelectData);
+            ClearSelection(ref modulePart);
+            // orientation flag is false, meaning the module should be upside-down
+            foreach(SketchSegment segment in segments.Cast<SketchSegment>())
+            {
+                segment.Select4(true, swSelectData);
+            }
+            RotateSelected(ref modulePart, chamferedTriangleCenterPoint.X, chamferedTriangleCenterPoint.Y, Math.PI);
+            ClearSelection(ref modulePart);
         }
-        RotateSelected(ref modulePart, fullTriangleCenterPoint.X, fullTriangleCenterPoint.Y, Math.PI);
+
+        chamferedTriangleCenterPoint?.Select4(true, swSelectData);
+        bottomSurfaceSketchPointList[moduleIndex].Select4(true, swSelectData);
+        MakeSelectedCoincide(ref modulePart);
         ClearSelection(ref modulePart);
-    }
-    // make the flattest side parallel to a flattest long side of the chamfered triangle
-    // TODO: find the flattest and longest side in a chamfered triangle
-    SketchLine? aLongSideFullTriangle = GetMostHorizontalTriangleSide(ref fullTriangleSegments);
-    ((SketchSegment)aLongSideChamferedTriangle).Select4(true, swSelectData);
-    ((SketchSegment)aLongSideFullTriangle).Select4(true, swSelectData);
-    MakeSelectedLinesParallel(ref modulePart);
 
-    // quit editing the fully triangle sketch
-    modulePart.InsertSketch2(true);
-    ClearSelection(ref modulePart);
-    // extrude the chamfered triangle
-    SelectSketch(ref modulePart, pastedFullTriangleSheetName);
-    // extrude the full triangle all the way to the "support surface point"
-    Feature fullTriangleExtrusion = CreateTwoWayExtrusionD1ToPointD2ThroughAll(ref modulePart, supportSurfaceMarkerPointList[moduleIndex], swSelectData);
-    fullTriangleExtrusion.Name = $"fullTriangleExtrusion_{moduleIndex}";
-    ClearSelection(ref modulePart);
+        // TESTING: make one of the sides to be in parallel to the most positively sloped side of the first reference chamfered triangle
+        // TODO: check if can set one side of the chamfered triangle to be in parallel with the first chamfered triangle
+        //SketchSegment? unchamferedTriangleMostPositiveSlopedSide = GetMostPositiveSlopedSideInChamferedTriangle(ref segments);
+        // TODO: temporary workaround, simply set one of the sides to be in horizontal to fully define each chamfered triangle
+        SketchLine aRelativelyFlatSide = GetMostHorizontalTriangleSide(ref segments);
+        ((SketchSegment)aRelativelyFlatSide).Select4(true, swSelectData);
+        MakeSelectedLineHorizontal(ref modulePart);
+        ClearSelection(ref modulePart);
 
-    /// Make pin holes - first test seems fine! ///
-    // copy the pin hole triangle sketch
-    SelectSketch(ref modulePart, pinHoleTriangleSketchName);
-    modulePart.EditCopy();
-    ((Feature)aRefPlane).Select2(true, -1);
-    modulePart.Paste();
-    // select the last pasted pin hole triangle sketch
-    lastSketchFeature = (Feature)modulePart.FeatureByPositionReverse(0);
-    lastSketchFeature.Select2(false, -1);
-    Sketch lastPinHoleTriangleSketch = (Sketch)lastSketchFeature.GetSpecificFeature2();
-    // edit the newly created pin hole triangle sketch to add constraints
-    ((Feature)lastPinHoleTriangleSketch).Select2(false, -1);
-    modulePart.EditSketch();
-    // record the pasted pin hole triangle's sketch name
-    string pastedPinHoleTriangleSheetname = GetActiveSketchName(ref modulePart);
-    // make the center of the pin hole triangle coincident with the extrusion axis
-    object[] pinHoleTriangleSegments = (object[])lastPinHoleTriangleSketch.GetSketchSegments();
-    SketchPoint? currentPinHoleTriangleCenterPoint = GetPinHoleTriangleCenterPoint(ref pinHoleTriangleSegments);
-    currentPinHoleTriangleCenterPoint?.Select4(true, swSelectData);
-    bottomSurfaceSketchPointList[moduleIndex].Select4(true, swSelectData);
-    MakeSelectedCoincide(ref modulePart);
-    ClearSelection(ref modulePart);
+        // get a handle on the longest most horizontal side of a chamfered triangle.
+        // This side will be used as a reference to set parallel constraint to a side of a full triangle
+        SketchLine? aLongSideChamferedTriangle = GetLongestMostHorizontalTriangleSide(ref segments);
 
-    // rotate the pin hole triangle if necessary, according to the orientation flag
-    if (frontGridPointCloud.moduleOrientations[moduleIndex] == false )
-    {
-        // orientation flag is false, meaning the module should be upside-down
-        foreach (SketchSegment pinHoleTriangleSegment in  pinHoleTriangleSegments.Cast<SketchSegment>())
+        // quit editing sketch
+        modulePart.InsertSketch2(true);
+        ClearSelection(ref modulePart);
+        // extrude the chamfered triangle
+        SelectSketch(ref modulePart, pastedChamferedTriangleSheetName);
+        Feature chamferedExtrusion = CreateTwoWayExtrusion(ref modulePart);
+        chamferedExtrusion.Name = $"chamferedExtrusion_{moduleIndex}";
+        ClearSelection(ref modulePart);
+
+        /// Now make the unchamfered/full triangle extrusion ///
+        // copy the full triangle sketch //
+        SelectSketch(ref modulePart, fullTriangleSketchName);
+        modulePart.EditCopy();
+        ((Feature)aRefPlane).Select2(true, -1);
+        modulePart.Paste();
+        // select the last pasted full triangle sketch
+        lastSketchFeature = (Feature)modulePart.FeatureByPositionReverse(0);
+        lastSketchFeature.Select2(false, -1);
+        Sketch lastFullTriangleSketch = (Sketch)lastSketchFeature.GetSpecificFeature2();
+        // edit the newly created fully triangle sketch to add constraints
+        ((Feature)lastFullTriangleSketch).Select2(false, -1);
+        modulePart.EditSketch();
+        // DEBUG: record the pasted sheet's name
+        string pastedFullTriangleSheetName = GetActiveSketchName(ref modulePart);
+        // make the center of the full triangle coincident with the extrusion axis
+        object[] fullTriangleSegments = (object[])lastFullTriangleSketch.GetSketchSegments();
+        SketchPoint? fullTriangleCenterPoint = GetTriangleCenterPoint(ref fullTriangleSegments);
+        fullTriangleCenterPoint?.Select4(true, swSelectData);
+        bottomSurfaceSketchPointList[moduleIndex].Select4(true, swSelectData);
+        MakeSelectedCoincide(ref modulePart);
+        ClearSelection(ref modulePart);
+
+        // Rotate the full triangle according to the orientation flag. This step will make aligning the chamfered & full triangles very easy
+        if (frontGridPointCloud.moduleOrientations[moduleIndex] == false)
         {
-            pinHoleTriangleSegment.Select4(true, swSelectData);
+            // orientation flag is false, meaning the module should be upside-down
+            foreach (SketchSegment fullTriangleSegment in fullTriangleSegments.Cast<SketchSegment>())
+            {
+                fullTriangleSegment.Select4(true, swSelectData);
+            }
+            RotateSelected(ref modulePart, fullTriangleCenterPoint.X, fullTriangleCenterPoint.Y, Math.PI);
+            ClearSelection(ref modulePart);
         }
-        RotateSelected(ref modulePart, pinHoleTriangleCenterPoint.X, pinHoleTriangleCenterPoint.Y, Math.PI);
-        ClearSelection(ref modulePart);
-    }
-    // Make the flattest side parallel to the flattest side of the full triangle
-    SketchLine? aLongSidePinHoleTriangle = GetMostHorizontalTriangleSide(ref pinHoleTriangleSegments);
-    ((SketchSegment)aLongSidePinHoleTriangle).Select4(true, swSelectData);
-    ((SketchSegment)aLongSideFullTriangle).Select4(true, swSelectData);
-    MakeSelectedLinesParallel(ref modulePart);
+        // make the flattest side parallel to a flattest long side of the chamfered triangle
+        // TODO: find the flattest and longest side in a chamfered triangle
+        SketchLine? aLongSideFullTriangle = GetMostHorizontalTriangleSide(ref fullTriangleSegments);
+        ((SketchSegment)aLongSideChamferedTriangle).Select4(true, swSelectData);
+        ((SketchSegment)aLongSideFullTriangle).Select4(true, swSelectData);
+        MakeSelectedLinesParallel(ref modulePart);
 
-    // quit editing the pin hole triangle sketch
-    modulePart.InsertSketch2(true);
-    ClearSelection(ref modulePart);
-    // extrude the pin holes
-    SelectSketch(ref modulePart, pastedPinHoleTriangleSheetname);
-    Feature pinHoleExtrusion = CreateTwoWayExtrusion(ref modulePart);
-    pinHoleExtrusion.Name = $"pinHoleExtrusion_{moduleIndex}";
-    ClearSelection(ref modulePart);
+        // quit editing the fully triangle sketch
+        modulePart.InsertSketch2(true);
+        ClearSelection(ref modulePart);
+        // extrude the chamfered triangle
+        SelectSketch(ref modulePart, pastedFullTriangleSheetName);
+        // extrude the full triangle all the way to the "support surface point"
+        Feature fullTriangleExtrusion = CreateTwoWayExtrusionD1ToPointD2ThroughAll(ref modulePart, supportSurfaceMarkerPointList[moduleIndex], swSelectData);
+        fullTriangleExtrusion.Name = $"fullTriangleExtrusion_{moduleIndex}";
+        ClearSelection(ref modulePart);
+
+        /// Make pin holes - first test seems fine! ///
+        // copy the pin hole triangle sketch
+        SelectSketch(ref modulePart, pinHoleTriangleSketchName);
+        modulePart.EditCopy();
+        ((Feature)aRefPlane).Select2(true, -1);
+        modulePart.Paste();
+        // select the last pasted pin hole triangle sketch
+        lastSketchFeature = (Feature)modulePart.FeatureByPositionReverse(0);
+        lastSketchFeature.Select2(false, -1);
+        Sketch lastPinHoleTriangleSketch = (Sketch)lastSketchFeature.GetSpecificFeature2();
+        // edit the newly created pin hole triangle sketch to add constraints
+        ((Feature)lastPinHoleTriangleSketch).Select2(false, -1);
+        modulePart.EditSketch();
+        // record the pasted pin hole triangle's sketch name
+        string pastedPinHoleTriangleSheetname = GetActiveSketchName(ref modulePart);
+        // make the center of the pin hole triangle coincident with the extrusion axis
+        object[] pinHoleTriangleSegments = (object[])lastPinHoleTriangleSketch.GetSketchSegments();
+        SketchPoint? currentPinHoleTriangleCenterPoint = GetPinHoleTriangleCenterPoint(ref pinHoleTriangleSegments);
+        currentPinHoleTriangleCenterPoint?.Select4(true, swSelectData);
+        bottomSurfaceSketchPointList[moduleIndex].Select4(true, swSelectData);
+        MakeSelectedCoincide(ref modulePart);
+        ClearSelection(ref modulePart);
+
+        // rotate the pin hole triangle if necessary, according to the orientation flag
+        if (frontGridPointCloud.moduleOrientations[moduleIndex] == false )
+        {
+            // orientation flag is false, meaning the module should be upside-down
+            foreach (SketchSegment pinHoleTriangleSegment in  pinHoleTriangleSegments.Cast<SketchSegment>())
+            {
+                pinHoleTriangleSegment.Select4(true, swSelectData);
+            }
+            RotateSelected(ref modulePart, pinHoleTriangleCenterPoint.X, pinHoleTriangleCenterPoint.Y, Math.PI);
+            ClearSelection(ref modulePart);
+        }
+        // Make the flattest side parallel to the flattest side of the full triangle
+        SketchLine? aLongSidePinHoleTriangle = GetMostHorizontalTriangleSide(ref pinHoleTriangleSegments);
+        ((SketchSegment)aLongSidePinHoleTriangle).Select4(true, swSelectData);
+        ((SketchSegment)aLongSideFullTriangle).Select4(true, swSelectData);
+        MakeSelectedLinesParallel(ref modulePart);
+
+        // quit editing the pin hole triangle sketch
+        modulePart.InsertSketch2(true);
+        ClearSelection(ref modulePart);
+        // extrude the pin holes
+        SelectSketch(ref modulePart, pastedPinHoleTriangleSheetname);
+        Feature pinHoleExtrusion = CreateTwoWayExtrusion(ref modulePart);
+        pinHoleExtrusion.Name = $"pinHoleExtrusion_{moduleIndex}";
+        ClearSelection(ref modulePart);
+
+        // update progress bar
+        extrudeModulesProgressBar.Tick();
+    }
 }
 
 // TODO: finally extrude the "reference sketches"
