@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="ShellProgressBar" Version="5.2.0" />
     <PackageReference Include="Visiativ.SOLIDWORKS.Interop" Version="31.4.0" />
   </ItemGroup>
 
