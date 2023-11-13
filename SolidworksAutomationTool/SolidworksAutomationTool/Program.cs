@@ -12,7 +12,7 @@ const double chamferLength = 10.5e-3;               // in meters
 // TODO: param: pin hole diameter
 const double pinHoleDiameter = 2.5e-3;              // in meters
 // TODO: param: pin hole depth
-const double pinHoleDepth = 6e-3;                   // in meters
+const double pinHoleDepth = 35e-3;                   // in meters
 // TODO: param: inter pin hole distance 
 const double interPinHoleDistance = 64e-3;          // in meters
 
@@ -574,12 +574,6 @@ if (pinHoleTriangleCenterPoint != null)
     ClearSelection(ref modulePart);
 }
 
-
-
-
-
-
-
 // Give the first pin hole triangle sketch a special name. 
 ((Feature)modulePart.SketchManager.ActiveSketch).Name = "Pin Hole Triangle Sketch";
 string pinHoleTriangleSketchName = ((Feature)modulePart.SketchManager.ActiveSketch).Name;
@@ -591,8 +585,8 @@ ClearSelection(ref modulePart);
 // TODO: reduce boilerplat code and move code to scaffold functions
 
 // try to gain speed by locking the user interface
-//modelView.EnableGraphicsUpdate = false;
-//modulePart.SketchManager.DisplayWhenAdded = false;
+modelView.EnableGraphicsUpdate = false;
+modulePart.SketchManager.DisplayWhenAdded = false;
 // try the magic disable feature manager scroll to view to hopefully boost performance
 solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swFeatureManagerEnsureVisible, false);
 //modulePart.Lock();
