@@ -601,6 +601,9 @@ using (ProgressBar extrudeModulesProgressBar = new ProgressBar(bottomSurfaceSket
             continue;
         };
 
+        // save the orientation flag.
+        bool isUpright = frontGridPointCloud.moduleOrientations[moduleIndex];
+
         // Create another test plane near the bottom and insert a sketch on it
         RefPlane aRefPlane = CreateRefPlaneFromPointAndNormal(bottomSurfaceSketchPointList[moduleIndex], extrusionAxisList[moduleIndex],
                                                                 $"ModulePlane_{moduleIndex}", swSelectData, modulePart.FeatureManager);
@@ -628,7 +631,7 @@ using (ProgressBar extrudeModulesProgressBar = new ProgressBar(bottomSurfaceSket
         SketchPoint? chamferedTriangleCenterPoint = GetTriangleCenterPoint(ref segments);
 
         // TODO: add constraints to the chamfered modules to orient the module
-        if (frontGridPointCloud.moduleOrientations[moduleIndex] == false)
+        if (!isUpright)
         {
             ClearSelection(ref modulePart);
             // orientation flag is false, meaning the module should be upside-down
@@ -691,7 +694,7 @@ using (ProgressBar extrudeModulesProgressBar = new ProgressBar(bottomSurfaceSket
         ClearSelection(ref modulePart);
 
         // Rotate the full triangle according to the orientation flag. This step will make aligning the chamfered & full triangles very easy
-        if (frontGridPointCloud.moduleOrientations[moduleIndex] == false)
+        if (!isUpright)
         {
             // orientation flag is false, meaning the module should be upside-down
             foreach (SketchSegment fullTriangleSegment in fullTriangleSegments.Cast<SketchSegment>())
@@ -742,7 +745,7 @@ using (ProgressBar extrudeModulesProgressBar = new ProgressBar(bottomSurfaceSket
         ClearSelection(ref modulePart);
 
         // rotate the pin hole triangle if necessary, according to the orientation flag
-        if (frontGridPointCloud.moduleOrientations[moduleIndex] == false )
+        if (!isUpright )
         {
             // orientation flag is false, meaning the module should be upside-down
             foreach (SketchSegment pinHoleTriangleSegment in  pinHoleTriangleSegments.Cast<SketchSegment>())
