@@ -91,17 +91,17 @@ namespace SolidworksAutomationTool
         public static void PrintPolygonDataStructure(ref object[] polygon)
         {
             Debug.WriteLine($"Found {polygon.Length} sketch segments in the polygon");
-            foreach (SketchSegment triangleSegment in polygon)
+            foreach (SketchSegment triangleSegment in polygon.Cast<SketchSegment>())
             {
                 string triangleSegmentType = triangleSegment.GetType() switch
                 {
-                    (int)swSketchSegments_e.swSketchARC => triangleSegmentType = "Arc",
-                    (int)swSketchSegments_e.swSketchLINE => triangleSegmentType = "Line",
-                    (int)swSketchSegments_e.swSketchELLIPSE => triangleSegmentType = "Ellipse",
-                    (int)swSketchSegments_e.swSketchPARABOLA => triangleSegmentType = "Parabola",
-                    (int)swSketchSegments_e.swSketchSPLINE => triangleSegmentType = "Spline",
+                    (int)swSketchSegments_e.swSketchARC => "Arc",
+                    (int)swSketchSegments_e.swSketchLINE => "Line",
+                    (int)swSketchSegments_e.swSketchELLIPSE => "Ellipse",
+                    (int)swSketchSegments_e.swSketchPARABOLA => "Parabola",
+                    (int)swSketchSegments_e.swSketchSPLINE => "Spline",
                     // Actually, why a sketch segment can be of type text??
-                    (int)swSketchSegments_e.swSketchTEXT => triangleSegmentType = "Text",
+                    (int)swSketchSegments_e.swSketchTEXT => "Text",
                     _ => "Unknown",
                 };
                 Debug.WriteLine($"Segment is of type: {triangleSegmentType}");
@@ -194,6 +194,10 @@ namespace SolidworksAutomationTool
         {
             return Math.Sqrt(Math.Pow(p1.X - p2.X, 2.0) + Math.Pow(p1.Y - p2.Y, 2.0) + Math.Pow(p1.Z - p2.Z, 2.0));
         }
+
+        /* Get the number of features in this document */
+        public static int GetFeatureCount(ref ModelDoc2 partModelDoc)
+            => partModelDoc.FeatureManager.GetFeatureCount(false);
 
         /* Get the index of the closest sketch point to the origin. 
          * Params: sketchPoints: reference to a list of sketchPoints
@@ -482,7 +486,7 @@ namespace SolidworksAutomationTool
                                     false,  // True for Direction 1 to be opposite of the default direction
                                     (int)swEndConditions_e.swEndCondBlind,  // Termination type for the first end
                                     (int)swEndConditions_e.swEndCondThroughAll,     // Termination type for the second end 
-                                    distanceD1ExtrudeTo, 1,   // depth of extrusion for 1st and 2nd end in meters
+                                    distanceD1ExtrudeTo, distanceD1ExtrudeTo,   // depth of extrusion for 1st and 2nd end in meters
                                     false, false, // True allows a draft angle in the first/second direction, false does not allow drafting in the first/second direction
                                     false, false, // True for the first/second draft angle to be inward, false to be outward; only valid when Dchk1/Dchk2 is true
                                     1, 1,   // Draft angle for the first end; only valid when Dchk1 is true
