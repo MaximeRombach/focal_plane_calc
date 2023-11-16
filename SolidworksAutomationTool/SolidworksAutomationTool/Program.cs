@@ -581,18 +581,21 @@ string pinHoleTriangleSketchName = ((Feature)modulePart.SketchManager.ActiveSket
 modulePart.SketchManager.InsertSketch(true);
 ClearSelection(ref modulePart);
 
-// TODO: use for loop to create triangle modules with the right shape for all the modules
+// use for loop to create triangle modules with the right shape for all the modules
 // TODO: reduce boilerplat code and move code to scaffold functions
 
 // try to gain speed by locking the user interface
-modelView.EnableGraphicsUpdate = false;
-modulePart.SketchManager.DisplayWhenAdded = false;
+modelView.EnableGraphicsUpdate = true;
+modulePart.SketchManager.DisplayWhenAdded = true;
 // try the magic disable feature manager scroll to view to hopefully boost performance
 solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swFeatureManagerEnsureVisible, false);
 //modulePart.Lock();
 
-using (ProgressBar extrudeModulesProgressBar = new ProgressBar(bottomSurfaceSketchPointList.Count, "Extruding modules", progressBarOptions))
+using (ProgressBar extrudeModulesProgressBar = new(bottomSurfaceSketchPointList.Count, "Extruding modules", progressBarOptions))
 {
+    // DEBUG:
+    Debug.WriteLine($"Closest to origin index: {closestPointIdx}");
+
     for (int moduleIndex = 0; moduleIndex < bottomSurfaceSketchPointList.Count; moduleIndex++)
     {
         // skip the point closest to the origin
@@ -612,13 +615,24 @@ using (ProgressBar extrudeModulesProgressBar = new ProgressBar(bottomSurfaceSket
         modulePart.BlankRefGeom();
         ClearSelection(ref modulePart);
 
+        //DEBUG:
+        Debug.WriteLine($"Number of features Precopy chamfered sketch: {GetFeatureCount(ref modulePart)}");
+
         // copy the chamfered triangle sketch //
         SelectSketch(ref modulePart, chamferedSketchName);
         modulePart.EditCopy();
         ((Feature)aRefPlane).Select2(true, -1);
         modulePart.Paste();
+
+        // DEBUG: try to manually update the feature tree to avoid missing the last pasted sketch
+        modulePart.FeatureManager.UpdateFeatureTree();
+        //DEBUG:
+        Debug.WriteLine($"Number of features post-copy chamfered sketch: {GetFeatureCount(ref modulePart)}");
+
         // select the last pasted sketch
         Feature lastSketchFeature = (Feature)modulePart.FeatureByPositionReverse(0);
+        Debug.WriteLine($"Feature name (s.t.b chamfered tri sketch): {lastSketchFeature.Name}");
+
         lastSketchFeature.Select2(false, -1);
         Sketch lastChamferedSketch = (Sketch)lastSketchFeature.GetSpecificFeature2();
         // edit the newly created sketch to add constraints
@@ -671,13 +685,23 @@ using (ProgressBar extrudeModulesProgressBar = new ProgressBar(bottomSurfaceSket
         ClearSelection(ref modulePart);
 
         /// Now make the unchamfered/full triangle extrusion ///
+        //DEBUG:
+        Debug.WriteLine($"Number of features Precopy full tri sketch: {GetFeatureCount(ref modulePart)}");
+
         // copy the full triangle sketch //
         SelectSketch(ref modulePart, fullTriangleSketchName);
         modulePart.EditCopy();
         ((Feature)aRefPlane).Select2(true, -1);
         modulePart.Paste();
+
+        // DEBUG: try to manually update the feature tree to avoid missing the last pasted sketch
+        modulePart.FeatureManager.UpdateFeatureTree();
+        Debug.WriteLine($"Number of features Post copy full tri sketch: {GetFeatureCount(ref modulePart)}");
+
         // select the last pasted full triangle sketch
         lastSketchFeature = (Feature)modulePart.FeatureByPositionReverse(0);
+        Debug.WriteLine($"Feature name (s.t.b full tri sketch): {lastSketchFeature.Name}");
+
         lastSketchFeature.Select2(false, -1);
         Sketch lastFullTriangleSketch = (Sketch)lastSketchFeature.GetSpecificFeature2();
         // edit the newly created fully triangle sketch to add constraints
@@ -721,55 +745,79 @@ using (ProgressBar extrudeModulesProgressBar = new ProgressBar(bottomSurfaceSket
         fullTriangleExtrusion.Name = $"fullTriangleExtrusion_{moduleIndex}";
         ClearSelection(ref modulePart);
 
+        //DEBUG:
+        Debug.WriteLine($"Number of features Precopy pin hole sketch: {GetFeatureCount(ref modulePart)}");
+
         /// Make pin holes - first test seems fine! ///
-        // copy the pin hole triangle sketch
+        // copy and paste the pin hole triangle sketch
         SelectSketch(ref modulePart, pinHoleTriangleSketchName);
         modulePart.EditCopy();
         ((Feature)aRefPlane).Select2(true, -1);
         modulePart.Paste();
-        // select the last pasted pin hole triangle sketch
-        lastSketchFeature = (Feature)modulePart.FeatureByPositionReverse(0);
-        lastSketchFeature.Select2(false, -1);
-        Sketch lastPinHoleTriangleSketch = (Sketch)lastSketchFeature.GetSpecificFeature2();
-        // edit the newly created pin hole triangle sketch to add constraints
-        ((Feature)lastPinHoleTriangleSketch).Select2(false, -1);
-        modulePart.EditSketch();
-        // record the pasted pin hole triangle's sketch name
-        string pastedPinHoleTriangleSheetname = GetActiveSketchName(ref modulePart);
-        // make the center of the pin hole triangle coincident with the extrusion axis
-        object[] pinHoleTriangleSegments = (object[])lastPinHoleTriangleSketch.GetSketchSegments();
-        SketchPoint? currentPinHoleTriangleCenterPoint = GetPinHoleTriangleCenterPoint(ref pinHoleTriangleSegments);
-        currentPinHoleTriangleCenterPoint?.Select4(true, swSelectData);
-        bottomSurfaceSketchPointList[moduleIndex].Select4(true, swSelectData);
-        MakeSelectedCoincide(ref modulePart);
-        ClearSelection(ref modulePart);
 
+        //// DEBUG: try to manually update the feature tree to avoid missing the last pasted sketch
+        modulePart.FeatureManager.UpdateFeatureTree();
+        ////DEBUG:
+        Debug.WriteLine($"Number of features Post-copy pin hole sketch: {GetFeatureCount(ref modulePart)}");
+
+        //// select the last pasted pin hole triangle sketch
+        Feature pastedPinHoleSketch = (Feature)modulePart.FeatureByPositionReverse(0);
+
+        pastedPinHoleSketch.Select2(false, -1);
+        Sketch lastPinHoleTriangleSketch = (Sketch)pastedPinHoleSketch.GetSpecificFeature2();
+        ClearSelection(ref modulePart);
+        //// edit the newly created pin hole triangle sketch to add constraints
+        ((Feature)lastPinHoleTriangleSketch).Select2(false, -1);
+        Debug.WriteLine($"Feature name (s.t.b pin tri sketch): {((Feature)lastPinHoleTriangleSketch).Name}");
+        modulePart.EditSketch();
+        //// record the pasted pin hole triangle's sketch name
+        //string pastedPinHoleTriangleSheetname = GetActiveSketchName(ref modulePart);
+        string pastedPinHoleTriangleSheetname = ((Feature)lastPinHoleTriangleSketch).Name;
+        //
+        object[] pinHoleTriangleSegments = (object[])lastPinHoleTriangleSketch.GetSketchSegments();
+        PrintPolygonDataStructure(ref pinHoleTriangleSegments);
+
+        SketchPoint? currentPinHoleTriangleCenterPoint = GetPinHoleTriangleCenterPoint(ref pinHoleTriangleSegments);
+        ClearSelection(ref modulePart);
         // rotate the pin hole triangle if necessary, according to the orientation flag
-        if (!isUpright )
+        if (!isUpright)
         {
             // orientation flag is false, meaning the module should be upside-down
-            foreach (SketchSegment pinHoleTriangleSegment in  pinHoleTriangleSegments.Cast<SketchSegment>())
+            foreach (SketchSegment pinHoleTriangleSegment in pinHoleTriangleSegments.Cast<SketchSegment>())
             {
                 pinHoleTriangleSegment.Select4(true, swSelectData);
             }
             RotateSelected(ref modulePart, pinHoleTriangleCenterPoint.X, pinHoleTriangleCenterPoint.Y, Math.PI);
             ClearSelection(ref modulePart);
         }
+
+        // make the center of the pin hole triangle coincident with the extrusion axis
+        currentPinHoleTriangleCenterPoint?.Select4(true, swSelectData);
+        bottomSurfaceSketchPointList[moduleIndex].Select4(true, swSelectData);
+        MakeSelectedCoincide(ref modulePart);
+        ClearSelection(ref modulePart);
+
         // Make the flattest side parallel to the flattest side of the full triangle
         SketchLine? aLongSidePinHoleTriangle = GetMostHorizontalTriangleSide(ref pinHoleTriangleSegments);
         ((SketchSegment)aLongSidePinHoleTriangle).Select4(true, swSelectData);
         ((SketchSegment)aLongSideFullTriangle).Select4(true, swSelectData);
         MakeSelectedLinesParallel(ref modulePart);
+        ClearSelection(ref modulePart);
 
         // quit editing the pin hole triangle sketch
         modulePart.InsertSketch2(true);
         ClearSelection(ref modulePart);
+
         // extrude the pin holes
-        // TODO: check if the pin hole depth is right
+        // TODO: check if the pin hole depth is right - this is wrong sometimes
         double extrusionDepth = GetDistanceBetweenTwoSketchPoints(currentPinHoleTriangleCenterPoint, supportSurfaceMarkerPointList[moduleIndex])
                                 + pinHoleDepth;
         SelectSketch(ref modulePart, pastedPinHoleTriangleSheetname);
         Feature pinHoleExtrusion = CreateTwoWayExtrusionD1ToDistanceD2ThroughAll(ref modulePart, extrusionDepth);
+        if (pinHoleExtrusion == null)
+        {
+            Console.WriteLine($"Failed to extrude pin hole {moduleIndex}");
+        }
         pinHoleExtrusion.Name = $"pinHoleExtrusion_{moduleIndex}";
         ClearSelection(ref modulePart);
 
