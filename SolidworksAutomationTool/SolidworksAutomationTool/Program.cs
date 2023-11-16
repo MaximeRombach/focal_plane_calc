@@ -809,9 +809,17 @@ using (ProgressBar extrudeModulesProgressBar = new(bottomSurfaceSketchPointList.
         ClearSelection(ref modulePart);
 
         // extrude the pin holes
-        // TODO: check if the pin hole depth is right - this is wrong sometimes
+        // TODO: check if the pin hole depth is right - The two points seem to be in different reference frames
         double extrusionDepth = GetDistanceBetweenTwoSketchPoints(currentPinHoleTriangleCenterPoint, supportSurfaceMarkerPointList[moduleIndex])
                                 + pinHoleDepth;
+
+        // DEBUG: check what is the support surface point
+        currentPinHoleTriangleCenterPoint.Select4(false, swSelectData);
+        ClearSelection(ref modulePart);
+
+        PrintSketchPoint(currentPinHoleTriangleCenterPoint, $"pin hole center {moduleIndex}");
+        PrintSketchPoint(supportSurfaceMarkerPointList[moduleIndex], $"support surface center {moduleIndex}");
+        Debug.WriteLine($"Extrusion depth at module {moduleIndex} is {extrusionDepth} meters");
         SelectSketch(ref modulePart, pastedPinHoleTriangleSheetname);
         Feature pinHoleExtrusion = CreateTwoWayExtrusionD1ToDistanceD2ThroughAll(ref modulePart, extrusionDepth);
         if (pinHoleExtrusion == null)
