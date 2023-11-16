@@ -108,6 +108,12 @@ namespace SolidworksAutomationTool
             }
         }
 
+        /* Print a sketch point's coordinates to the Debug stream */
+        public static void PrintSketchPoint(SketchPoint aPoint, string pointName)
+        {
+            Debug.WriteLine($"Point {pointName}: x: {aPoint.X}, y: {aPoint.Y}, z: {aPoint.Z}");
+        }
+
         /* Debug function to see the features inside the feature manager design tree
          * This function can be used to check if a feature is created as expected
          */
