@@ -114,10 +114,17 @@ namespace SolidworksAutomationTool
             Debug.WriteLine($"Point {pointName}: x: {aPoint.X}, y: {aPoint.Y}, z: {aPoint.Z}");
         }
 
-        /* Debug function to see the features inside the feature manager design tree
-         * This function can be used to check if a feature is created as expected
-         */
-        public static void PrintFeaturesInFeatureManagerDesignTree(ref ModelDoc2 partModelDoc)
+        /* Print a math point's coordinates to the Debug stream */
+        public static void PrintMathPoint(MathPoint aPoint, string pointName)
+        {
+            double[] pointDataArray = (double[])aPoint.ArrayData;
+            Debug.WriteLine($"Point {pointName}: x: {pointDataArray[0]}, y: {pointDataArray[1]}, z: {pointDataArray[2]}");
+        }
+
+    /* Debug function to see the features inside the feature manager design tree
+     * This function can be used to check if a feature is created as expected
+     */
+    public static void PrintFeaturesInFeatureManagerDesignTree(ref ModelDoc2 partModelDoc)
         {
             Debug.WriteLine("Printing features in this part:");
             int numberOfFeatures = partModelDoc.GetFeatureCount();
@@ -195,10 +202,15 @@ namespace SolidworksAutomationTool
             return basicReferenceGeometry;
         }
 
-        /* Get the distance between two sketch points */
-        public static double GetDistanceBetweenTwoSketchPoints(SketchPoint p1, SketchPoint p2)
+        /* Get the distance between two math points */
+        public static double GetDistanceBetweenTwoMathPoints(MathPoint p1, MathPoint p2)
         {
-            return Math.Sqrt(Math.Pow(p1.X - p2.X, 2.0) + Math.Pow(p1.Y - p2.Y, 2.0) + Math.Pow(p1.Z - p2.Z, 2.0));
+            double[] p1DataArray = (double[])p1.ArrayData;
+            double[] p2DataArray = (double[])p2.ArrayData;
+
+            return Math.Sqrt(   Math.Pow(p1DataArray[0] - p2DataArray[0], 2.0) +
+                                Math.Pow(p1DataArray[1] - p2DataArray[1], 2.0) + 
+                                Math.Pow(p1DataArray[2] - p2DataArray[2], 2.0));
         }
 
         /* Get the number of features in this document */
