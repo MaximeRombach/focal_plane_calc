@@ -57,7 +57,7 @@ Can repeatedly create sketches of modules(both chamfered and unchamfered) and ex
 ## On optimizations
 
 - [ ] Make wrapper functions to reduce boilerplat code
-- [ ] Optionally add a progress bar in the console version of the Automation Tool
+- [x] Optionally add a progress bar in the console version of the Automation Tool
 
 ## On documentation
 
