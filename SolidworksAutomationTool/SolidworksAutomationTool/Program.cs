@@ -804,13 +804,31 @@ using (ProgressBar extrudeModulesProgressBar = new(bottomSurfaceSketchPointList.
         MakeSelectedLinesParallel(ref modulePart);
         ClearSelection(ref modulePart);
 
+        // DEBUG: get the trans mat from model frame to local sketch frame
+        MathTransform globalToSketchTransformMat = modulePart.SketchManager.ActiveSketch.ModelToSketchTransform;
+
         // quit editing the pin hole triangle sketch
         modulePart.InsertSketch2(true);
         ClearSelection(ref modulePart);
 
         // extrude the pin holes
-        // TODO: check if the pin hole depth is right - The two points seem to be in different reference frames
-        double extrusionDepth = GetDistanceBetweenTwoSketchPoints(currentPinHoleTriangleCenterPoint, supportSurfaceMarkerPointList[moduleIndex])
+        // TODO: correct the pin hole depth calculation.
+        // The currentPinHoleTriangleCenterPoint is in the 2d sketch's local frame.
+        // The support surface markers are all in 3D global frame (seems)
+        // Need to transform the currentPinHoleTriangleCenterPoint into the global frame before calculating the 3D Euclidean distance
+
+        // DEBUG: try to transform the support surface marker point in the local sketch's frame
+        MathUtility swMathUtility = (MathUtility)solidworksApp.GetMathUtility();
+        MathPoint supportSurfaceMathPointInModelFrame = (MathPoint)swMathUtility.CreatePoint(new double[] { supportSurfaceMarkerPointList[moduleIndex].X, 
+                                                                                                            supportSurfaceMarkerPointList[moduleIndex].Y, 
+                                                                                                            supportSurfaceMarkerPointList[moduleIndex].Z });
+        MathPoint supportSurfaceMathPointInSketchFrame = (MathPoint)supportSurfaceMathPointInModelFrame.MultiplyTransform(globalToSketchTransformMat);
+
+        MathPoint currentPinHoleTriangleCenterMathPoint = (MathPoint)swMathUtility.CreatePoint(new double[] {
+                                                                                                    currentPinHoleTriangleCenterPoint.X,
+                                                                                                    currentPinHoleTriangleCenterPoint.Y,
+                                                                                                    currentPinHoleTriangleCenterPoint.Z });
+        double extrusionDepth = GetDistanceBetweenTwoMathPoints(currentPinHoleTriangleCenterMathPoint, supportSurfaceMathPointInSketchFrame)
                                 + pinHoleDepth;
 
         // DEBUG: check what is the support surface point
@@ -818,7 +836,7 @@ using (ProgressBar extrudeModulesProgressBar = new(bottomSurfaceSketchPointList.
         ClearSelection(ref modulePart);
 
         PrintSketchPoint(currentPinHoleTriangleCenterPoint, $"pin hole center {moduleIndex}");
-        PrintSketchPoint(supportSurfaceMarkerPointList[moduleIndex], $"support surface center {moduleIndex}");
+        PrintMathPoint(currentPinHoleTriangleCenterMathPoint, $"support surface center in Sketch Frame {moduleIndex}");
         Debug.WriteLine($"Extrusion depth at module {moduleIndex} is {extrusionDepth} meters");
         SelectSketch(ref modulePart, pastedPinHoleTriangleSheetname);
         Feature pinHoleExtrusion = CreateTwoWayExtrusionD1ToDistanceD2ThroughAll(ref modulePart, extrusionDepth);
