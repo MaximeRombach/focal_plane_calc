@@ -780,7 +780,7 @@ using (ProgressBar extrudeModulesProgressBar = new(bottomSurfaceSketchPointList.
         //
         object[] pinHoleTriangleSegments = (object[])lastPinHoleTriangleSketch.GetSketchSegments();
 
-        SketchPoint? currentPinHoleTriangleCenterPoint = GetPinHoleTriangleCenterPoint(ref pinHoleTriangleSegments);
+        SketchPoint? currentPinHoleTriangleCenterPoint = GetTriangleCenterPoint(ref pinHoleTriangleSegments);
         ClearSelection(ref modulePart);
         // rotate the pin hole triangle if necessary, according to the orientation flag
         if (!isUpright)
