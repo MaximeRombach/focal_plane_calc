@@ -244,16 +244,36 @@ namespace SolidworksAutomationTool
          * Returns the center point as a sketch point if the polygon contains a Sketch Arc
          *          else, returns null.
          */
-        public static SketchPoint? GetTriangleCenterPoint(ref object[] polygon)
+        public static SketchPoint? GetTriangleCenterPoint(ref object[] trianglePolygon)
         {
-            foreach (SketchSegment triangleSegment in polygon.Reverse().Cast<SketchSegment>())
+
+            // the trick is to check the ForConstruction property of the circles. Only the inscribed circle is marked for construction
+            // the pin holes are all solid shapes
+            foreach (SketchSegment triangleSegment in trianglePolygon.Cast<SketchSegment>())
             {
-                if (triangleSegment.GetType() == (int)swSketchSegments_e.swSketchARC)
+                if (triangleSegment.GetType() == (int)swSketchSegments_e.swSketchARC && triangleSegment.ConstructionGeometry)
                 {
                     return (SketchPoint)((SketchArc)triangleSegment).GetCenterPoint2(); ;
                 }
             }
             return null;
+        }
+
+        /* Returns a list of the vertices in a full triangle */
+        public static List<SketchPoint> GetVerticesInTriangle(ref object[] trianglePolygon)
+        {
+            // get the vertices of the triangle.
+            // the same vertex will be shared by two lines. We use the hashSet to pick only the unique vertices
+            HashSet<SketchPoint> verticesInTriangleSet = new();
+            foreach (SketchSegment triangleSegment in trianglePolygon.Cast<SketchSegment>())
+            {
+                if (triangleSegment.GetType() == (int)swSketchSegments_e.swSketchLINE)
+                {
+                    verticesInTriangleSet.Add((SketchPoint)((SketchLine)triangleSegment).GetStartPoint2());
+                    verticesInTriangleSet.Add((SketchPoint)((SketchLine)triangleSegment).GetEndPoint2());
+                }
+            }
+            return verticesInTriangleSet.ToList();
         }
 
         /* A function to get the center point of the inscribed construction circle inside the pin hole triangle. 
