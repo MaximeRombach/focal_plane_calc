@@ -276,23 +276,6 @@ namespace SolidworksAutomationTool
             return verticesInTriangleSet.ToList();
         }
 
-        /* A function to get the center point of the inscribed construction circle inside the pin hole triangle. 
-         * Since the pin hole triangle has 4 circles (3 pin holes and 1 inscribed construction circle)
-         */
-        public static SketchPoint? GetPinHoleTriangleCenterPoint(ref object[] pinHoleTriangle)
-        {
-            // the trick is to check the ForConstruction property of the circles. Only the inscribed circle is marked for construction
-            // the pin holes are all solid shapes
-            foreach (SketchSegment segment in pinHoleTriangle.Cast<SketchSegment>())
-            {
-                if (segment.GetType() == (int)swSketchSegments_e.swSketchARC && segment.ConstructionGeometry)
-                {
-                    return (SketchPoint)((SketchArc)segment).GetCenterPoint2(); ;
-                }
-            }
-            return null;
-        }
-
         /* A function to get one of the sides of a triangle polygon
          * Returns a side of the triangle if the polygon contains at least a Sketch line
          *  else Returns null
