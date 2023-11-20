@@ -5,16 +5,19 @@ using SolidWorks.Interop.swconst;
 using SolidworksAutomationTool;
 using static SolidworksAutomationTool.ScaffoldFunctions;
 using ShellProgressBar;
+using System.Diagnostics;
 
 /* Define some parameters here. These parameters should be configurable in the GUI */
-// TODO: param: chamfer length
+// TODO: param: chamfer length of a chamfered triangle
 const double chamferLength = 10.5e-3;               // in meters
 // TODO: param: pin hole diameter
 const double pinHoleDiameter = 2.5e-3;              // in meters
 // TODO: param: pin hole depth
-const double pinHoleDepth = 35e-3;                   // in meters
+const double pinHoleDepth = 35e-3;                  // in meters
 // TODO: param: inter pin hole distance 
 const double interPinHoleDistance = 64e-3;          // in meters
+// TODO: param: fillet radius in full triangle
+const double filletRadiusFullTriangle = 2.5e-3;     // in meters 
 
 // TODO: param: bestFitSphereRadius.
 const double bestFitSphereRadius = 11045.6e-3;      // in meters
@@ -95,7 +98,7 @@ solidworksApp.Visible = true;
 Console.WriteLine("Please wait a bit. SolidWorks should appear. If not, there is an error starting solidworks");
 
 /* Start modeling the robot holder in the focal plane */
-PromptAndWait("Press any key to create the robot-holder from the point clouds");
+//PromptAndWait("Press any key to create the robot-holder from the point clouds");
 Console.WriteLine("Creating extrusion axes from point clouds ...");
 
 // create a part
@@ -516,6 +519,14 @@ if (fullTriangleCenter != null)
     ClearSelection(ref modulePart);
 }
 
+List<SketchPoint> verticesInFullTriangle = GetVerticesInTriangle(ref fullTrianglePolygon);
+verticesInFullTriangle.ForEach(vertex =>
+{
+    vertex.Select4(true, swSelectData);
+    SketchSegment addedFillet = modulePart.SketchManager.CreateFillet(filletRadiusFullTriangle, (int)swConstrainedCornerAction_e.swConstrainedCornerKeepGeometry);
+    ClearSelection(ref modulePart);
+});
+
 // Give the first full triangle sketch a special name. 
 ((Feature)modulePart.SketchManager.ActiveSketch).Name = "Full Triangle Sketch";
 string fullTriangleSketchName = ((Feature)modulePart.SketchManager.ActiveSketch).Name;
@@ -544,17 +555,9 @@ if (oneSideOfPinHoleTriangle != null)
 }
 // Add the pin holes on 3 vertices
 // first find the vertices in a pin hole triangle
-HashSet<SketchPoint> verticesInPinHoleTriangleSet = new();
-foreach (SketchSegment segment in pinHoleConstructionTriangle.Cast<SketchSegment>())
-{
-    if (segment.GetType() == (int)swSketchSegments_e.swSketchLINE)
-    {
-        verticesInPinHoleTriangleSet.Add((SketchPoint)((SketchLine)segment).GetStartPoint2());
-        verticesInPinHoleTriangleSet.Add((SketchPoint)((SketchLine)segment).GetEndPoint2());
-    }
-}
+List<SketchPoint> verticesInPinHoleTriangle = GetVerticesInTriangle(ref pinHoleConstructionTriangle);
 // add pin hole at every vertex
-verticesInPinHoleTriangleSet.ToList().ForEach(vertex =>
+verticesInPinHoleTriangle.ForEach(vertex =>
 {
     SketchSegment? pinHole = modulePart.SketchManager.CreateCircleByRadius(vertex.X, vertex.Y, 0, pinHoleDiameter);
     // dimension the pin hole's diammeter
@@ -565,7 +568,7 @@ verticesInPinHoleTriangleSet.ToList().ForEach(vertex =>
 });
 
 // coincide the center point of the pin hole triangle to the extrusion axis
-SketchPoint? pinHoleTriangleCenterPoint = GetPinHoleTriangleCenterPoint(ref pinHoleConstructionTriangle);
+SketchPoint? pinHoleTriangleCenterPoint = GetTriangleCenterPoint(ref pinHoleConstructionTriangle);
 if (pinHoleTriangleCenterPoint != null)
 {
     pinHoleTriangleCenterPoint.Select4(true, swSelectData);
@@ -585,8 +588,8 @@ ClearSelection(ref modulePart);
 // TODO: reduce boilerplat code and move code to scaffold functions
 
 // try to gain speed by locking the user interface
-modelView.EnableGraphicsUpdate = true;
-modulePart.SketchManager.DisplayWhenAdded = true;
+modelView.EnableGraphicsUpdate = false; // This property affects whether to refresh the model view during a selection
+modulePart.SketchManager.DisplayWhenAdded = false;
 // try the magic disable feature manager scroll to view to hopefully boost performance
 solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swFeatureManagerEnsureVisible, false);
 //modulePart.Lock();
@@ -629,11 +632,12 @@ using (ProgressBar extrudeModulesProgressBar = new(bottomSurfaceSketchPointList.
         //DEBUG:
         Debug.WriteLine($"Number of features post-copy chamfered sketch: {GetFeatureCount(ref modulePart)}");
 
-        // select the last pasted sketch
+        // select the last pasted sketch. It should be a chamfered triangle sketch feature
         Feature lastSketchFeature = (Feature)modulePart.FeatureByPositionReverse(0);
         Debug.WriteLine($"Feature name (s.t.b chamfered tri sketch): {lastSketchFeature.Name}");
 
         lastSketchFeature.Select2(false, -1);
+        // actually get the underlying chamfered sketch
         Sketch lastChamferedSketch = (Sketch)lastSketchFeature.GetSpecificFeature2();
         // edit the newly created sketch to add constraints
         ((Feature)lastChamferedSketch).Select2(false, -1);
@@ -775,7 +779,6 @@ using (ProgressBar extrudeModulesProgressBar = new(bottomSurfaceSketchPointList.
         string pastedPinHoleTriangleSheetname = ((Feature)lastPinHoleTriangleSketch).Name;
         //
         object[] pinHoleTriangleSegments = (object[])lastPinHoleTriangleSketch.GetSketchSegments();
-        PrintPolygonDataStructure(ref pinHoleTriangleSegments);
 
         SketchPoint? currentPinHoleTriangleCenterPoint = GetPinHoleTriangleCenterPoint(ref pinHoleTriangleSegments);
         ClearSelection(ref modulePart);
