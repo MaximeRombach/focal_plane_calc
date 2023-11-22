@@ -585,6 +585,60 @@ namespace SolidworksAutomationTool
             return pastedPinHoleSketch;
         }
 
+        /* Create a copy of the chamfered triangle sketch on a given plane using a reference chamfered triangle sketch */
+        public static (Sketch, SketchPoint, SketchLine) CreateChamferedTriangleSketchFromReferenceSketch(ref ModelDoc2 partModelDoc, RefPlane plane, SelectData swSelectData, string chamferedTriangleSketchName, bool isUprightTriangle, SketchPoint pointToCoincide)
+        {
+            // copy the chamfered triangle sketch //
+            SelectSketch(ref partModelDoc, chamferedTriangleSketchName);
+            partModelDoc.EditCopy();
+            ((Feature)plane).Select2(true, -1);
+            partModelDoc.Paste();
+
+            // select the last pasted sketch. It should be a chamfered triangle sketch feature
+            Feature lastSketchFeature = (Feature)partModelDoc.FeatureByPositionReverse(0);
+            lastSketchFeature.Select2(false, -1);
+            // actually get the underlying chamfered sketch
+            Sketch pastedChamferedSketch = (Sketch)lastSketchFeature.GetSpecificFeature2();
+            // edit the newly created sketch to add constraints
+            ((Feature)pastedChamferedSketch).Select2(false, -1);
+            partModelDoc.EditSketch();
+            // make the center of the chamfered module coincident with the extrusion axis
+            object[] segments = (object[])pastedChamferedSketch.GetSketchSegments();
+            SketchPoint? chamferedTriangleCenterPoint = GetTriangleCenterPoint(ref segments);
+
+            // TODO: add constraints to the chamfered modules to orient the module
+            if (!isUprightTriangle)
+            {
+                ClearSelection(ref partModelDoc);
+                // orientation flag is false, meaning the module should be upside-down
+                SelectAllSketchSegments(ref segments, swSelectData);
+                RotateSelected(ref partModelDoc, chamferedTriangleCenterPoint.X, chamferedTriangleCenterPoint.Y, Math.PI);
+                ClearSelection(ref partModelDoc);
+            }
+            chamferedTriangleCenterPoint?.Select4(true, swSelectData);
+            pointToCoincide.Select4(true, swSelectData);
+            MakeSelectedCoincide(ref partModelDoc);
+            ClearSelection(ref partModelDoc);
+
+            // TESTING: make one of the sides to be in parallel to the most positively sloped side of the first reference chamfered triangle
+            // TODO: check if can set one side of the chamfered triangle to be in parallel with the first chamfered triangle
+            //SketchSegment? unchamferedTriangleMostPositiveSlopedSide = GetMostPositiveSlopedSideInChamferedTriangle(ref segments);
+            // TODO: temporary workaround, simply set one of the sides to be in horizontal to fully define each chamfered triangle
+            SketchLine aRelativelyFlatSide = GetMostHorizontalTriangleSide(ref segments);
+            ((SketchSegment)aRelativelyFlatSide).Select4(true, swSelectData);
+            MakeSelectedLineHorizontal(ref partModelDoc);
+            ClearSelection(ref partModelDoc);
+
+            // get a handle on the longest most horizontal side of a chamfered triangle.
+            // This side will be used as a reference to set parallel constraint to a side of a full triangle
+            SketchLine? aLongSideChamferedTriangle = GetLongestMostHorizontalTriangleSide(ref segments);
+
+            // quit editing sketch
+            partModelDoc.InsertSketch2(true);
+
+            return (pastedChamferedSketch, chamferedTriangleCenterPoint, aLongSideChamferedTriangle);
+        }
+
         /* A wrapper function to enable the dimension dialog when an operation requires some input */
         public static void EnableInputDimensionByUser(ref SldWorks solidworks)
         {

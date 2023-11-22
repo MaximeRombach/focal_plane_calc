@@ -622,70 +622,23 @@ using (ProgressBar extrudeModulesProgressBar = new(bottomSurfaceSketchPointList.
         Debug.WriteLine($"Number of features Precopy chamfered sketch: {GetFeatureCount(ref modulePart)}");
 
         // copy the chamfered triangle sketch //
-        SelectSketch(ref modulePart, chamferedSketchName);
-        modulePart.EditCopy();
-        ((Feature)aRefPlane).Select2(true, -1);
-        modulePart.Paste();
+        (Sketch pastedChamferedTriangleSketch, SketchPoint chamferedTriangleCenter, SketchLine aLongSideChamferedTriangle) = CreateChamferedTriangleSketchFromReferenceSketch(
+                                                                                                                                                ref modulePart,
+                                                                                                                                                aRefPlane,
+                                                                                                                                                swSelectData,
+                                                                                                                                                chamferedSketchName,
+                                                                                                                                                isUpright,
+                                                                                                                                                bottomSurfaceSketchPointList[moduleIndex]);
 
-        // DEBUG: try to manually update the feature tree to avoid missing the last pasted sketch
-        modulePart.FeatureManager.UpdateFeatureTree();
-        //DEBUG:
-        Debug.WriteLine($"Number of features post-copy chamfered sketch: {GetFeatureCount(ref modulePart)}");
-
-        // select the last pasted sketch. It should be a chamfered triangle sketch feature
-        Feature lastSketchFeature = (Feature)modulePart.FeatureByPositionReverse(0);
-        Debug.WriteLine($"Feature name (s.t.b chamfered tri sketch): {lastSketchFeature.Name}");
-
-        lastSketchFeature.Select2(false, -1);
-        // actually get the underlying chamfered sketch
-        Sketch lastChamferedSketch = (Sketch)lastSketchFeature.GetSpecificFeature2();
-        // edit the newly created sketch to add constraints
-        ((Feature)lastChamferedSketch).Select2(false, -1);
-        modulePart.EditSketch();
-        // record the pasted sheet's name for the extrusion later
-        string pastedChamferedTriangleSheetName = GetActiveSketchName(ref modulePart);
-        // make the center of the chamfered module coincident with the extrusion axis
-        object[] segments = (object[])lastChamferedSketch.GetSketchSegments();
-        SketchPoint? chamferedTriangleCenterPoint = GetTriangleCenterPoint(ref segments);
-
-        // TODO: add constraints to the chamfered modules to orient the module
-        if (!isUpright)
-        {
-            ClearSelection(ref modulePart);
-            // orientation flag is false, meaning the module should be upside-down
-            SelectAllSketchSegments(ref segments, swSelectData);
-            RotateSelected(ref modulePart, chamferedTriangleCenterPoint.X, chamferedTriangleCenterPoint.Y, Math.PI);
-            ClearSelection(ref modulePart);
-        }
-
-        chamferedTriangleCenterPoint?.Select4(true, swSelectData);
-        bottomSurfaceSketchPointList[moduleIndex].Select4(true, swSelectData);
-        MakeSelectedCoincide(ref modulePart);
-        ClearSelection(ref modulePart);
-
-        // TESTING: make one of the sides to be in parallel to the most positively sloped side of the first reference chamfered triangle
-        // TODO: check if can set one side of the chamfered triangle to be in parallel with the first chamfered triangle
-        //SketchSegment? unchamferedTriangleMostPositiveSlopedSide = GetMostPositiveSlopedSideInChamferedTriangle(ref segments);
-        // TODO: temporary workaround, simply set one of the sides to be in horizontal to fully define each chamfered triangle
-        SketchLine aRelativelyFlatSide = GetMostHorizontalTriangleSide(ref segments);
-        ((SketchSegment)aRelativelyFlatSide).Select4(true, swSelectData);
-        MakeSelectedLineHorizontal(ref modulePart);
-        ClearSelection(ref modulePart);
-
-        // get a handle on the longest most horizontal side of a chamfered triangle.
-        // This side will be used as a reference to set parallel constraint to a side of a full triangle
-        SketchLine? aLongSideChamferedTriangle = GetLongestMostHorizontalTriangleSide(ref segments);
-
-        // quit editing sketch
-        modulePart.InsertSketch2(true);
         ClearSelection(ref modulePart);
         // extrude the chamfered triangle
-        SelectSketch(ref modulePart, pastedChamferedTriangleSheetName);
+        SelectSketch(ref modulePart, ((Feature)pastedChamferedTriangleSketch).Name);
         Feature chamferedExtrusion = CreateTwoWayExtrusion(ref modulePart);
         chamferedExtrusion.Name = $"chamferedExtrusion_{moduleIndex}";
         ClearSelection(ref modulePart);
 
         /// Now make the unchamfered/full triangle extrusion ///
+        /// TODO: move the full triangle creation to a scaffold function
         //DEBUG:
         Debug.WriteLine($"Number of features Precopy full tri sketch: {GetFeatureCount(ref modulePart)}");
 
@@ -700,7 +653,7 @@ using (ProgressBar extrudeModulesProgressBar = new(bottomSurfaceSketchPointList.
         Debug.WriteLine($"Number of features Post copy full tri sketch: {GetFeatureCount(ref modulePart)}");
 
         // select the last pasted full triangle sketch
-        lastSketchFeature = (Feature)modulePart.FeatureByPositionReverse(0);
+        Feature lastSketchFeature = (Feature)modulePart.FeatureByPositionReverse(0);
         Debug.WriteLine($"Feature name (s.t.b full tri sketch): {lastSketchFeature.Name}");
 
         lastSketchFeature.Select2(false, -1);
