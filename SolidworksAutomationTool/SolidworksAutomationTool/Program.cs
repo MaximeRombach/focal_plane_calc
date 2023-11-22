@@ -653,10 +653,7 @@ using (ProgressBar extrudeModulesProgressBar = new(bottomSurfaceSketchPointList.
         {
             ClearSelection(ref modulePart);
             // orientation flag is false, meaning the module should be upside-down
-            foreach(SketchSegment segment in segments.Cast<SketchSegment>())
-            {
-                segment.Select4(true, swSelectData);
-            }
+            SelectAllSketchSegments(ref segments, swSelectData);
             RotateSelected(ref modulePart, chamferedTriangleCenterPoint.X, chamferedTriangleCenterPoint.Y, Math.PI);
             ClearSelection(ref modulePart);
         }
@@ -725,10 +722,7 @@ using (ProgressBar extrudeModulesProgressBar = new(bottomSurfaceSketchPointList.
         if (!isUpright)
         {
             // orientation flag is false, meaning the module should be upside-down
-            foreach (SketchSegment fullTriangleSegment in fullTriangleSegments.Cast<SketchSegment>())
-            {
-                fullTriangleSegment.Select4(true, swSelectData);
-            }
+            SelectAllSketchSegments(ref fullTriangleSegments, swSelectData);
             RotateSelected(ref modulePart, fullTriangleCenterPoint.X, fullTriangleCenterPoint.Y, Math.PI);
             ClearSelection(ref modulePart);
         }
@@ -752,96 +746,35 @@ using (ProgressBar extrudeModulesProgressBar = new(bottomSurfaceSketchPointList.
         //DEBUG:
         Debug.WriteLine($"Number of features Precopy pin hole sketch: {GetFeatureCount(ref modulePart)}");
 
-        /// Make pin holes - first test seems fine! ///
-        // copy and paste the pin hole triangle sketch
-        SelectSketch(ref modulePart, pinHoleTriangleSketchName);
-        modulePart.EditCopy();
-        ((Feature)aRefPlane).Select2(true, -1);
-        modulePart.Paste();
+        /// Make pin holes - first test seems fine! ///        
+        Sketch lastPinHoleTriangleSketch = CreatePinHoleSketchFromReferenceSketch(ref modulePart, aRefPlane, swSelectData, pinHoleTriangleSketchName,
+                                                                                    isUpright, bottomSurfaceSketchPointList[moduleIndex],
+                                                                                    (SketchSegment)aLongSideFullTriangle);
+        MathTransform globalToSketchTransformMat = lastPinHoleTriangleSketch.ModelToSketchTransform;
 
-        //// DEBUG: try to manually update the feature tree to avoid missing the last pasted sketch
-        modulePart.FeatureManager.UpdateFeatureTree();
-        ////DEBUG:
-        Debug.WriteLine($"Number of features Post-copy pin hole sketch: {GetFeatureCount(ref modulePart)}");
-
-        //// select the last pasted pin hole triangle sketch
-        Feature pastedPinHoleSketch = (Feature)modulePart.FeatureByPositionReverse(0);
-
-        pastedPinHoleSketch.Select2(false, -1);
-        Sketch lastPinHoleTriangleSketch = (Sketch)pastedPinHoleSketch.GetSpecificFeature2();
-        ClearSelection(ref modulePart);
-        //// edit the newly created pin hole triangle sketch to add constraints
-        ((Feature)lastPinHoleTriangleSketch).Select2(false, -1);
-        Debug.WriteLine($"Feature name (s.t.b pin tri sketch): {((Feature)lastPinHoleTriangleSketch).Name}");
-        modulePart.EditSketch();
-        //// record the pasted pin hole triangle's sketch name
-        //string pastedPinHoleTriangleSheetname = GetActiveSketchName(ref modulePart);
-        string pastedPinHoleTriangleSheetname = ((Feature)lastPinHoleTriangleSketch).Name;
-        //
-        object[] pinHoleTriangleSegments = (object[])lastPinHoleTriangleSketch.GetSketchSegments();
-
-        SketchPoint? currentPinHoleTriangleCenterPoint = GetTriangleCenterPoint(ref pinHoleTriangleSegments);
-        ClearSelection(ref modulePart);
-        // rotate the pin hole triangle if necessary, according to the orientation flag
-        if (!isUpright)
-        {
-            // orientation flag is false, meaning the module should be upside-down
-            foreach (SketchSegment pinHoleTriangleSegment in pinHoleTriangleSegments.Cast<SketchSegment>())
-            {
-                pinHoleTriangleSegment.Select4(true, swSelectData);
-            }
-            RotateSelected(ref modulePart, pinHoleTriangleCenterPoint.X, pinHoleTriangleCenterPoint.Y, Math.PI);
-            ClearSelection(ref modulePart);
-        }
-
-        // make the center of the pin hole triangle coincident with the extrusion axis
-        currentPinHoleTriangleCenterPoint?.Select4(true, swSelectData);
-        bottomSurfaceSketchPointList[moduleIndex].Select4(true, swSelectData);
-        MakeSelectedCoincide(ref modulePart);
-        ClearSelection(ref modulePart);
-
-        // Make the flattest side parallel to the flattest side of the full triangle
-        SketchLine? aLongSidePinHoleTriangle = GetMostHorizontalTriangleSide(ref pinHoleTriangleSegments);
-        ((SketchSegment)aLongSidePinHoleTriangle).Select4(true, swSelectData);
-        ((SketchSegment)aLongSideFullTriangle).Select4(true, swSelectData);
-        MakeSelectedLinesParallel(ref modulePart);
-        ClearSelection(ref modulePart);
-
-        // DEBUG: get the trans mat from model frame to local sketch frame
-        MathTransform globalToSketchTransformMat = modulePart.SketchManager.ActiveSketch.ModelToSketchTransform;
-
-        // quit editing the pin hole triangle sketch
-        modulePart.InsertSketch2(true);
-        ClearSelection(ref modulePart);
 
         // extrude the pin holes
-        // TODO: correct the pin hole depth calculation.
         // The currentPinHoleTriangleCenterPoint is in the 2d sketch's local frame.
-        // The support surface markers are all in 3D global frame (seems)
+        // The support surface markers are all in 3D global frame
         // Need to transform the currentPinHoleTriangleCenterPoint into the global frame before calculating the 3D Euclidean distance
-
         // DEBUG: try to transform the support surface marker point in the local sketch's frame
         MathUtility swMathUtility = (MathUtility)solidworksApp.GetMathUtility();
         MathPoint supportSurfaceMathPointInModelFrame = (MathPoint)swMathUtility.CreatePoint(new double[] { supportSurfaceMarkerPointList[moduleIndex].X, 
                                                                                                             supportSurfaceMarkerPointList[moduleIndex].Y, 
                                                                                                             supportSurfaceMarkerPointList[moduleIndex].Z });
-        MathPoint supportSurfaceMathPointInSketchFrame = (MathPoint)supportSurfaceMathPointInModelFrame.MultiplyTransform(globalToSketchTransformMat);
+        //MathPoint supportSurfaceMathPointInSketchFrame = (MathPoint)supportSurfaceMathPointInModelFrame.MultiplyTransform(globalToSketchTransformMat);
 
         MathPoint currentPinHoleTriangleCenterMathPoint = (MathPoint)swMathUtility.CreatePoint(new double[] {
-                                                                                                    currentPinHoleTriangleCenterPoint.X,
-                                                                                                    currentPinHoleTriangleCenterPoint.Y,
-                                                                                                    currentPinHoleTriangleCenterPoint.Z });
-        double extrusionDepth = GetDistanceBetweenTwoMathPoints(currentPinHoleTriangleCenterMathPoint, supportSurfaceMathPointInSketchFrame)
+                                                                                                    bottomSurfaceSketchPointList[moduleIndex].X,
+                                                                                                    bottomSurfaceSketchPointList[moduleIndex].Y,
+                                                                                                    bottomSurfaceSketchPointList[moduleIndex].Z });
+        double extrusionDepth = GetDistanceBetweenTwoMathPoints(currentPinHoleTriangleCenterMathPoint, supportSurfaceMathPointInModelFrame)
                                 + pinHoleDepth;
 
         // DEBUG: check what is the support surface point
-        currentPinHoleTriangleCenterPoint.Select4(false, swSelectData);
-        ClearSelection(ref modulePart);
-
-        PrintSketchPoint(currentPinHoleTriangleCenterPoint, $"pin hole center {moduleIndex}");
         PrintMathPoint(currentPinHoleTriangleCenterMathPoint, $"support surface center in Sketch Frame {moduleIndex}");
         Debug.WriteLine($"Extrusion depth at module {moduleIndex} is {extrusionDepth} meters");
-        SelectSketch(ref modulePart, pastedPinHoleTriangleSheetname);
+        SelectSketch(ref modulePart, ((Feature)lastPinHoleTriangleSketch).Name);
         Feature pinHoleExtrusion = CreateTwoWayExtrusionD1ToDistanceD2ThroughAll(ref modulePart, extrusionDepth);
         if (pinHoleExtrusion == null)
         {
