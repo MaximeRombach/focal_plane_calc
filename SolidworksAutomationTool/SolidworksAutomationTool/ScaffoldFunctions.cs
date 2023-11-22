@@ -72,6 +72,17 @@ namespace SolidworksAutomationTool
             partModelDoc.Extension.SelectByID2(sketchName, "SKETCH", 0, 0, 0, appendToSelection, 0, null, 0);
         }
 
+        /* Wrapper function to select all sketch segments in a given array.
+         * NOTE: this function does not clear previous selections. The user should manually clear selections if needed
+         */
+        public static void SelectAllSketchSegments(ref object[] segmentArray, SelectData swSelectData)
+        {
+            foreach (SketchSegment segment in segmentArray.Cast<SketchSegment>())
+            {
+                segment.Select4(true, swSelectData);
+            }
+        }
+
         /*Wrapper function to rotate selected sketch segments by certain angle.
          * NOTE: this function preserves the sketch relations from the source sketch
          */
@@ -121,10 +132,10 @@ namespace SolidworksAutomationTool
             Debug.WriteLine($"Point {pointName}: x: {pointDataArray[0]}, y: {pointDataArray[1]}, z: {pointDataArray[2]}");
         }
 
-    /* Debug function to see the features inside the feature manager design tree
+        /* Debug function to see the features inside the feature manager design tree
      * This function can be used to check if a feature is created as expected
      */
-    public static void PrintFeaturesInFeatureManagerDesignTree(ref ModelDoc2 partModelDoc)
+        public static void PrintFeaturesInFeatureManagerDesignTree(ref ModelDoc2 partModelDoc)
         {
             Debug.WriteLine("Printing features in this part:");
             int numberOfFeatures = partModelDoc.GetFeatureCount();
@@ -521,6 +532,58 @@ namespace SolidworksAutomationTool
             return extrusionFeature;
         }
 
+        /* Create a copy of the pin hole sketch on a given plane using a reference pin hole sketch*/
+        public static Sketch CreatePinHoleSketchFromReferenceSketch(ref ModelDoc2 partModelDoc, RefPlane plane, SelectData swSelectData, string pinHoleSketchName, bool isUprightTriangle, SketchPoint pointToCoincide, SketchSegment sideToParallel)
+        {
+            // copy and paste the pin hole triangle sketch
+            SelectSketch(ref partModelDoc, pinHoleSketchName);
+            partModelDoc.EditCopy();
+            ((Feature)plane).Select2(true, -1);
+            partModelDoc.Paste();
+
+            // select the last pasted pin hole triangle sketch
+            Feature pastedPinHoleSketchFeature = (Feature)partModelDoc.FeatureByPositionReverse(0);
+            pastedPinHoleSketchFeature.Select2(false, -1);
+            Sketch pastedPinHoleSketch = (Sketch)pastedPinHoleSketchFeature.GetSpecificFeature2();
+            ClearSelection(ref partModelDoc);
+
+            // edit the pasted pin hole sketch
+            ((Feature)pastedPinHoleSketch).Select2(false, -1);
+            partModelDoc.EditSketch();
+
+            string pastedPinHoleTriangleSketchName = ((Feature)pastedPinHoleSketch).Name;
+            object[] pinHoleTriangleSegments = (object[])pastedPinHoleSketch.GetSketchSegments();
+
+            SketchPoint? pinHoleTriangleCenter = GetTriangleCenterPoint(ref pinHoleTriangleSegments);
+            ClearSelection(ref partModelDoc);
+            if (!isUprightTriangle)
+            {
+                // orientation flag is false, meaning the module should be upside-down
+                foreach (SketchSegment pinHoleTriangleSketchSegment in pinHoleTriangleSegments.Cast<SketchSegment>())
+                {
+                    pinHoleTriangleSketchSegment.Select4(true, swSelectData);
+                }
+                RotateSelected(ref partModelDoc, pinHoleTriangleCenter.X, pinHoleTriangleCenter.Y, Math.PI);
+                ClearSelection(ref partModelDoc);
+            }
+            // make the center of the pin hole triangle conincident with the extrusion axis
+            pinHoleTriangleCenter.Select4(true, swSelectData);
+            pointToCoincide.Select4(true, swSelectData);
+            MakeSelectedCoincide(ref partModelDoc);
+            ClearSelection(ref partModelDoc);
+
+            // Make the flattest side parallel to the given reference side(should be the flattest side of a full triangle)
+            SketchLine? aLongSidePinHoleTriangle = GetMostHorizontalTriangleSide(ref pinHoleTriangleSegments);
+            ((SketchSegment)aLongSidePinHoleTriangle).Select4(true, swSelectData);
+            sideToParallel.Select4(true, swSelectData);
+            MakeSelectedLinesParallel(ref partModelDoc);
+            ClearSelection(ref partModelDoc);
+
+            // quit editing the pin hole triangle sketch
+            partModelDoc.InsertSketch2(true);
+            ClearSelection(ref partModelDoc);
+            return pastedPinHoleSketch;
+        }
 
         /* A wrapper function to enable the dimension dialog when an operation requires some input */
         public static void EnableInputDimensionByUser(ref SldWorks solidworks)
