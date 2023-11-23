@@ -59,7 +59,7 @@ namespace SolidworksAutomationTool
             => partModelDoc.SketchAddConstraints("sgPARALLEL");
 
         // Wrapper function to clear selection
-        public static void ClearSelection(ref ModelDoc2 partModelDoc) 
+        public static void ClearSelection(ref ModelDoc2 partModelDoc)
             => partModelDoc.ClearSelection2(true);
 
         // Wrapper function to select the origin. ONLY WORKS IN THE ENGLISH VERSION OF SOLIDWORKS
@@ -89,7 +89,7 @@ namespace SolidworksAutomationTool
         public static void RotateSelected(ref ModelDoc2 partModelDoc, double rotationCenterX, double rotationCenterY, double angleInRad)
         {
             // preserve the sketch relations when copying a sketch
-            partModelDoc.Extension.RotateOrCopy( false, 1, true, rotationCenterX, rotationCenterY, 0, 0, 0, 1, angleInRad);
+            partModelDoc.Extension.RotateOrCopy(false, 1, true, rotationCenterX, rotationCenterY, 0, 0, 0, 1, angleInRad);
         }
 
         /* Wrapper function to zoom-to-fit the view */
@@ -590,7 +590,8 @@ namespace SolidworksAutomationTool
             ClearSelection(ref partModelDoc);
 
             // quit editing the pin hole triangle sketch
-            partModelDoc.InsertSketch2(true);
+            // TODO: try not rebuilding now
+            partModelDoc.InsertSketch2(false);
             ClearSelection(ref partModelDoc);
             return pastedPinHoleSketch;
         }
@@ -646,7 +647,8 @@ namespace SolidworksAutomationTool
             SketchLine? aLongSideChamferedTriangle = GetLongestMostHorizontalTriangleSide(ref segments);
 
             // quit editing sketch
-            partModelDoc.InsertSketch2(true);
+            // TODO: try not rebuilding now
+            partModelDoc.InsertSketch2(false);
 
             return (pastedChamferedSketch, chamferedTriangleCenterPoint, aLongSideChamferedTriangle);
         }
@@ -695,7 +697,8 @@ namespace SolidworksAutomationTool
             MakeSelectedLinesParallel(ref partModelDoc);
 
             // quit editing the fully triangle sketch
-            partModelDoc.InsertSketch2(true);
+            // TODO: try not rebuilding now
+            partModelDoc.InsertSketch2(false);
 
             return (lastFullTriangleSketch, fullTriangleCenterPoint, (SketchSegment)aLongSideFullTriangle);
         }
