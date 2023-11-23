@@ -643,55 +643,17 @@ using (ProgressBar extrudeModulesProgressBar = new(bottomSurfaceSketchPointList.
         Debug.WriteLine($"Number of features Precopy full tri sketch: {GetFeatureCount(ref modulePart)}");
 
         // copy the full triangle sketch //
-        SelectSketch(ref modulePart, fullTriangleSketchName);
-        modulePart.EditCopy();
-        ((Feature)aRefPlane).Select2(true, -1);
-        modulePart.Paste();
-
-        // DEBUG: try to manually update the feature tree to avoid missing the last pasted sketch
-        modulePart.FeatureManager.UpdateFeatureTree();
-        Debug.WriteLine($"Number of features Post copy full tri sketch: {GetFeatureCount(ref modulePart)}");
-
-        // select the last pasted full triangle sketch
-        Feature lastSketchFeature = (Feature)modulePart.FeatureByPositionReverse(0);
-        Debug.WriteLine($"Feature name (s.t.b full tri sketch): {lastSketchFeature.Name}");
-
-        lastSketchFeature.Select2(false, -1);
-        Sketch lastFullTriangleSketch = (Sketch)lastSketchFeature.GetSpecificFeature2();
-        // edit the newly created fully triangle sketch to add constraints
-        ((Feature)lastFullTriangleSketch).Select2(false, -1);
-        modulePart.EditSketch();
-        // DEBUG: record the pasted sheet's name
-        string pastedFullTriangleSheetName = GetActiveSketchName(ref modulePart);
-        // make the center of the full triangle coincident with the extrusion axis
-        object[] fullTriangleSegments = (object[])lastFullTriangleSketch.GetSketchSegments();
-        SketchPoint? fullTriangleCenterPoint = GetTriangleCenterPoint(ref fullTriangleSegments);
-        fullTriangleCenterPoint?.Select4(true, swSelectData);
-        bottomSurfaceSketchPointList[moduleIndex].Select4(true, swSelectData);
-        MakeSelectedCoincide(ref modulePart);
+        (Sketch pastedFullTriangleSketch, SketchPoint pastedFullTriangleCenter, SketchSegment aLongSideFullTriangle) = CreateFullTriangleSketchFromReferenceSketch(ref modulePart,
+            aRefPlane,
+            swSelectData,
+            fullTriangleSketchName,
+            isUpright,
+            bottomSurfaceSketchPointList[moduleIndex],
+            (SketchSegment)aLongSideChamferedTriangle);
         ClearSelection(ref modulePart);
 
-        // Rotate the full triangle according to the orientation flag. This step will make aligning the chamfered & full triangles very easy
-        if (!isUpright)
-        {
-            // orientation flag is false, meaning the module should be upside-down
-            SelectAllSketchSegments(ref fullTriangleSegments, swSelectData);
-            RotateSelected(ref modulePart, fullTriangleCenterPoint.X, fullTriangleCenterPoint.Y, Math.PI);
-            ClearSelection(ref modulePart);
-        }
-        // make the flattest side parallel to a flattest long side of the chamfered triangle
-        // TODO: find the flattest and longest side in a chamfered triangle
-        SketchLine? aLongSideFullTriangle = GetMostHorizontalTriangleSide(ref fullTriangleSegments);
-        ((SketchSegment)aLongSideChamferedTriangle).Select4(true, swSelectData);
-        ((SketchSegment)aLongSideFullTriangle).Select4(true, swSelectData);
-        MakeSelectedLinesParallel(ref modulePart);
-
-        // quit editing the fully triangle sketch
-        modulePart.InsertSketch2(true);
-        ClearSelection(ref modulePart);
-        // extrude the chamfered triangle
-        SelectSketch(ref modulePart, pastedFullTriangleSheetName);
         // extrude the full triangle all the way to the "support surface point"
+        SelectSketch(ref modulePart, ((Feature)pastedFullTriangleSketch).Name);
         Feature fullTriangleExtrusion = CreateTwoWayExtrusionD1ToPointD2ThroughAll(ref modulePart, supportSurfaceMarkerPointList[moduleIndex], swSelectData);
         fullTriangleExtrusion.Name = $"fullTriangleExtrusion_{moduleIndex}";
         ClearSelection(ref modulePart);
@@ -700,9 +662,14 @@ using (ProgressBar extrudeModulesProgressBar = new(bottomSurfaceSketchPointList.
         Debug.WriteLine($"Number of features Precopy pin hole sketch: {GetFeatureCount(ref modulePart)}");
 
         /// Make pin holes - first test seems fine! ///        
-        Sketch lastPinHoleTriangleSketch = CreatePinHoleSketchFromReferenceSketch(ref modulePart, aRefPlane, swSelectData, pinHoleTriangleSketchName,
-                                                                                    isUpright, bottomSurfaceSketchPointList[moduleIndex],
-                                                                                    (SketchSegment)aLongSideFullTriangle);
+        Sketch lastPinHoleTriangleSketch = CreatePinHoleSketchFromReferenceSketch(  ref modulePart, 
+                                                                                    aRefPlane, 
+                                                                                    swSelectData, 
+                                                                                    pinHoleTriangleSketchName,
+                                                                                    isUpright, 
+                                                                                    bottomSurfaceSketchPointList[moduleIndex],
+                                                                                    aLongSideFullTriangle);
+        ClearSelection(ref modulePart);
         MathTransform globalToSketchTransformMat = lastPinHoleTriangleSketch.ModelToSketchTransform;
 
 

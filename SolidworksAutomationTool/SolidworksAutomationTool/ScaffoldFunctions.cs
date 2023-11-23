@@ -170,7 +170,7 @@ namespace SolidworksAutomationTool
             for (int featureIdx = partModelDoc.GetFeatureCount() - 1; featureIdx >= 0; featureIdx--)
             {
                 // no need to continue looking into features if already found 3 basic ref planes and 1 origin
-                if ( refPlanesLocated >= 3 && originLocated >= 1)
+                if (refPlanesLocated >= 3 && originLocated >= 1)
                 {
                     break;
                 }
@@ -293,7 +293,7 @@ namespace SolidworksAutomationTool
          */
         public static SketchLine? GetOneTriangleSide(ref object[] polygon)
         {
-            foreach(SketchSegment triangleSegment in polygon.Cast<SketchSegment>())
+            foreach (SketchSegment triangleSegment in polygon.Cast<SketchSegment>())
             {
                 if (triangleSegment.GetType() == (int)swSketchSegments_e.swSketchLINE)
                 {
@@ -408,7 +408,7 @@ namespace SolidworksAutomationTool
             {
                 if (chamferedTriangleSegment.GetType() == (int)swSketchSegments_e.swSketchLINE)
                 {
-                    if ( longestSideLength < chamferedTriangleSegment.GetLength() )
+                    if (longestSideLength < chamferedTriangleSegment.GetLength())
                     {
                         longestSideLength = chamferedTriangleSegment.GetLength();
                         longSide = chamferedTriangleSegment;
@@ -434,9 +434,9 @@ namespace SolidworksAutomationTool
             // as the 2 constraints are enough for the "point and normal" method
             RefPlane refPlane = (RefPlane)featureManager.InsertRefPlane((int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Perpendicular, 0,
                                                                                           (int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Coincident, 0, 0, 0);
-            
+
             // The user can decide the name of the plane by passing a string. If null is passed in, the plane's name is left to solidworks to decide
-            if (planeName != null )
+            if (planeName != null)
             {
                 ((Feature)refPlane).Name = planeName;
             }
@@ -462,7 +462,7 @@ namespace SolidworksAutomationTool
                                     false, false, // True for the first/second draft angle to be inward, false to be outward; only valid when Dchk1/Dchk2 is true
                                     1, 1,   // Draft angle for the first end; only valid when Dchk1 is true
                                     false, false, // If you chose to offset the first/second end condition from another face or plane, then true specifies offset in direction away from the sketch, false specifies offset from the face or plane in a direction toward the sketch
-                                    false, false, 
+                                    false, false,
                                     false, true, true, true, true, false,
                                     (int)swStartConditions_e.swStartSketchPlane,  // Start conditions as defined in swStartConditions_e
                                     0,      // If T0 is swStartConditions_e.swStartOffset, then specify an offset value
@@ -541,6 +541,8 @@ namespace SolidworksAutomationTool
             ((Feature)plane).Select2(true, -1);
             partModelDoc.Paste();
 
+            // manual update feature tree
+            partModelDoc.FeatureManager.UpdateFeatureTree();
             // select the last pasted pin hole triangle sketch
             Feature pastedPinHoleSketchFeature = (Feature)partModelDoc.FeatureByPositionReverse(0);
             pastedPinHoleSketchFeature.Select2(false, -1);
@@ -594,6 +596,8 @@ namespace SolidworksAutomationTool
             ((Feature)plane).Select2(true, -1);
             partModelDoc.Paste();
 
+            // manual update feature tree
+            partModelDoc.FeatureManager.UpdateFeatureTree();
             // select the last pasted sketch. It should be a chamfered triangle sketch feature
             Feature lastSketchFeature = (Feature)partModelDoc.FeatureByPositionReverse(0);
             lastSketchFeature.Select2(false, -1);
@@ -637,6 +641,55 @@ namespace SolidworksAutomationTool
             partModelDoc.InsertSketch2(true);
 
             return (pastedChamferedSketch, chamferedTriangleCenterPoint, aLongSideChamferedTriangle);
+        }
+
+        /* Create a copy of the full triangle sketch on a given plane using a reference full triangle sketch */
+        public static (Sketch, SketchPoint, SketchSegment) CreateFullTriangleSketchFromReferenceSketch(ref ModelDoc2 partModelDoc, RefPlane plane, SelectData swSelectData, string fullTriangleSketchName, bool isUprightTriangle, SketchPoint pointToCoincide, SketchSegment sideToParallel)
+        {
+            // copy the full triangle sketch //
+            SelectSketch(ref partModelDoc, fullTriangleSketchName);
+            partModelDoc.EditCopy();
+            ((Feature)plane).Select2(true, -1);
+            partModelDoc.Paste();
+
+            // DEBUG: try to manually update the feature tree to avoid missing the last pasted sketch
+            partModelDoc.FeatureManager.UpdateFeatureTree();
+
+            // select the last pasted full triangle sketch
+            Feature lastSketchFeature = (Feature)partModelDoc.FeatureByPositionReverse(0);
+            lastSketchFeature.Select2(false, -1);
+            Sketch lastFullTriangleSketch = (Sketch)lastSketchFeature.GetSpecificFeature2();
+            // edit the newly created fully triangle sketch to add constraints
+            ((Feature)lastFullTriangleSketch).Select2(false, -1);
+            partModelDoc.EditSketch();
+
+            // make the center of the full triangle coincident with the extrusion axis
+            object[] fullTriangleSegments = (object[])lastFullTriangleSketch.GetSketchSegments();
+            SketchPoint? fullTriangleCenterPoint = GetTriangleCenterPoint(ref fullTriangleSegments);
+            fullTriangleCenterPoint?.Select4(true, swSelectData);
+            pointToCoincide.Select4(true, swSelectData);
+            MakeSelectedCoincide(ref partModelDoc);
+            ClearSelection(ref partModelDoc);
+
+            // Rotate the full triangle according to the orientation flag. This step will make aligning the chamfered & full triangles very easy
+            if (!isUprightTriangle)
+            {
+                // orientation flag is false, meaning the module should be upside-down
+                SelectAllSketchSegments(ref fullTriangleSegments, swSelectData);
+                RotateSelected(ref partModelDoc, fullTriangleCenterPoint.X, fullTriangleCenterPoint.Y, Math.PI);
+                ClearSelection(ref partModelDoc);
+            }
+
+            // make the flattest side parallel to a flattest long side of the chamfered triangle
+            SketchLine? aLongSideFullTriangle = GetMostHorizontalTriangleSide(ref fullTriangleSegments);
+            sideToParallel.Select4(true, swSelectData);
+            ((SketchSegment)aLongSideFullTriangle).Select4(true, swSelectData);
+            MakeSelectedLinesParallel(ref partModelDoc);
+
+            // quit editing the fully triangle sketch
+            partModelDoc.InsertSketch2(true);
+
+            return (lastFullTriangleSketch, fullTriangleCenterPoint, (SketchSegment)aLongSideFullTriangle);
         }
 
         /* A wrapper function to enable the dimension dialog when an operation requires some input */
