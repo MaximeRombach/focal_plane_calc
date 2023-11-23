@@ -585,11 +585,10 @@ modulePart.SketchManager.InsertSketch(true);
 ClearSelection(ref modulePart);
 
 // use for loop to create triangle modules with the right shape for all the modules
-// TODO: reduce boilerplat code and move code to scaffold functions
 
 // try to gain speed by locking the user interface
-modelView.EnableGraphicsUpdate = false; // This property affects whether to refresh the model view during a selection
-modulePart.SketchManager.DisplayWhenAdded = false;
+modelView.EnableGraphicsUpdate = true; // This property affects whether to refresh the model view during a selection
+modulePart.SketchManager.DisplayWhenAdded = true;
 // try the magic disable feature manager scroll to view to hopefully boost performance
 solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swFeatureManagerEnsureVisible, false);
 //modulePart.Lock();
@@ -638,7 +637,6 @@ using (ProgressBar extrudeModulesProgressBar = new(bottomSurfaceSketchPointList.
         ClearSelection(ref modulePart);
 
         /// Now make the unchamfered/full triangle extrusion ///
-        /// TODO: move the full triangle creation to a scaffold function
         //DEBUG:
         Debug.WriteLine($"Number of features Precopy full tri sketch: {GetFeatureCount(ref modulePart)}");
 
@@ -688,6 +686,15 @@ using (ProgressBar extrudeModulesProgressBar = new(bottomSurfaceSketchPointList.
         }
         pinHoleExtrusion.Name = $"pinHoleExtrusion_{moduleIndex}";
         ClearSelection(ref modulePart);
+
+        // DEBUG: try rebuilding everything at the end of pasting all the triangles
+        bool rebuildSuccess = modulePart.EditRebuild3();
+        string rebuildStatus = rebuildSuccess switch
+        {
+            true => "success",
+            false => "failed",
+        };
+        Debug.WriteLine($"Rebuild modules{moduleIndex} {rebuildStatus}");
 
         // update progress bar
         extrudeModulesProgressBar.Tick();
