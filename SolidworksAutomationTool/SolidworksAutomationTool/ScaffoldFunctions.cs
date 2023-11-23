@@ -586,38 +586,13 @@ namespace SolidworksAutomationTool
         public static Sketch CreatePinHoleSketchFromReferenceSketch(ref ModelDoc2 partModelDoc, RefPlane plane, SelectData swSelectData, string pinHoleSketchName, bool isUprightTriangle, SketchPoint pointToCoincide, SketchSegment sideToParallel)
         {
             // copy and paste the pin hole triangle sketch
-            SelectSketch(ref partModelDoc, pinHoleSketchName);
-            partModelDoc.EditCopy();
-            ((Feature)plane).Select2(true, -1);
-            partModelDoc.Paste();
-
-            // manual update feature tree
-            partModelDoc.FeatureManager.UpdateFeatureTree();
-            // select the last pasted pin hole triangle sketch
-            Feature pastedPinHoleSketchFeature = (Feature)partModelDoc.FeatureByPositionReverse(0);
-            pastedPinHoleSketchFeature.Select2(false, -1);
-            Sketch pastedPinHoleSketch = (Sketch)pastedPinHoleSketchFeature.GetSpecificFeature2();
-            ClearSelection(ref partModelDoc);
-
-            // edit the pasted pin hole sketch
-            ((Feature)pastedPinHoleSketch).Select2(false, -1);
-            partModelDoc.EditSketch();
-
-            string pastedPinHoleTriangleSketchName = ((Feature)pastedPinHoleSketch).Name;
-            object[] pinHoleTriangleSegments = (object[])pastedPinHoleSketch.GetSketchSegments();
-
-            SketchPoint? pinHoleTriangleCenter = GetTriangleCenterPoint(ref pinHoleTriangleSegments);
-            ClearSelection(ref partModelDoc);
-            if (!isUprightTriangle)
-            {
-                // orientation flag is false, meaning the module should be upside-down
-                foreach (SketchSegment pinHoleTriangleSketchSegment in pinHoleTriangleSegments.Cast<SketchSegment>())
-                {
-                    pinHoleTriangleSketchSegment.Select4(true, swSelectData);
-                }
-                RotateSelected(ref partModelDoc, pinHoleTriangleCenter.X, pinHoleTriangleCenter.Y, Math.PI);
-                ClearSelection(ref partModelDoc);
-            }
+            // copy the full triangle sketch //
+            (Sketch pastedPinHoleSketch, SketchPoint pinHoleTriangleCenter, object[] pinHoleTriangleSegments) = CreateACopyAndRotateReferenceSketch(
+                                                                                                                        ref partModelDoc,
+                                                                                                                        plane,
+                                                                                                                        swSelectData,
+                                                                                                                        pinHoleSketchName,
+                                                                                                                        isUprightTriangle);
             // make the center of the pin hole triangle conincident with the extrusion axis
             pinHoleTriangleCenter.Select4(true, swSelectData);
             pointToCoincide.Select4(true, swSelectData);
