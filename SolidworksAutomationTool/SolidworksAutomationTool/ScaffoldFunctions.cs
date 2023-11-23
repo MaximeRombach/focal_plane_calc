@@ -219,9 +219,17 @@ namespace SolidworksAutomationTool
             double[] p1DataArray = (double[])p1.ArrayData;
             double[] p2DataArray = (double[])p2.ArrayData;
 
-            return Math.Sqrt(   Math.Pow(p1DataArray[0] - p2DataArray[0], 2.0) +
-                                Math.Pow(p1DataArray[1] - p2DataArray[1], 2.0) + 
+            return Math.Sqrt(Math.Pow(p1DataArray[0] - p2DataArray[0], 2.0) +
+                                Math.Pow(p1DataArray[1] - p2DataArray[1], 2.0) +
                                 Math.Pow(p1DataArray[2] - p2DataArray[2], 2.0));
+        }
+
+        /* Get the distance between two sketch points */
+        public static double GetDistanceBetweenTwoSketchPoints(SketchPoint p1, SketchPoint p2)
+        {
+            return Math.Sqrt(   Math.Pow(p1.X - p2.X, 2.0) +
+                                Math.Pow(p1.Y - p2.Y, 2.0) +
+                                Math.Pow(p1.Z - p2.Z, 2.0));
         }
 
         /* Get the number of features in this document */
