@@ -643,13 +643,14 @@ using (ProgressBar extrudeModulesProgressBar = new(bottomSurfaceSketchPointList.
         Debug.WriteLine($"Number of features Precopy full tri sketch: {GetFeatureCount(ref modulePart)}");
 
         // copy the full triangle sketch //
-        (Sketch pastedFullTriangleSketch, SketchPoint pastedFullTriangleCenter, SketchSegment aLongSideFullTriangle) = CreateFullTriangleSketchFromReferenceSketch(ref modulePart,
-            aRefPlane,
-            swSelectData,
-            fullTriangleSketchName,
-            isUpright,
-            bottomSurfaceSketchPointList[moduleIndex],
-            (SketchSegment)aLongSideChamferedTriangle);
+        (Sketch pastedFullTriangleSketch, SketchPoint pastedFullTriangleCenter, SketchSegment aLongSideFullTriangle) = CreateFullTriangleSketchFromReferenceSketch(
+                                                                                                                                ref modulePart,
+                                                                                                                                aRefPlane,
+                                                                                                                                swSelectData,
+                                                                                                                                fullTriangleSketchName,
+                                                                                                                                isUpright,
+                                                                                                                                bottomSurfaceSketchPointList[moduleIndex],
+                                                                                                                                (SketchSegment)aLongSideChamferedTriangle);
         ClearSelection(ref modulePart);
 
         // extrude the full triangle all the way to the "support surface point"
@@ -672,28 +673,13 @@ using (ProgressBar extrudeModulesProgressBar = new(bottomSurfaceSketchPointList.
         ClearSelection(ref modulePart);
         MathTransform globalToSketchTransformMat = lastPinHoleTriangleSketch.ModelToSketchTransform;
 
-
         // extrude the pin holes
-        // The currentPinHoleTriangleCenterPoint is in the 2d sketch's local frame.
-        // The support surface markers are all in 3D global frame
-        // Need to transform the currentPinHoleTriangleCenterPoint into the global frame before calculating the 3D Euclidean distance
-        // DEBUG: try to transform the support surface marker point in the local sketch's frame
-        MathUtility swMathUtility = (MathUtility)solidworksApp.GetMathUtility();
-        MathPoint supportSurfaceMathPointInModelFrame = (MathPoint)swMathUtility.CreatePoint(new double[] { supportSurfaceMarkerPointList[moduleIndex].X, 
-                                                                                                            supportSurfaceMarkerPointList[moduleIndex].Y, 
-                                                                                                            supportSurfaceMarkerPointList[moduleIndex].Z });
-        //MathPoint supportSurfaceMathPointInSketchFrame = (MathPoint)supportSurfaceMathPointInModelFrame.MultiplyTransform(globalToSketchTransformMat);
-
-        MathPoint currentPinHoleTriangleCenterMathPoint = (MathPoint)swMathUtility.CreatePoint(new double[] {
-                                                                                                    bottomSurfaceSketchPointList[moduleIndex].X,
-                                                                                                    bottomSurfaceSketchPointList[moduleIndex].Y,
-                                                                                                    bottomSurfaceSketchPointList[moduleIndex].Z });
-        double extrusionDepth = GetDistanceBetweenTwoMathPoints(currentPinHoleTriangleCenterMathPoint, supportSurfaceMathPointInModelFrame)
+        double extrusionDepth = GetDistanceBetweenTwoSketchPoints(supportSurfaceMarkerPointList[moduleIndex], bottomSurfaceSketchPointList[moduleIndex])
                                 + pinHoleDepth;
 
         // DEBUG: check what is the support surface point
-        PrintMathPoint(currentPinHoleTriangleCenterMathPoint, $"support surface center in Sketch Frame {moduleIndex}");
-        Debug.WriteLine($"Extrusion depth at module {moduleIndex} is {extrusionDepth} meters");
+        PrintSketchPoint(bottomSurfaceSketchPointList[moduleIndex], $"support surface center in Sketch Frame {moduleIndex}");
+        Debug.WriteLine($"Extrusion depth at module {moduleIndex} is {extrusionDepth, 0:F3} meters");
         SelectSketch(ref modulePart, ((Feature)lastPinHoleTriangleSketch).Name);
         Feature pinHoleExtrusion = CreateTwoWayExtrusionD1ToDistanceD2ThroughAll(ref modulePart, extrusionDepth);
         if (pinHoleExtrusion == null)
