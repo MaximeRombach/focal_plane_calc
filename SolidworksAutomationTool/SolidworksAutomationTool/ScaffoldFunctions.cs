@@ -540,6 +540,48 @@ namespace SolidworksAutomationTool
             return extrusionFeature;
         }
 
+        /* A function to copy and paste a reference sketch on the given plane and rotate if necessary
+         * This function is just to save time and repetitive code
+         */
+        public static (Sketch, SketchPoint, object[]) CreateACopyAndRotateReferenceSketch(ref ModelDoc2 partModelDoc, RefPlane plane, SelectData swSelectData, string referenceSketchName, bool isUprightTriangle)
+        {
+            // copy and paste the reference sketch
+            SelectSketch(ref partModelDoc, referenceSketchName);
+            partModelDoc.EditCopy();
+            ((Feature)plane).Select2(true, -1);
+            partModelDoc.Paste();
+
+            // manually update feature tree
+            partModelDoc.FeatureManager.UpdateFeatureTree();
+            // select the last pasted pin hole triangle sketch
+            Feature pastedSketchFeature = (Feature)partModelDoc.FeatureByPositionReverse(0);
+            pastedSketchFeature.Select2(false, -1);
+            Sketch pastedSketch = (Sketch)pastedSketchFeature.GetSpecificFeature2();
+            ClearSelection(ref partModelDoc);
+
+            // edit the pasted pin hole sketch
+            ((Feature)pastedSketch).Select2(false, -1);
+            partModelDoc.EditSketch();
+
+            // it's a bit weird to cast the sketch back and forth, but only the Feature object has the sketch's name
+            string pastedPinHoleTriangleSketchName = ((Feature)pastedSketch).Name;
+            object[] sketchSegments = (object[])pastedSketch.GetSketchSegments();
+
+            SketchPoint? triangleCenter = GetTriangleCenterPoint(ref sketchSegments);
+            ClearSelection(ref partModelDoc);
+            if (!isUprightTriangle)
+            {
+                // orientation flag is false, meaning the module should be upside-down
+                foreach (SketchSegment pinHoleTriangleSketchSegment in sketchSegments.Cast<SketchSegment>())
+                {
+                    pinHoleTriangleSketchSegment.Select4(true, swSelectData);
+                }
+                RotateSelected(ref partModelDoc, triangleCenter.X, triangleCenter.Y, Math.PI);
+                ClearSelection(ref partModelDoc);
+            }
+            return (pastedSketch, triangleCenter, sketchSegments);
+        }
+
         /* Create a copy of the pin hole sketch on a given plane using a reference pin hole sketch*/
         public static Sketch CreatePinHoleSketchFromReferenceSketch(ref ModelDoc2 partModelDoc, RefPlane plane, SelectData swSelectData, string pinHoleSketchName, bool isUprightTriangle, SketchPoint pointToCoincide, SketchSegment sideToParallel)
         {
@@ -654,41 +696,26 @@ namespace SolidworksAutomationTool
         }
 
         /* Create a copy of the full triangle sketch on a given plane using a reference full triangle sketch */
-        public static (Sketch, SketchPoint, SketchSegment) CreateFullTriangleSketchFromReferenceSketch(ref ModelDoc2 partModelDoc, RefPlane plane, SelectData swSelectData, string fullTriangleSketchName, bool isUprightTriangle, SketchPoint pointToCoincide, SketchSegment sideToParallel)
+        public static (Sketch, SketchPoint, SketchSegment) CreateFullTriangleSketchFromReferenceSketch( ref ModelDoc2 partModelDoc, 
+                                                                                                        RefPlane plane, 
+                                                                                                        SelectData swSelectData, 
+                                                                                                        string fullTriangleSketchName, 
+                                                                                                        bool isUprightTriangle, 
+                                                                                                        SketchPoint pointToCoincide, 
+                                                                                                        SketchSegment sideToParallel)
         {
             // copy the full triangle sketch //
-            SelectSketch(ref partModelDoc, fullTriangleSketchName);
-            partModelDoc.EditCopy();
-            ((Feature)plane).Select2(true, -1);
-            partModelDoc.Paste();
+            (Sketch lastFullTriangleSketch, SketchPoint fullTriangleCenterPoint, object[] fullTriangleSegments) = CreateACopyAndRotateReferenceSketch(
+                                                                                                                        ref partModelDoc, 
+                                                                                                                        plane, 
+                                                                                                                        swSelectData, 
+                                                                                                                        fullTriangleSketchName, 
+                                                                                                                        isUprightTriangle);
 
-            // DEBUG: try to manually update the feature tree to avoid missing the last pasted sketch
-            partModelDoc.FeatureManager.UpdateFeatureTree();
-
-            // select the last pasted full triangle sketch
-            Feature lastSketchFeature = (Feature)partModelDoc.FeatureByPositionReverse(0);
-            lastSketchFeature.Select2(false, -1);
-            Sketch lastFullTriangleSketch = (Sketch)lastSketchFeature.GetSpecificFeature2();
-            // edit the newly created fully triangle sketch to add constraints
-            ((Feature)lastFullTriangleSketch).Select2(false, -1);
-            partModelDoc.EditSketch();
-
-            // make the center of the full triangle coincident with the extrusion axis
-            object[] fullTriangleSegments = (object[])lastFullTriangleSketch.GetSketchSegments();
-            SketchPoint? fullTriangleCenterPoint = GetTriangleCenterPoint(ref fullTriangleSegments);
-            fullTriangleCenterPoint?.Select4(true, swSelectData);
+            fullTriangleCenterPoint.Select4(true, swSelectData);
             pointToCoincide.Select4(true, swSelectData);
             MakeSelectedCoincide(ref partModelDoc);
             ClearSelection(ref partModelDoc);
-
-            // Rotate the full triangle according to the orientation flag. This step will make aligning the chamfered & full triangles very easy
-            if (!isUprightTriangle)
-            {
-                // orientation flag is false, meaning the module should be upside-down
-                SelectAllSketchSegments(ref fullTriangleSegments, swSelectData);
-                RotateSelected(ref partModelDoc, fullTriangleCenterPoint.X, fullTriangleCenterPoint.Y, Math.PI);
-                ClearSelection(ref partModelDoc);
-            }
 
             // make the flattest side parallel to a flattest long side of the chamfered triangle
             SketchLine? aLongSideFullTriangle = GetMostHorizontalTriangleSide(ref fullTriangleSegments);

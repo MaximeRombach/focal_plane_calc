@@ -669,7 +669,6 @@ using (ProgressBar extrudeModulesProgressBar = new(bottomSurfaceSketchPointList.
                                                                                     bottomSurfaceSketchPointList[moduleIndex],
                                                                                     aLongSideFullTriangle);
         ClearSelection(ref modulePart);
-        MathTransform globalToSketchTransformMat = lastPinHoleTriangleSketch.ModelToSketchTransform;
 
         // extrude the pin holes
         double extrusionDepth = GetDistanceBetweenTwoSketchPoints(supportSurfaceMarkerPointList[moduleIndex], bottomSurfaceSketchPointList[moduleIndex])
