@@ -617,34 +617,12 @@ namespace SolidworksAutomationTool
         public static (Sketch, SketchPoint, SketchLine) CreateChamferedTriangleSketchFromReferenceSketch(ref ModelDoc2 partModelDoc, RefPlane plane, SelectData swSelectData, string chamferedTriangleSketchName, bool isUprightTriangle, SketchPoint pointToCoincide)
         {
             // copy the chamfered triangle sketch //
-            SelectSketch(ref partModelDoc, chamferedTriangleSketchName);
-            partModelDoc.EditCopy();
-            ((Feature)plane).Select2(true, -1);
-            partModelDoc.Paste();
-
-            // manual update feature tree
-            partModelDoc.FeatureManager.UpdateFeatureTree();
-            // select the last pasted sketch. It should be a chamfered triangle sketch feature
-            Feature lastSketchFeature = (Feature)partModelDoc.FeatureByPositionReverse(0);
-            lastSketchFeature.Select2(false, -1);
-            // actually get the underlying chamfered sketch
-            Sketch pastedChamferedSketch = (Sketch)lastSketchFeature.GetSpecificFeature2();
-            // edit the newly created sketch to add constraints
-            ((Feature)pastedChamferedSketch).Select2(false, -1);
-            partModelDoc.EditSketch();
-            // make the center of the chamfered module coincident with the extrusion axis
-            object[] segments = (object[])pastedChamferedSketch.GetSketchSegments();
-            SketchPoint? chamferedTriangleCenterPoint = GetTriangleCenterPoint(ref segments);
-
-            // TODO: add constraints to the chamfered modules to orient the module
-            if (!isUprightTriangle)
-            {
-                ClearSelection(ref partModelDoc);
-                // orientation flag is false, meaning the module should be upside-down
-                SelectAllSketchSegments(ref segments, swSelectData);
-                RotateSelected(ref partModelDoc, chamferedTriangleCenterPoint.X, chamferedTriangleCenterPoint.Y, Math.PI);
-                ClearSelection(ref partModelDoc);
-            }
+            (Sketch pastedChamferedSketch, SketchPoint chamferedTriangleCenterPoint, object[] chamferedTriangleSegments) = CreateACopyAndRotateReferenceSketch(
+                                                                                                                        ref partModelDoc,
+                                                                                                                        plane,
+                                                                                                                        swSelectData,
+                                                                                                                        chamferedTriangleSketchName,
+                                                                                                                        isUprightTriangle);
             chamferedTriangleCenterPoint?.Select4(true, swSelectData);
             pointToCoincide.Select4(true, swSelectData);
             MakeSelectedCoincide(ref partModelDoc);
@@ -654,14 +632,14 @@ namespace SolidworksAutomationTool
             // TODO: check if can set one side of the chamfered triangle to be in parallel with the first chamfered triangle
             //SketchSegment? unchamferedTriangleMostPositiveSlopedSide = GetMostPositiveSlopedSideInChamferedTriangle(ref segments);
             // TODO: temporary workaround, simply set one of the sides to be in horizontal to fully define each chamfered triangle
-            SketchLine aRelativelyFlatSide = GetMostHorizontalTriangleSide(ref segments);
+            SketchLine aRelativelyFlatSide = GetMostHorizontalTriangleSide(ref chamferedTriangleSegments);
             ((SketchSegment)aRelativelyFlatSide).Select4(true, swSelectData);
             MakeSelectedLineHorizontal(ref partModelDoc);
             ClearSelection(ref partModelDoc);
 
             // get a handle on the longest most horizontal side of a chamfered triangle.
             // This side will be used as a reference to set parallel constraint to a side of a full triangle
-            SketchLine? aLongSideChamferedTriangle = GetLongestMostHorizontalTriangleSide(ref segments);
+            SketchLine? aLongSideChamferedTriangle = GetLongestMostHorizontalTriangleSide(ref chamferedTriangleSegments);
 
             // quit editing sketch
             // TODO: try not rebuilding now
