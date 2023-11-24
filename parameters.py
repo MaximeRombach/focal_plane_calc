@@ -18,6 +18,7 @@ from shapely.geometry import mapping
 import ezdxf
 import ezdxf.addons.geo
 import updown_tri as tri
+import pandas as pd
 
 logging.basicConfig(level=logging.INFO)
 tan30 = np.tan(np.deg2rad(30))
@@ -31,14 +32,14 @@ class FocalSurf():
           self.project = project
           self.focal_surf_param = self.set_surface_parameters()
 
-          self.R = self.focal_surf_param['R'] #curvature radius of focal plane
+          self.curvature_R = self.focal_surf_param['curvature_R'] #curvature radius of focal plane
           self.asph_formula = self.focal_surf_param['asph_formula'] # Checks the presence or not of aspherical coefficients
           if self.asph_formula: # Store spherical focal plane parameters if known
                
                self.k = self.focal_surf_param['k']
                self.a2 = self.focal_surf_param['a2']
                self.a3 = self.focal_surf_param['a3']
-               self.c = 1/self.R
+               self.c = 1/self.curvature_R
                self.asph_coeff = [self.k, self.a2, self.a3]
 
           self.vigR = self.focal_surf_param['vigR'] # vignetting radius
@@ -51,7 +52,120 @@ class FocalSurf():
           self.surfaces_polygon = {} # dictionnary to store the polygons of the focal plane surfaces (main vigR, GFA, donut hole, etc)
           self.surf_name = self.focal_surf_param['name']
           self.FoV = self.focal_surf_param['FoV']
-          
+
+
+     def set_surface_parameters(self):
+
+          if self.project == 'MUST':
+               focal_surf_param = {
+                                   'name': 'MUST',
+                                   'curvature_R': -11365, # [mm], curvature radius
+                                   'vigD': 1068, # [mm], vigneting diameter: last updated 2023-11-08 (previous value: 589.27 * 2)
+                                   'vigR': 1068/2, # [mm], vignetting radius
+                                   'asph_formula': True,
+                                   'k': 0,
+                                   'a1': 0, 
+                                   'a2': -6e-12, 
+                                   'a3': 0,
+                                   'f-number': 3.699,
+                                   'BFS': 10921.711, # [mm], radius of BFS # Value calculated with Joe's cal_BFS function with MUST data from 2023-09-06
+                                   'FoV': None # [deg]
+                                   }
+
+          elif self.project == 'MegaMapper':
+               focal_surf_param = {
+                                   'name': 'MegaMapper',
+                                   'curvature_R': -11067, 
+                                   'vigR': 613.2713,
+                                   # 'vigR': 440,
+                                   'asph_formula': False,
+                                   'BFS': 11045.6, # [mm], radius of BFS
+                                   'f-number': 3.57,
+                                   'FoV': None # [deg]
+                                   }
+
+          elif self.project == 'DESI':
+               focal_surf_param = {
+                                   'name': 'DESI',
+                                   'curvature_R': -11067, 
+                                   'vigR': 406.,
+                                   'asph_formula': False,
+                                   'BFS': 11067, # [mm], radius of BFS,
+                                   'f-number': 3.699,
+                                   'FoV': None # [deg]
+                                   }
+               
+          elif self.project == 'WST1':
+               focal_surf_param = {
+                                   'name': r'$\bf{WST - Focal Plane \varnothing: 1.2 m - Center \varnothing: 0.17m}$',
+                                   'curvature_R': -11067, 
+                                   'vigR': 600, # [mm], vignetting radius
+                                   'donutDiam': 20, # [arcmin], diameter of donut hole
+                                   'asph_formula': False,
+                                   'BFS': 11067, # [mm], radius of BFS,
+                                   'f-number': 3.699, # assumption based on previous telescope designs
+                                   'FoV': 1.8 # [deg]
+                                   }
+               
+          elif self.project == 'WST2':
+               focal_surf_param = {
+                              'name': r'$\bf{WST - Focal Plane \varnothing: 1.4 m - Center \varnothing: 0.2m}$',
+                              'curvature_R': -11067, 
+                              'vigR': 700,# [mm], vignetting radius
+                              'donutDiam': 20, # [arcmin], diameter of donut hole
+                              'asph_formula': False,
+                              'BFS': 11067, # [mm], radius of BFS,
+                              'f-number': 3.7, # assumption based on previous telescope designs
+                              'FoV': 1.8 # [deg]
+                              }
+
+          elif self.project == 'WST3':
+               focal_surf_param = {
+                              'name': r'$\bf{WST - Focal Plane \varnothing: 1.3 m - Center \varnothing: 0.24m (20 arcmin)}$',
+                              'curvature_R': -11067, 
+                              'vigR': 650,# [mm], vignetting radius
+                              'donutDiam': 20, # [arcmin], diameter of donut hole
+                              'asph_formula': False,
+                              'BFS': 11067, # [mm], radius of BFS,
+                              'f-number': 3.7, # assumption based on previous telescope designs
+                              'FoV': 1.8 # [deg]
+                              }
+               
+          elif self.project == 'Spec-s5':
+               focal_surf_param = {
+                    'name': r'$\bf{Spec-s5}$',
+                    'curvature_R': -13000, # [mm], main radius of curvature (roughly 13m from Claire's info 20.10.2023)
+                    'vigR': 4.084421E+02,# [mm], vignetting radius
+                    'asph_formula': False,
+                    'BFS': -1.277364E+04, # [mm], radius of BFS,
+                    'f-number': 3.64, # assumption based on previous telescope designs
+                    'FoV': None # [deg]
+                    }
+          else: 
+               logging.error(f'Setting focal surface parameters: {self.project} project is not defined')
+               raise Exception(f'Error in setting focal surface parameters: {self.project} project is not defined')
+
+          return focal_surf_param
+     
+     def read_focal_plane_data(self):
+
+               filename = f"./Data_focal_planes/{self.project}.csv" # optics data from Zemax
+               comment_character = "#"  # The character that indicates a commented line
+               # Read CSV file and ignore commented lines
+               optics_data = pd.read_csv(filename, comment=comment_character, sep=';')
+
+               # Set headers using the first non-comment line
+               with open(filename, 'r') as file:
+                    for line in file:
+                         if not line.startswith(comment_character):
+                              headers = line.strip().split(';')
+                              break
+               optics_data.columns = headers
+
+               #TODO: add SPEC-S5 data (read txt)
+               
+               return optics_data
+     
      def asph_R2Z(self):
           """ 
           Returns the aspherical focal plane curve from the aspherical coefficients
@@ -67,100 +181,6 @@ class FocalSurf():
                return lambda r: main_term(r) + secondary_terms(r)
           else:
                return print('Aspherical coefficients not defined for this project \n Taking sampled data from csv file instead')
-
-     def set_surface_parameters(self):
-
-          if self.project == 'MUST':
-               # MUST optical data from 2023-09-06
-               focal_surf_param = {
-                                   'name': 'MUST',
-                                   'R': -11365, # [mm], curvature radius
-                                   'vigD': 589.27 * 2,
-                                   'vigR': 589.27, # [mm], vignetting
-                                   'asph_formula': True,
-                                   'k': 0,
-                                   'a1': 0, 
-                                   'a2': -6e-12, 
-                                   'a3': 0,
-                                   'f-number': 3.699,
-                                   'BFS': 10921.711, # [mm], radius of BFS # Value calculated with Joe's cal_BFS function with MUST data from 2023-09-06
-                                   'FoV': None # [deg]
-                                   }
-
-          elif self.project == 'MegaMapper':
-               focal_surf_param = {
-                                   'name': 'MegaMapper',
-                                   'R': -11067, 
-                                   'vigR': 613.2713,
-                                   # 'vigR': 440,
-                                   'asph_formula': False,
-                                   'BFS': 11045.6, # [mm], radius of BFS
-                                   'f-number': 3.57,
-                                   'FoV': None # [deg]
-                                   }
-
-          elif self.project == 'DESI':
-               focal_surf_param = {
-                                   'name': 'DESI',
-                                   'R': -11067, 
-                                   'vigR': 406.,
-                                   'asph_formula': False,
-                                   'BFS': 11067, # [mm], radius of BFS,
-                                   'f-number': 3.699,
-                                   'FoV': None # [deg]
-                                   }
-               
-          elif self.project == 'WST1':
-               focal_surf_param = {
-                                   'name': r'$\bf{WST - Focal Plane \varnothing: 1.2 m - Center \varnothing: 0.17m}$',
-                                   'R': -11067, 
-                                   'vigR': 600, # [mm], vignetting radius
-                                   'donutDiam': 20, # [arcmin], diameter of donut hole
-                                   'asph_formula': False,
-                                   'BFS': 11067, # [mm], radius of BFS,
-                                   'f-number': 3.699, # assumption based on previous telescope designs
-                                   'FoV': 1.8 # [deg]
-                                   }
-               
-          elif self.project == 'WST2':
-               focal_surf_param = {
-                              'name': r'$\bf{WST - Focal Plane \varnothing: 1.4 m - Center \varnothing: 0.2m}$',
-                              'R': -11067, 
-                              'vigR': 700,# [mm], vignetting radius
-                              'donutDiam': 20, # [arcmin], diameter of donut hole
-                              'asph_formula': False,
-                              'BFS': 11067, # [mm], radius of BFS,
-                              'f-number': 3.7, # assumption based on previous telescope designs
-                              'FoV': 1.8 # [deg]
-                              }
-
-          elif self.project == 'WST3':
-               focal_surf_param = {
-                              'name': r'$\bf{WST - Focal Plane \varnothing: 1.3 m - Center \varnothing: 0.24m (20 arcmin)}$',
-                              'R': -11067, 
-                              'vigR': 650,# [mm], vignetting radius
-                              'donutDiam': 20, # [arcmin], diameter of donut hole
-                              'asph_formula': False,
-                              'BFS': 11067, # [mm], radius of BFS,
-                              'f-number': 3.7, # assumption based on previous telescope designs
-                              'FoV': 1.8 # [deg]
-                              }
-               
-          elif self.project == 'Spec-s5':
-               focal_surf_param = {
-                    'name': r'$\bf{Spec-s5}$',
-                    'R': -13000, # [mm], main radius of curvature (roughly 13m from Claire's info 20.10.2023)
-                    'vigR': 4.084421E+02,# [mm], vignetting radius
-                    'asph_formula': False,
-                    'BFS': -1.277364E+04, # [mm], radius of BFS,
-                    'f-number': 3.64, # assumption based on previous telescope designs
-                    'FoV': None # [deg]
-                    }
-          else: 
-               logging.error(f'Setting focal surface parameters: {self.project} project is not defined')
-               raise Exception(f'Error in setting focal surface parameters: {self.project} project is not defined')
-
-          return focal_surf_param
      
      def calc_BFS(self, r, z):
 
@@ -196,9 +216,24 @@ class FocalSurf():
           pizza = Polygon(to_polygon_format(vigR_lim_x, vigR_lim_y))
 
           if self.project == 'WST' or self.project == 'WST1' or self.project == 'WST2' or self.project == 'WST3':
-                    donut = Polygon(to_polygon_format(vigR_lim_x*self.arcmin2mm(self.donutR)/self.vigR, vigR_lim_y*self.arcmin2mm(self.donutR)/self.vigR))
-                    pizza = pizza.difference(donut)
-                    self.surfaces_polygon['donut'] = donut
+               # WST has a donut hole in the center of the focal plane for big fiber bundle
+               donut = Polygon(to_polygon_format(vigR_lim_x*self.arcmin2mm(self.donutR)/self.vigR, vigR_lim_y*self.arcmin2mm(self.donutR)/self.vigR))
+               pizza = pizza.difference(donut)
+               self.surfaces_polygon['donut'] = donut
+
+          # elif self.project == 'MUST':
+          #      # 2023.11.08 update: MUST has a blind spot at the center for wavefront sensor --> need sensor's footprint
+          #      # donut = Polygon(to_polygon_format(vigR_lim_x*30/self.vigR, vigR_lim_y*30/self.vigR))
+          #      # pizza = pizza.difference(donut)
+          #      # self.surfaces_polygon['donut'] = donut
+          #      length, width = 60, 60
+          #      minx = -length/2
+          #      miny = -width/2
+          #      maxx = length/2
+          #      maxy = width/2
+          #      donut = Polygon([(minx, miny), (maxx, miny), (maxx, maxy), (minx, maxy), (minx, miny)])
+          #      pizza = pizza.difference(donut)
+          #      self.surfaces_polygon['donut'] = donut
 
           self.surfaces_polygon['pizza'] = pizza
 
@@ -657,6 +692,7 @@ class IntermediateTriangle:
 
           return intermediate_collection, intermediate_collection_speed, intermediate_coverage, inter_df
 
+# NOTE: GFA class
 class GFA(SavingResults):
      def __init__(self, length: float, width: float, nb_gfa: int, saving_df, vigR: float, trimming_angle = 360) -> None:
           self.length = length
@@ -731,7 +767,7 @@ class GFA(SavingResults):
 # NOTE: Grid generation class
 class Grid:
 
-     def __init__(self, module_width: float, inter_frame_thick: float, global_frame_thick: float, vigR: float, R: float, centered_on_triangle: bool  = False) -> None:
+     def __init__(self, module_width: float, inter_frame_thick: float, global_frame_thick: float, vigR: float, BFS: float, centered_on_triangle: bool  = False) -> None:
 
           self.centered_on_triangle = centered_on_triangle
           self.module_width = module_width
@@ -739,7 +775,7 @@ class Grid:
           self.global_frame_thick = global_frame_thick
           self.inter_frame_width = 2*self.module_width + 2*self.inter_frame_thick*np.cos(np.deg2rad(30)) + 2*self.global_frame_thick*np.cos(np.deg2rad(30))
           self.vigR = vigR
-          self.R = R
+          self.BFS = BFS
           
           self.grid_df = {}
           self.x_grid, self.y_grid, self.z_grid = self.create_flat_grid()
@@ -784,7 +820,7 @@ class Grid:
           
           x_grid = np.array(x_grid)
           y_grid = np.array(y_grid)
-          z_grid = -np.sqrt(self.R**2 - (self.vigR)**2)*np.ones(len(x_grid))
+          z_grid = -np.sqrt(self.BFS**2 - (self.vigR)**2)*np.ones(len(x_grid))
 
           self.grid_df['x_grid_flat'] = x_grid
           self.grid_df['y_grid_flat'] = y_grid
@@ -912,9 +948,9 @@ def plot_intermediate(intermediate_collection, nb_robots, ignore_points, interme
                continue
           plot_module(mod_collection, label_coverage, label_robots, ignore_points)
                
-def final_title(project: str, nb_robots: int, total_modules: int, total_robots: int, inter_frame_thick, global_frame_thick, allow_small_out: bool, out_allowance: float, disp_robots_info: bool = True):
+def final_title(project: str, vigR:float, nb_robots: int, total_modules: int, total_robots: int, inter_frame_thick, global_frame_thick, allow_small_out: bool, out_allowance: float, disp_robots_info: bool = True):
 
-     project_info = r"$\bf{Project:}$" + project
+     project_info = r"$\bf{Project:}$" + project + r" - $\varnothing$" + f" {2*vigR} mm"
      
      if allow_small_out:
           small_out_info = f"Out allowance: {out_allowance * 100:0.1f} %"
@@ -930,9 +966,9 @@ def final_title(project: str, nb_robots: int, total_modules: int, total_robots: 
      if inter_frame_thick != global_frame_thick:
           figtitle = f"{project_info}\n Semi frameless - {modules_info} \n Inner gap: {inter_frame_thick} mm - Global gap: {global_frame_thick} mm {robots_info} \n {small_out_info} \n"
      elif inter_frame_thick == global_frame_thick and global_frame_thick == 0:
-          figtitle = f"Frameless - {modules_info} {robots_info} \n {small_out_info} \n"
+          figtitle = f"{project_info}\n Frameless - {modules_info} {robots_info} \n {small_out_info} \n"
      else:
-          figtitle = f"Framed - {modules_info} \n Gap: {inter_frame_thick} mm {robots_info} \n {small_out_info} \n"
+          figtitle = f"{project_info}\n Framed - {modules_info} \n Gap: {inter_frame_thick} mm {robots_info} \n {small_out_info} \n"
 
      return figtitle
 

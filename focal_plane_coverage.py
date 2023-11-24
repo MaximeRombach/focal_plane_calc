@@ -63,10 +63,10 @@ start_time = time.time()
 
 ## Study one case at a time
 nbots = [63]
-out_allowances = [0.5]
+out_allowances = [0.7]
 
 width_increase = 0 # [mm] How much we want to increase the base length of a module
-chanfer_length = 10 # [mm] Size of chanfers of module vertices (base value: 7.5); increase chanfer decreases coverage as it reduces the module size thus patrol area
+chanfer_length = 10.5 # [mm] Size of chanfers of module vertices (base value: 7.5); increase chanfer decreases coverage as it reduces the module size thus patrol area
 centered_on_triangle = False # move the center of the grid (red dot) on the centroid on a triangle instead of the edge
 full_framed = False # flag to check wether we are in semi frameless or in full framed case (turns True if inter_gap = global_gap = 0 mm)
 
@@ -92,9 +92,9 @@ if inner_gap == global_gap and inner_gap != 0:
 """ Define focal surface """
 
 # Available projects: MUST, Megamapper, DESI, WST1, WST2, WST3, Spec-s5
-project_surface = 'MegaMapper'
+project_surface = 'MUST'
 surf = param.FocalSurf(project = project_surface)
-R = abs(surf.R)
+curvature_R = abs(surf.curvature_R)
 vigR = surf.vigR
 BFS = surf.BFS
 trimming_angle = 360
@@ -112,14 +112,15 @@ save_plots = False # Save most useful plots
 save_all_plots = False  # Save all plots (including intermediate ones)
 save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
 save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
-save_txt = False # Save positions of modules along curved focal surface
+save_txt = True # Save positions of modules along curved focal surface
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
 saving = param.SavingResults(saving_df, project_surface)
 
 """GFA stuff"""
 gfa_tune = 1
 nb_gfa = 6
-gfa = param.GFA(length = 33.3*gfa_tune, width = 61*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df)
+# gfa = param.GFA(length = 33.3*gfa_tune, width = 61*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df)
+gfa = param.GFA(length = 60*gfa_tune, width = 60*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df)
 gdf_gfa = gfa.gdf_gfa
 polygon_gfa = MultiPolygon(list(gdf_gfa['geometry']))
 
@@ -184,7 +185,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
      dist_global = 2*rho
      inter_centroid = inter_frame_width*np.sqrt(3)/3*np.array([np.cos(np.deg2rad(30)), np.sin(np.deg2rad(30))])
 
-     grid = param.Grid(module_width, inner_gap, global_gap, vigR, R, centered_on_triangle = centered_on_triangle)
+     grid = param.Grid(module_width, inner_gap, global_gap, vigR, BFS, centered_on_triangle = centered_on_triangle)
      grid_df = grid.grid_df
      grid.plot_2D_grid()
 
@@ -578,8 +579,7 @@ if global_gap > 0:
           ax.set_title('Outline saved to DXF file')     
      
 print(surf.surf_name)
-figtitle = param.final_title(surf.surf_name, nb_robots, total_modules, total_robots, inner_gap, global_gap, allow_small_out, out_allowance)
-print(figtitle)
+figtitle = param.final_title(surf.surf_name, vigR, nb_robots, total_modules, total_robots, inner_gap, global_gap, allow_small_out, out_allowance)
 filename = f"Coverage_global_{nb_robots}_rob__Inner_{inner_gap}_mm__Global_{global_gap}_mm"
 f, ax= plt.subplots(figsize=(12, 12), sharex = True, sharey=True)
 f.suptitle(figtitle)
@@ -776,7 +776,7 @@ if len(out_allowances) > 1:
 
 end_time = time.time()
 
-print(f'Elapsed time: {end_time-start_time:0.3f} s')
+print(f'Focal plane coverage run complete \n Elapsed time: {end_time-start_time:0.3f} s')
 
 if draw and is_timer:
      

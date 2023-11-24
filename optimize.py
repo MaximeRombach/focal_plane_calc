@@ -10,7 +10,7 @@ import logging
 
 # Choose project
 # Available: MUST, Megamapper
-project = 'MegaMapper'
+project = 'MUST'
 surf = param.FocalSurf(project = project)
 logging.basicConfig(level=logging.INFO)
 logging.info('Project loaded: %s', project)
@@ -21,38 +21,27 @@ saving = param.SavingResults(saving_df)
 
 draw = True
 
-if surf.asph_formula: # Check if focal surface defined directly by ashperic coefficients (analytical solution)
-    R2Z = surf.asph_R2Z()
+R2Z_analytical = surf.asph_R2Z()
 
-elif not surf.asph_formula and project == 'MegaMapper': # If no coefficients load data from csv file and interpolate to get focal plane curve
+# elif not surf.asph_formula and project == 'Spec-s5':
+#     filename = "./Data_focal_planes/2023_10_16_Spec-s5.txt" # optics data from Zemax
+#     Z,CRD,R = surf.read_focal_plane_data(filename) # Read data from csv file
 
-    filename = "./Data_focal_planes/2021_10_09_MegaMapper.csv" # optics data from Zemax
-    comment_character = "#"  # The character that indicates a commented line
-    # Read CSV file and ignore commented lines
-    optics_data = pd.read_csv(filename, comment=comment_character)
+filename = f"./Data_focal_planes/{project}.txt" # optics data from Zemax
+optics_data = surf.read_focal_plane_data() # Read data from csv file
+print(optics_data)
 
-    # Set headers using the first non-comment line
-    with open(filename, 'r') as file:
-        for line in file:
-            if not line.startswith(comment_character):
-                headers = line.strip().split(',')
-                break
+Z = optics_data['Z']
+R = optics_data['R']
+CRD = optics_data['CRD']
 
-    optics_data.columns = headers
-
-    Z = optics_data['Z']
-    CRD = optics_data['CRD']
-    R = optics_data['R']
-
-    R2Z = interp1d(R,Z,kind='cubic', fill_value = "extrapolate") #leave 'cubic' interpolation for normal vectors calculations
-    R2CRD = interp1d(R,CRD,kind='cubic')
-
-elif not surf.asph_formula and project == 'Spec-s5':
-    filename = "./Data_focal_planes/2023_10_16_Spec-s5.txt" # optics data from Zemax
-
+R2Z = interp1d(R,Z,kind='cubic', fill_value = "extrapolate") #leave 'cubic' interpolation for normal vectors calculations
+R2CRD = interp1d(R,CRD,kind='cubic')
 
 r = np.linspace(0,surf.vigR,500) # Define radius vector for focal plane curve
 z = R2Z(r) # Calculate focal plane curve from csv data
+
+z_analytical = R2Z_analytical(r)
 
 #%% Plot 3D focal plane from curve
 
@@ -84,6 +73,8 @@ z = R2Z(r) # Calculate focal plane curve from csv data
 #%% 2) Define BFS
 
 BFS = surf.calc_BFS(r,z)
+BFS_analytical = surf.calc_BFS(r,z_analytical)
+print(f"BFS = {BFS :.3f} mm \n BFS = {BFS_analytical :.3f} mm" )
 z_BFS = np.sqrt(BFS**2 - r**2) - BFS # Define z coordinate of BFS
 
 plt.figure()
