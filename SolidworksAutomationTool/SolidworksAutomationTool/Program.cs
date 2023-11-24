@@ -114,7 +114,6 @@ modulePart.SketchManager.Insert3DSketch(true);
 modulePart.ShowNamedView2("", (int)swStandardViews_e.swIsometricView);
 
 // disable user input box when adding dimensions
-//solidworksApp.SetUserPreferenceToggle( (int)swUserPreferenceToggle_e.swInputDimValOnCreate, false );
 DisableInputDimensionByUser(ref solidworksApp);
 
 // disable view refreshing until points are created
