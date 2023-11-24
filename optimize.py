@@ -29,14 +29,8 @@ R2Z_analytical = surf.asph_R2Z()
 
 filename = f"./Data_focal_planes/{project}.txt" # optics data from Zemax
 optics_data = surf.read_focal_plane_data() # Read data from csv file
-print(optics_data)
 
-Z = optics_data['Z']
-R = optics_data['R']
-CRD = optics_data['CRD']
-
-R2Z = interp1d(R,Z,kind='cubic', fill_value = "extrapolate") #leave 'cubic' interpolation for normal vectors calculations
-R2CRD = interp1d(R,CRD,kind='cubic')
+R2Z, R2CRD = surf.transfer_functions(optics_data)
 
 r = np.linspace(0,surf.vigR,500) # Define radius vector for focal plane curve
 z = R2Z(r) # Calculate focal plane curve from csv data
@@ -76,6 +70,9 @@ BFS = surf.calc_BFS(r,z)
 BFS_analytical = surf.calc_BFS(r,z_analytical)
 print(f"BFS = {BFS :.3f} mm \n BFS = {BFS_analytical :.3f} mm" )
 z_BFS = np.sqrt(BFS**2 - r**2) - BFS # Define z coordinate of BFS
+tol = 50e-3
+z_tol_up = z + tol*np.ones(len(z))
+z_tol_down = z - tol*np.ones(len(z))
 
 plt.figure()
 plt.title('Focal plane aspherical curve and Best Fit Sphere')
@@ -83,6 +80,8 @@ plt.plot(r,z, label = 'Aspherical curve')
 plt.xlabel('r [mm]')
 plt.ylabel('z [mm]')
 plt.plot(r,z_BFS, '--', label = 'BFS')
+plt.plot(r,z_tol_up, '--', color = 'g', label = fr'Tolerance = $\pm$ {tol} mm')
+plt.plot(r,z_tol_down, '--' , color = 'g',)
 plt.grid()
 plt.legend()
 

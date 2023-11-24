@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from shapely.geometry import Polygon, box
 from shapely.ops import unary_union
 from scipy import optimize
+from scipy.interpolate import interp1d
 from shapely.plotting import plot_polygon, plot_points
 import os
 from datetime import datetime
@@ -52,6 +53,7 @@ class FocalSurf():
           self.surfaces_polygon = {} # dictionnary to store the polygons of the focal plane surfaces (main vigR, GFA, donut hole, etc)
           self.surf_name = self.focal_surf_param['name']
           self.FoV = self.focal_surf_param['FoV']
+
 
 
      def set_surface_parameters(self):
@@ -164,8 +166,29 @@ class FocalSurf():
 
                #TODO: add SPEC-S5 data (read txt)
                
+               print(f"{self.project} focal plane data successfully read from {filename}")
                return optics_data
      
+     def transfer_functions(self, optics_data):
+
+          """ 
+          Input: 
+               - optics_data: pandas dataframe containing the focal plane data from zmax csv file
+
+          Output:
+               - R2Z: functions to convert radius to height on focal surface
+               - R2CRD: function to get chief ray deviation interms of radial position on focal surface
+          
+          ATTENTION: Needs csv file to contain columns named: R, Z, CRD """
+          Z = optics_data['Z']
+          R = optics_data['R']
+          CRD = optics_data['CRD']
+
+          R2Z = interp1d(R,Z,kind='cubic', fill_value = "extrapolate") #leave 'cubic' interpolation for normal vectors calculations
+          R2CRD = interp1d(R,CRD,kind='cubic')
+
+          return R2Z, R2CRD
+
      def asph_R2Z(self):
           """ 
           Returns the aspherical focal plane curve from the aspherical coefficients
