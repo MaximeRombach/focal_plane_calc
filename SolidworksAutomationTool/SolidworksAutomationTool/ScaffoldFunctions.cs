@@ -564,7 +564,7 @@ namespace SolidworksAutomationTool
             partModelDoc.EditSketch();
 
             // it's a bit weird to cast the sketch back and forth, but only the Feature object has the sketch's name
-            string pastedPinHoleTriangleSketchName = ((Feature)pastedSketch).Name;
+            //string pastedPinHoleTriangleSketchName = ((Feature)pastedSketch).Name;
             object[] sketchSegments = (object[])pastedSketch.GetSketchSegments();
 
             SketchPoint? triangleCenter = GetTriangleCenterPoint(ref sketchSegments);
@@ -632,14 +632,14 @@ namespace SolidworksAutomationTool
             // TODO: check if can set one side of the chamfered triangle to be in parallel with the first chamfered triangle
             //SketchSegment? unchamferedTriangleMostPositiveSlopedSide = GetMostPositiveSlopedSideInChamferedTriangle(ref segments);
             // TODO: temporary workaround, simply set one of the sides to be in horizontal to fully define each chamfered triangle
-            SketchLine aRelativelyFlatSide = GetMostHorizontalTriangleSide(ref chamferedTriangleSegments);
-            ((SketchSegment)aRelativelyFlatSide).Select4(true, swSelectData);
+            SketchLine aLongSideChamferedTriangle = GetLongestMostHorizontalTriangleSide(ref chamferedTriangleSegments);
+            ((SketchSegment)aLongSideChamferedTriangle).Select4(true, swSelectData);
             MakeSelectedLineHorizontal(ref partModelDoc);
             ClearSelection(ref partModelDoc);
 
             // get a handle on the longest most horizontal side of a chamfered triangle.
             // This side will be used as a reference to set parallel constraint to a side of a full triangle
-            SketchLine? aLongSideChamferedTriangle = GetLongestMostHorizontalTriangleSide(ref chamferedTriangleSegments);
+            //SketchLine? aLongSideChamferedTriangle = GetLongestMostHorizontalTriangleSide(ref chamferedTriangleSegments);
 
             // quit editing sketch
             // TODO: try not rebuilding now
