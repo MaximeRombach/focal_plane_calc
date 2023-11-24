@@ -572,10 +572,7 @@ namespace SolidworksAutomationTool
             if (!isUprightTriangle)
             {
                 // orientation flag is false, meaning the module should be upside-down
-                foreach (SketchSegment pinHoleTriangleSketchSegment in sketchSegments.Cast<SketchSegment>())
-                {
-                    pinHoleTriangleSketchSegment.Select4(true, swSelectData);
-                }
+                SelectAllSketchSegments(ref sketchSegments, swSelectData);
                 RotateSelected(ref partModelDoc, triangleCenter.X, triangleCenter.Y, Math.PI);
                 ClearSelection(ref partModelDoc);
             }
@@ -804,10 +801,7 @@ namespace SolidworksAutomationTool
         public static SketchBlockDefinition MakeTriangleBlockFromTrianglePolygon(object[] trianglePolygon, ref ModelDoc2 partModelDoc, SelectData swSelectData)
         {
             // Select the triangle polygon
-            foreach (SketchSegment triangleSegment in trianglePolygon.Cast<SketchSegment>())
-            {
-                triangleSegment.Select4(true, swSelectData);
-            }
+            SelectAllSketchSegments(ref trianglePolygon, swSelectData);
             SketchBlockDefinition triangleBlock = partModelDoc.SketchManager.MakeSketchBlockFromSelected(null);
             return triangleBlock;
         }
