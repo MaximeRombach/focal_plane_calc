@@ -426,6 +426,17 @@ namespace SolidworksAutomationTool
             return (SketchLine?)longSide;
         }
 
+        /* TODO: implement the function
+         * Create global variables in the equation manager
+         * Params: 
+         * Returns Index of the new equation if successfully added, -1 if error occured
+         * If adding a global variable assignment that already exists, this method returns an error.
+         * */
+        public static int CreateGlobalVariableInAllConfigs(ref ModelDoc2 partModelDoc, string expression)
+        {
+            
+            return ;
+        }
 
         /* A wrapper function to reduce the boilerplate code for creating normal planes using the "point and normal" method
          *  This function first selects an extrusion axis, requiring it to be perpendicular to the ref plane;
