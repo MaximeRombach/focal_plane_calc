@@ -241,7 +241,7 @@ Console.WriteLine("Revolving a pizza slice ...");
 // define variables needed for pizza creation
 double arcAngle = DegreeToRadian(15);
 
-// TODO: verify Solidworks wants points to be defined in the local cartesian coordinate frame. - inside a sketch, yes
+// Solidworks wants points to be defined in the local cartesian coordinate frame inside a sketch
 Point3D arcCenterPoint = new(0, -bestFitSphereRadius, 0);
 Point3D arcStartPoint = new(0, 0, 0);
 Point3D arcEndPoint = new(bestFitSphereRadius * Math.Sin(arcAngle), -bestFitSphereRadius * (1 - Math.Cos(arcAngle)), 0);
