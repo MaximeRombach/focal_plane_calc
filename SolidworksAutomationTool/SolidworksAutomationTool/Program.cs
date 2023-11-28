@@ -22,14 +22,28 @@ const double filletRadiusFullTriangle = 2.5e-3;     // in meters
 // TODO: param: bestFitSphereRadius.
 const double bestFitSphereRadius = 11045.6e-3;      // in meters
 // TODO: param: focal plane thickness
-double outerRimHeight = 200e-3;                     // in meters
+const double outerRimHeight = 200e-3;                     // in meters
 // TODO: param: distance between the support surface to top surface definition
-double supportToTopSurfaceDistance = 30e-3;         // in meters
+const double supportToTopSurfaceDistance = 30e-3;         // in meters
 // TODO: create horizontal line (for flat bottom surface). Need a better name here
-double bottomSurfaceRadius = 663.27e-3;
-// TODO: define the side length of the equilateral triangle
-double equilateralTriangleSideLength = 74.5e-3;
+const double bottomSurfaceRadius = 663.27e-3;
+// TODO: param: side length of the equilateral triangle (full triangle)
+const double equilateralTriangleSideLength = 74.5e-3;
 
+// add variables to the solidworks global variable equation table. If later fine tuning of some parameters is needed, the user can do so in solidworks' GUI
+Dictionary<string, double> solidworksGlobalVariables = new()
+{
+    { nameof(chamferLength), chamferLength },
+    { nameof(pinHoleDiameter), pinHoleDiameter },
+    { nameof(pinHoleDepth), pinHoleDepth },
+    { nameof(interPinHoleDistance), interPinHoleDistance },
+    { nameof(filletRadiusFullTriangle), filletRadiusFullTriangle },
+    { nameof(bestFitSphereRadius), bestFitSphereRadius },
+    { nameof(outerRimHeight), outerRimHeight },
+    { nameof(supportToTopSurfaceDistance), supportToTopSurfaceDistance },
+    { nameof(bottomSurfaceRadius), bottomSurfaceRadius },
+    { nameof(equilateralTriangleSideLength), equilateralTriangleSideLength },
+};
 
 Console.WriteLine("Welcome to the LASTRO Solidworks Automation Tool!");
 
@@ -103,6 +117,14 @@ Console.WriteLine("Creating extrusion axes from point clouds ...");
 
 // create a part
 modulePart = solidworksApp.INewDocument2( solidworksApp.GetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplatePart), 0, 0, 0);
+
+// test adding global variables - seems fine
+foreach (KeyValuePair<string, double> variableNameValue in solidworksGlobalVariables)
+{
+    CreateGlobalVariableInAllConfigs(ref modulePart, variableNameValue.Key, variableNameValue.Value);
+}
+
+PromptAndWait("Check if global variables are added");
 
 // Get a handle to the FRONT, TOP, RIGHT planes
 BasicReferenceGeometry basicRefGeometry = GetBasicReferenceGeometry(ref modulePart);
