@@ -426,16 +426,28 @@ namespace SolidworksAutomationTool
             return (SketchLine?)longSide;
         }
 
-        /* TODO: implement the function
+        /* 
          * Create global variables in the equation manager
-         * Params: 
+         * Params:  partModelDoc: reference to the ModelDoc2 object
+         *          expression: global variable assignment in string
          * Returns Index of the new equation if successfully added, -1 if error occured
          * If adding a global variable assignment that already exists, this method returns an error.
          * */
-        public static int CreateGlobalVariableInAllConfigs(ref ModelDoc2 partModelDoc, string expression)
+        public static int CreateGlobalVariableInAllConfigs(ref ModelDoc2 partModelDoc, string variableName, double variableValue)
         {
-            
-            return ;
+            EquationMgr equationManager = partModelDoc.GetEquationMgr();
+            // syntax is referenced from https://help.solidworks.com/2022/English/api/sldworksapi/Add_Equations_Example_CSharp.htm?verRedirect=1
+            // by default adding the global variable to the end of the equation list
+            //int variableIndex = equationManager.Add3(-1, $"\"{variableName}\" = {variableValue}m", true, (int)swInConfigurationOpts_e.swAllConfiguration, null);
+            string variableAssignmentExpression = $"\"{variableName}\" = {variableValue,0:F6}m";
+            int variableIndex = equationManager.Add2(-1, variableAssignmentExpression, true);
+            // TODO: check if the feature manager update is necessary
+            partModelDoc.FeatureManager.UpdateFeatureTree();
+            if (variableIndex == -1)
+            {
+                Console.WriteLine($"ERROR adding global variable : {variableName} with value {variableValue}");
+            }
+            return variableIndex;
         }
 
         /* A wrapper function to reduce the boilerplate code for creating normal planes using the "point and normal" method
