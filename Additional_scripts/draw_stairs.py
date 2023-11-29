@@ -1,6 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import sys
+# Or the path to the focal_plane_calc folder on your machine
+# I know it is not the best way to do it but it works for now, To Be Fixed Later
+sys.path.insert(0,'C:/Users/rombach/Documents/Astrobots/Inosuisse/focal_plane_calc')
+
 import numpy as np
 import matplotlib.pyplot as plt
 import math
@@ -12,37 +17,44 @@ from datetime import datetime
 
 ## Parameters ##
 
-Rc = 11067 # Curve radius [mm]
-vigR = 613.2713
-d_plane = 1200 # Focal plane diameter [mm]
-nb_robots = 102
+project = 'MegaMapper'
+surf = param.FocalSurf(project)
+
+Rc = surf.curvature_R # Curve radius [mm]
+vigR = surf.vigR
+d_plane = 2*vigR # Focal plane diameter [mm]
+nb_robots = 75
 saving_df = {"save_plots": False, "save_dxf": False, "save_csv": False, "save_txt": False }
+display_BFS = False
+save = param.SavingResults(saving_df, project_name=project)
 mod_param = param.Module(nb_robots, saving_df)
 module_width = mod_param.module_width * np.sqrt(3)/2 #= triangle HEIGHT and NOT side
-# module_width = 74*np.sqrt(3)/2 # Module width [mm] = triangle HEIGHT and NOT side
 nb_modules = 9 #number of modules of one side of the axis
 tolerance_envelop_width = 0.1 # [mm] tolerance in positioning around nominal focal surface
-start_offset = 0
+start_offset = module_width/2
 
-t = Table.read('MM1536-cfg1-20210910.csv', comment='#')
+t = Table.read(f'Data_focal_planes/{project}.csv', comment='#', delimiter=',')
 Z_data = -t['Z']
 CRD_data = t['CRD']
 R_data = t['R']
+r = np.linspace(0,vigR,500)
+
+BFS = surf.calc_BFS(R_data, Z_data)
+R2Z_BFS = interp1d(r,-np.sqrt(BFS**2-np.square(r)) + BFS,kind='cubic', fill_value = "extrapolate")
 
 R2Z = interp1d(R_data,Z_data,kind='cubic', fill_value = "extrapolate") #leave 'cubic' interpolation for normal vectors calculations
-
 R2CRD = interp1d(R_data,CRD_data,kind='cubic')
-r = np.linspace(0,vigR,500)
+
 z = R2Z(r) # Calculate focal plane curve from csv data
 
 saving = param.SavingResults(saving_df)
 to_csv_dict = {}
 
-def calc_modules_pos(Rc, module_width, nb_modules, R2Z, BFS = False):
+def calc_modules_pos(BFS, module_width, nb_modules, R2Z, on_BFS = False):
 
     r_modules = np.arange(start_offset,nb_modules*module_width+start_offset,module_width)
     if BFS: # Calculate module pos on Best Fit Sphere
-        z_modules = -np.sqrt(Rc**2-np.square(r_modules)) + Rc
+        z_modules = R2Z_BFS(r_modules)
     else: # Calcualte module pos on interpolation of values from Berkeley optical team (csv file)
         z_modules = R2Z(r_modules) 
 
@@ -74,6 +86,9 @@ def get_normals(r_modules, R2Z, h=0.001):
         normal.append([-dy, dx])
 
     return np.array(normal)
+
+def get_nomrals2():
+    """Calculates the normal vectors to the curve"""
 
 def get_normals_angles(normal, print_data = True):
     """Calculates the angle between the normal vectors and the vertical"""
@@ -197,19 +212,20 @@ def draw_modules_horizontal(plot_axis=0, draw=True, draw_one = False, module_num
 
         plt.plot((x_min,x_max),(y_modules[module_number], y_modules[module_number]), color='r', label="Horizontal modules", linewidth=1.25)
 
-def draw_BFS(Rc,vigR, draw=False, full_curve = False):
+def draw_BFS(BFS,vigR, display_BFS=False, full_curve = False):
     """Draws the Best Fit Sphere of the focal surface for comparison with the interpolated one
     full_curve criteria draws both sides of the curve"""
-    if not draw:
+    if not display_BFS:
         return
     if full_curve: 
         x = np.linspace(-vigR,vigR,100)
     else:
         x = np.linspace(0,vigR,100)
 
-    y = -np.sqrt(Rc**2-np.square(x)) + Rc
+    y = R2Z_BFS(x)
 
-    plt.plot(x,y,label='BFS',color='orange',linestyle='-.')
+    plt.plot(x,y,label=f'BFS = {int(BFS)} mm',color='orange',linestyle='-.')
+    plt.legend()
 
 def draw_R2CRD(r,R_data,CRD_data,R2CRD, draw=True):
     if not draw:
@@ -236,13 +252,13 @@ def draw_envelop(plot_axis = 0,draw = True, draw_legend=False):
 
     plt.plot(r_envelop_plus, z_envelop_plus, envelop_looks, linewidth = 0.75)
 
-def zoom_in_1module(module_number, xbound, ybound, save_fig, draw=True):
+def zoom_in_1module(module_number, xbound, ybound, draw=True):
 
     if not draw:
         return
     
-    figtitle = 'Zoom in module #{} - {} robots'.format(module_number+1, nb_robots)
-    fig = plt.figure(figtitle,figsize=(15,5))
+    figtitle = 'Project: $\\bf{'+f'{project}''}$'+'\nZoom in module #{} - {} robots'.format(module_number+1, nb_robots)
+    fig = plt.figure('Zoom in module', figsize=(15,5))
     x_center, y_center = x_modules[module_number], y_modules[module_number]
     xlim_min, xlim_max, ylim_min, ylim_max = x_center - xbound, x_center + xbound,  y_center - ybound, y_center + ybound
 
@@ -250,7 +266,9 @@ def zoom_in_1module(module_number, xbound, ybound, save_fig, draw=True):
     draw_modules_horizontal(plot_axis=1, draw=True, draw_one=True, module_number=module_number)
     draw_envelop(plot_axis=1, draw_legend=True)
     draw_modules_oriented(plot_axis=1, draw_one=True, module_number=module_number)
+    # draw_normals(x_modules,y_modules,normal,length=1)
     translate_module_in_envelop(dist=0.025, module_number=module_number)
+    draw_BFS(BFS,vigR, display_BFS=display_BFS, full_curve=False)
 
     plt.xlim(xlim_min, xlim_max)
     plt.ylim(ylim_min, ylim_max)
@@ -259,10 +277,14 @@ def zoom_in_1module(module_number, xbound, ybound, save_fig, draw=True):
     plt.xlabel('R [mm]')
     plt.ylabel('Z [mm]')
     plt.grid()
-    param.save_figures_to_dir(save_fig, figtitle)
 
 
-x_modules, y_modules = calc_modules_pos(Rc, module_width, nb_modules, R2Z)
+def dist2curve(x,y,x_curve):
+    """Calculate the distance between a point and a curve"""
+    y_curve = R2Z(x_curve)
+    return np.sqrt((x-x_curve)**2 + (y-y_curve)**2)
+
+x_modules, y_modules = calc_modules_pos(BFS, module_width, nb_modules, R2Z)
 normal = get_normals(x_modules, R2Z)
 angles = get_normals_angles(normal)
 new_left_module, new_right_module = rotate_modules_tangent_2_surface(x_modules, y_modules, angles)
@@ -285,23 +307,30 @@ draw_normals(x_modules,y_modules,normal,length=10)
 draw_modules_horizontal()
 draw_modules_oriented(draw = True)
 plt.plot(r,z,'--g',label="Focal surface")
-draw_BFS(Rc,vigR, draw=False, full_curve=False)
+draw_BFS(BFS,vigR, display_BFS=display_BFS)
 draw_envelop()
 plt.legend(shadow=True)
-plt.title(f'Focal surface and module arrangement with normal vectors - {nb_robots} robots/module')
+plt.title('Project: $\\bf{'+f'{project}''}$'+f'\nFocal surface and module arrangement with normal vectors - {nb_robots} robots/module')
 plt.xlabel('R [mm]')
 plt.ylabel('Z [mm]')
 plt.grid()
-param.save_figures_to_dir(save_fig, 'Focal surface and module arrangement with normal vectors')
+save.save_figures_to_dir('Focal surface and module arrangement with normal vectors')
 
-zoom_in_1module(module_number = 3, xbound=45, ybound=1, save_fig = save_fig, draw=True)
+module_number = 3
+if nb_robots == 102:
+    xbound=45
+    ybound=1.2
+elif nb_robots == 63:
+    xbound=35
+    ybound=0.75
+elif nb_robots == 75:
+    xbound=40
+    ybound=0.9
+zoom_in_1module(module_number = module_number, xbound=xbound, ybound=ybound, draw=True)
+save.save_figures_to_dir(f'Zoomed_in_module_{module_number+1}')
 draw_R2CRD(r,R_data,CRD_data,R2CRD, draw=False)
 
-# print(to_csv_dict)
-# to_csv_df = pd.DataFrame(to_csv_dict)
-# now = datetime.now()
-# today_filename = now.strftime("%Y-%m-%d-%H-%M-%S_") + "stairs_data.csv"
-# to_csv_df.to_csv(saving.results_dir_path() + today_filename)
+
 
 if is_timer:
     plt.show(block=False)
