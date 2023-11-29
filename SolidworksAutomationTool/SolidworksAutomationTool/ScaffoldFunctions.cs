@@ -722,7 +722,7 @@ namespace SolidworksAutomationTool
          */
         public static Dimension AddDimensionToSelected(ref ModelDoc2 partModelDoc, double dimensionValue, double dimLocationX, double dimLocationY, double dimLocationZ)
         {
-            // first create a DisplayDimension that 
+            // first create a DisplayDimension that is displayed in parts, assemblies, drawings
             DisplayDimension displayDimension = (DisplayDimension)partModelDoc.AddDimension2(dimLocationX, dimLocationY, dimLocationZ);
             // The Index argument is valid for chamfer display dimensions only.
             // If the display dimension is not a chamfer display dimension, then Index is ignored.
@@ -738,7 +738,7 @@ namespace SolidworksAutomationTool
          */
         public static Dimension AddDimensionToSelected(ref ModelDoc2 partModelDoc, double dimensionValue, SketchPoint displayDimensionLocation )
         {
-            // first create a DisplayDimension that 
+            // first create a DisplayDimension that is displayed in parts, assemblies, drawings
             DisplayDimension displayDimension = (DisplayDimension)partModelDoc.AddDimension2(displayDimensionLocation.X, displayDimensionLocation.Y, displayDimensionLocation.Z);
             // The Index argument is valid for chamfer display dimensions only.
             // If the display dimension is not a chamfer display dimension, then Index is ignored.
@@ -747,6 +747,25 @@ namespace SolidworksAutomationTool
             // not sure if swSetValue_InThisConfiguration is the best parameter to use
             dimension.SetSystemValue3(dimensionValue, (int)swSetValueInConfiguration_e.swSetValue_InThisConfiguration, "");
             return dimension;
+        }
+
+        /* Add dimension to selected using the proviced global variable name
+         * NOTE: this function does not check selected items are valid for applying the current type of dimension
+         * NOTE: the added relationship to the dimension is not immediately solved. The user should call EquationMgr::EvaluateAll() at the end of a bunch of dimensioning to update these dimensions
+         * */
+        public static DisplayDimension? AddDimensionToSelectedWithGlobalVariable( ref ModelDoc2 partModelDoc, string globalVariableName, double dimLocationX, double dimLocationY, double dimLocationZ, bool solveEquationNow = false)
+        {
+            // first create a DisplayDimension that is displayed in parts, assemblies, drawings
+            DisplayDimension displayDimension = (DisplayDimension)partModelDoc.AddDimension2(dimLocationX, dimLocationY, dimLocationZ);
+            string dimensionName = displayDimension.GetNameForSelection();
+            int addDimStatus = partModelDoc.GetEquationMgr().Add2(-1, $"\"{dimensionName}\"=\"{globalVariableName}\"", solveEquationNow);
+            if (addDimStatus == -1)
+            {
+                Console.WriteLine($"ERROR: failed to create dimension{dimensionName} with global variable: {globalVariableName}");
+                return null;
+            }
+
+            return displayDimension;
         }
 
         /* A function to add chamfer to all vertices on a equilateral triangle.
