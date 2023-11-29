@@ -59,7 +59,7 @@ namespace SolidworksAutomationTool
             => partModelDoc.SketchAddConstraints("sgPARALLEL");
 
         // Wrapper function to clear selection
-        public static void ClearSelection(ref ModelDoc2 partModelDoc) 
+        public static void ClearSelection(ref ModelDoc2 partModelDoc)
             => partModelDoc.ClearSelection2(true);
 
         // Wrapper function to select the origin. ONLY WORKS IN THE ENGLISH VERSION OF SOLIDWORKS
@@ -72,13 +72,24 @@ namespace SolidworksAutomationTool
             partModelDoc.Extension.SelectByID2(sketchName, "SKETCH", 0, 0, 0, appendToSelection, 0, null, 0);
         }
 
+        /* Wrapper function to select all sketch segments in a given array.
+         * NOTE: this function does not clear previous selections. The user should manually clear selections if needed
+         */
+        public static void SelectAllSketchSegments(ref object[] segmentArray, SelectData swSelectData)
+        {
+            foreach (SketchSegment segment in segmentArray.Cast<SketchSegment>())
+            {
+                segment.Select4(true, swSelectData);
+            }
+        }
+
         /*Wrapper function to rotate selected sketch segments by certain angle.
          * NOTE: this function preserves the sketch relations from the source sketch
          */
         public static void RotateSelected(ref ModelDoc2 partModelDoc, double rotationCenterX, double rotationCenterY, double angleInRad)
         {
             // preserve the sketch relations when copying a sketch
-            partModelDoc.Extension.RotateOrCopy( false, 1, true, rotationCenterX, rotationCenterY, 0, 0, 0, 1, angleInRad);
+            partModelDoc.Extension.RotateOrCopy(false, 1, true, rotationCenterX, rotationCenterY, 0, 0, 0, 1, angleInRad);
         }
 
         /* Wrapper function to zoom-to-fit the view */
@@ -91,26 +102,39 @@ namespace SolidworksAutomationTool
         public static void PrintPolygonDataStructure(ref object[] polygon)
         {
             Debug.WriteLine($"Found {polygon.Length} sketch segments in the polygon");
-            foreach (SketchSegment triangleSegment in polygon)
+            foreach (SketchSegment triangleSegment in polygon.Cast<SketchSegment>())
             {
                 string triangleSegmentType = triangleSegment.GetType() switch
                 {
-                    (int)swSketchSegments_e.swSketchARC => triangleSegmentType = "Arc",
-                    (int)swSketchSegments_e.swSketchLINE => triangleSegmentType = "Line",
-                    (int)swSketchSegments_e.swSketchELLIPSE => triangleSegmentType = "Ellipse",
-                    (int)swSketchSegments_e.swSketchPARABOLA => triangleSegmentType = "Parabola",
-                    (int)swSketchSegments_e.swSketchSPLINE => triangleSegmentType = "Spline",
+                    (int)swSketchSegments_e.swSketchARC => "Arc",
+                    (int)swSketchSegments_e.swSketchLINE => "Line",
+                    (int)swSketchSegments_e.swSketchELLIPSE => "Ellipse",
+                    (int)swSketchSegments_e.swSketchPARABOLA => "Parabola",
+                    (int)swSketchSegments_e.swSketchSPLINE => "Spline",
                     // Actually, why a sketch segment can be of type text??
-                    (int)swSketchSegments_e.swSketchTEXT => triangleSegmentType = "Text",
+                    (int)swSketchSegments_e.swSketchTEXT => "Text",
                     _ => "Unknown",
                 };
                 Debug.WriteLine($"Segment is of type: {triangleSegmentType}");
             }
         }
 
+        /* Print a sketch point's coordinates to the Debug stream */
+        public static void PrintSketchPoint(SketchPoint aPoint, string pointName)
+        {
+            Debug.WriteLine($"Point {pointName}: x: {aPoint.X}, y: {aPoint.Y}, z: {aPoint.Z}");
+        }
+
+        /* Print a math point's coordinates to the Debug stream */
+        public static void PrintMathPoint(MathPoint aPoint, string pointName)
+        {
+            double[] pointDataArray = (double[])aPoint.ArrayData;
+            Debug.WriteLine($"Point {pointName}: x: {pointDataArray[0]}, y: {pointDataArray[1]}, z: {pointDataArray[2]}");
+        }
+
         /* Debug function to see the features inside the feature manager design tree
-         * This function can be used to check if a feature is created as expected
-         */
+     * This function can be used to check if a feature is created as expected
+     */
         public static void PrintFeaturesInFeatureManagerDesignTree(ref ModelDoc2 partModelDoc)
         {
             Debug.WriteLine("Printing features in this part:");
@@ -146,7 +170,7 @@ namespace SolidworksAutomationTool
             for (int featureIdx = partModelDoc.GetFeatureCount() - 1; featureIdx >= 0; featureIdx--)
             {
                 // no need to continue looking into features if already found 3 basic ref planes and 1 origin
-                if ( refPlanesLocated >= 3 && originLocated >= 1)
+                if (refPlanesLocated >= 3 && originLocated >= 1)
                 {
                     break;
                 }
@@ -189,6 +213,29 @@ namespace SolidworksAutomationTool
             return basicReferenceGeometry;
         }
 
+        /* Get the distance between two math points */
+        public static double GetDistanceBetweenTwoMathPoints(MathPoint p1, MathPoint p2)
+        {
+            double[] p1DataArray = (double[])p1.ArrayData;
+            double[] p2DataArray = (double[])p2.ArrayData;
+
+            return Math.Sqrt(Math.Pow(p1DataArray[0] - p2DataArray[0], 2.0) +
+                                Math.Pow(p1DataArray[1] - p2DataArray[1], 2.0) +
+                                Math.Pow(p1DataArray[2] - p2DataArray[2], 2.0));
+        }
+
+        /* Get the distance between two sketch points */
+        public static double GetDistanceBetweenTwoSketchPoints(SketchPoint p1, SketchPoint p2)
+        {
+            return Math.Sqrt(   Math.Pow(p1.X - p2.X, 2.0) +
+                                Math.Pow(p1.Y - p2.Y, 2.0) +
+                                Math.Pow(p1.Z - p2.Z, 2.0));
+        }
+
+        /* Get the number of features in this document */
+        public static int GetFeatureCount(ref ModelDoc2 partModelDoc)
+            => partModelDoc.FeatureManager.GetFeatureCount(false);
+
         /* Get the index of the closest sketch point to the origin. 
          * Params: sketchPoints: reference to a list of sketchPoints
          * Returns: the index of the closest sketch point
@@ -216,11 +263,14 @@ namespace SolidworksAutomationTool
          * Returns the center point as a sketch point if the polygon contains a Sketch Arc
          *          else, returns null.
          */
-        public static SketchPoint? GetTriangleCenterPoint(ref object[] polygon)
+        public static SketchPoint? GetTriangleCenterPoint(ref object[] trianglePolygon)
         {
-            foreach (SketchSegment triangleSegment in polygon.Reverse().Cast<SketchSegment>())
+
+            // the trick is to check the ForConstruction property of the circles. Only the inscribed circle is marked for construction
+            // the pin holes are all solid shapes
+            foreach (SketchSegment triangleSegment in trianglePolygon.Cast<SketchSegment>())
             {
-                if (triangleSegment.GetType() == (int)swSketchSegments_e.swSketchARC)
+                if (triangleSegment.GetType() == (int)swSketchSegments_e.swSketchARC && triangleSegment.ConstructionGeometry)
                 {
                     return (SketchPoint)((SketchArc)triangleSegment).GetCenterPoint2(); ;
                 }
@@ -228,21 +278,21 @@ namespace SolidworksAutomationTool
             return null;
         }
 
-        /* A function to get the center point of the inscribed construction circle inside the pin hole triangle. 
-         * Since the pin hole triangle has 4 circles (3 pin holes and 1 inscribed construction circle)
-         */
-        public static SketchPoint? GetPinHoleTriangleCenterPoint(ref object[] pinHoleTriangle)
+        /* Returns a list of the vertices in a full triangle */
+        public static List<SketchPoint> GetVerticesInTriangle(ref object[] trianglePolygon)
         {
-            // the trick is to check the ForConstruction property of the circles. Only the inscribed circle is marked for construction
-            // the pin holes are all solid shapes
-            foreach (SketchSegment segment in pinHoleTriangle.Cast<SketchSegment>())
+            // get the vertices of the triangle.
+            // the same vertex will be shared by two lines. We use the hashSet to pick only the unique vertices
+            HashSet<SketchPoint> verticesInTriangleSet = new();
+            foreach (SketchSegment triangleSegment in trianglePolygon.Cast<SketchSegment>())
             {
-                if (segment.GetType() == (int)swSketchSegments_e.swSketchARC && segment.ConstructionGeometry)
+                if (triangleSegment.GetType() == (int)swSketchSegments_e.swSketchLINE)
                 {
-                    return (SketchPoint)((SketchArc)segment).GetCenterPoint2(); ;
+                    verticesInTriangleSet.Add((SketchPoint)((SketchLine)triangleSegment).GetStartPoint2());
+                    verticesInTriangleSet.Add((SketchPoint)((SketchLine)triangleSegment).GetEndPoint2());
                 }
             }
-            return null;
+            return verticesInTriangleSet.ToList();
         }
 
         /* A function to get one of the sides of a triangle polygon
@@ -251,7 +301,7 @@ namespace SolidworksAutomationTool
          */
         public static SketchLine? GetOneTriangleSide(ref object[] polygon)
         {
-            foreach(SketchSegment triangleSegment in polygon.Cast<SketchSegment>())
+            foreach (SketchSegment triangleSegment in polygon.Cast<SketchSegment>())
             {
                 if (triangleSegment.GetType() == (int)swSketchSegments_e.swSketchLINE)
                 {
@@ -366,7 +416,7 @@ namespace SolidworksAutomationTool
             {
                 if (chamferedTriangleSegment.GetType() == (int)swSketchSegments_e.swSketchLINE)
                 {
-                    if ( longestSideLength < chamferedTriangleSegment.GetLength() )
+                    if (longestSideLength < chamferedTriangleSegment.GetLength())
                     {
                         longestSideLength = chamferedTriangleSegment.GetLength();
                         longSide = chamferedTriangleSegment;
@@ -376,6 +426,29 @@ namespace SolidworksAutomationTool
             return (SketchLine?)longSide;
         }
 
+        /* 
+         * Create global variables in the equation manager
+         * Params:  partModelDoc: reference to the ModelDoc2 object
+         *          expression: global variable assignment in string
+         * Returns Index of the new equation if successfully added, -1 if error occured
+         * If adding a global variable assignment that already exists, this method returns an error.
+         * */
+        public static int CreateGlobalVariableInAllConfigs(ref ModelDoc2 partModelDoc, string variableName, double variableValue)
+        {
+            EquationMgr equationManager = partModelDoc.GetEquationMgr();
+            // syntax is referenced from https://help.solidworks.com/2022/English/api/sldworksapi/Add_Equations_Example_CSharp.htm?verRedirect=1
+            // by default adding the global variable to the end of the equation list
+            //int variableIndex = equationManager.Add3(-1, $"\"{variableName}\" = {variableValue}m", true, (int)swInConfigurationOpts_e.swAllConfiguration, null);
+            string variableAssignmentExpression = $"\"{variableName}\" = {variableValue,0:F6}m";
+            int variableIndex = equationManager.Add2(-1, variableAssignmentExpression, true);
+            // TODO: check if the feature manager update is necessary
+            partModelDoc.FeatureManager.UpdateFeatureTree();
+            if (variableIndex == -1)
+            {
+                Console.WriteLine($"ERROR adding global variable : {variableName} with value {variableValue}");
+            }
+            return variableIndex;
+        }
 
         /* A wrapper function to reduce the boilerplate code for creating normal planes using the "point and normal" method
          *  This function first selects an extrusion axis, requiring it to be perpendicular to the ref plane;
@@ -392,9 +465,9 @@ namespace SolidworksAutomationTool
             // as the 2 constraints are enough for the "point and normal" method
             RefPlane refPlane = (RefPlane)featureManager.InsertRefPlane((int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Perpendicular, 0,
                                                                                           (int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Coincident, 0, 0, 0);
-            
+
             // The user can decide the name of the plane by passing a string. If null is passed in, the plane's name is left to solidworks to decide
-            if (planeName != null )
+            if (planeName != null)
             {
                 ((Feature)refPlane).Name = planeName;
             }
@@ -420,7 +493,7 @@ namespace SolidworksAutomationTool
                                     false, false, // True for the first/second draft angle to be inward, false to be outward; only valid when Dchk1/Dchk2 is true
                                     1, 1,   // Draft angle for the first end; only valid when Dchk1 is true
                                     false, false, // If you chose to offset the first/second end condition from another face or plane, then true specifies offset in direction away from the sketch, false specifies offset from the face or plane in a direction toward the sketch
-                                    false, false, 
+                                    false, false,
                                     false, true, true, true, true, false,
                                     (int)swStartConditions_e.swStartSketchPlane,  // Start conditions as defined in swStartConditions_e
                                     0,      // If T0 is swStartConditions_e.swStartOffset, then specify an offset value
@@ -463,6 +536,173 @@ namespace SolidworksAutomationTool
             return extrusionFeature;
         }
 
+        /* A wrapper function to make two-way extrusion on a already selected sketch. 
+         * Direction 1 is extruded till the given distance,
+         * Direction 2 is extruded all through.
+         */
+        public static Feature CreateTwoWayExtrusionD1ToDistanceD2ThroughAll(ref ModelDoc2 partModelDoc, double distanceD1ExtrudeTo)
+        { // the FeatureCut4 api takes a ton of arguments. This wrapper function is to simplify the calling process.
+            // https://help.solidworks.com/2023/english/api/sldworksapi/solidworks.interop.sldworks~solidworks.interop.sldworks.ifeaturemanager~featurecut4.html?verRedirect=1
+            Feature extrusionFeature = partModelDoc.FeatureManager.FeatureCut4(
+                                    false,  // true for single ended cut, false for double-ended cut
+                                    false,  // True to remove material outside of the profile of the flip side to cut, false to not
+                                    false,  // True for Direction 1 to be opposite of the default direction
+                                    (int)swEndConditions_e.swEndCondBlind,  // Termination type for the first end
+                                    (int)swEndConditions_e.swEndCondThroughAll,     // Termination type for the second end 
+                                    distanceD1ExtrudeTo, distanceD1ExtrudeTo,   // depth of extrusion for 1st and 2nd end in meters
+                                    false, false, // True allows a draft angle in the first/second direction, false does not allow drafting in the first/second direction
+                                    false, false, // True for the first/second draft angle to be inward, false to be outward; only valid when Dchk1/Dchk2 is true
+                                    1, 1,   // Draft angle for the first end; only valid when Dchk1 is true
+                                    false, false, // If you chose to offset the first/second end condition from another face or plane, then true specifies offset in direction away from the sketch, false specifies offset from the face or plane in a direction toward the sketch
+                                    false, false,
+                                    false, true, true, true, true, false,
+                                    (int)swStartConditions_e.swStartSketchPlane,  // Start conditions as defined in swStartConditions_e
+                                    0,      // If T0 is swStartConditions_e.swStartOffset, then specify an offset value
+                                    false,  // If T0 is swStartConditions_e.swStartOffset, then true to flip the direction of cut, false to not
+                                    false);
+            return extrusionFeature;
+        }
+
+        /* A function to copy and paste a reference sketch on the given plane and rotate if necessary
+         * This function is just to save time and repetitive code
+         */
+        public static (Sketch, SketchPoint, object[]) CreateACopyAndRotateReferenceSketch(ref ModelDoc2 partModelDoc, RefPlane plane, SelectData swSelectData, string referenceSketchName, bool isUprightTriangle)
+        {
+            // copy and paste the reference sketch
+            SelectSketch(ref partModelDoc, referenceSketchName);
+            partModelDoc.EditCopy();
+            ((Feature)plane).Select2(true, -1);
+            partModelDoc.Paste();
+
+            // manually update feature tree
+            partModelDoc.FeatureManager.UpdateFeatureTree();
+            // select the last pasted pin hole triangle sketch
+            Feature pastedSketchFeature = (Feature)partModelDoc.FeatureByPositionReverse(0);
+            pastedSketchFeature.Select2(false, -1);
+            Sketch pastedSketch = (Sketch)pastedSketchFeature.GetSpecificFeature2();
+            ClearSelection(ref partModelDoc);
+
+            // edit the pasted pin hole sketch
+            ((Feature)pastedSketch).Select2(false, -1);
+            partModelDoc.EditSketch();
+
+            // it's a bit weird to cast the sketch back and forth, but only the Feature object has the sketch's name
+            //string pastedPinHoleTriangleSketchName = ((Feature)pastedSketch).Name;
+            object[] sketchSegments = (object[])pastedSketch.GetSketchSegments();
+
+            SketchPoint? triangleCenter = GetTriangleCenterPoint(ref sketchSegments);
+            ClearSelection(ref partModelDoc);
+            if (!isUprightTriangle)
+            {
+                // orientation flag is false, meaning the module should be upside-down
+                SelectAllSketchSegments(ref sketchSegments, swSelectData);
+                RotateSelected(ref partModelDoc, triangleCenter.X, triangleCenter.Y, Math.PI);
+                ClearSelection(ref partModelDoc);
+            }
+            return (pastedSketch, triangleCenter, sketchSegments);
+        }
+
+        /* Create a copy of the pin hole sketch on a given plane using a reference pin hole sketch*/
+        public static Sketch CreatePinHoleSketchFromReferenceSketch(ref ModelDoc2 partModelDoc, RefPlane plane, SelectData swSelectData, string pinHoleSketchName, bool isUprightTriangle, SketchPoint pointToCoincide, SketchSegment sideToParallel)
+        {
+            // copy and paste the pin hole triangle sketch
+            // copy the full triangle sketch //
+            (Sketch pastedPinHoleSketch, SketchPoint pinHoleTriangleCenter, object[] pinHoleTriangleSegments) = CreateACopyAndRotateReferenceSketch(
+                                                                                                                        ref partModelDoc,
+                                                                                                                        plane,
+                                                                                                                        swSelectData,
+                                                                                                                        pinHoleSketchName,
+                                                                                                                        isUprightTriangle);
+            // make the center of the pin hole triangle conincident with the extrusion axis
+            pinHoleTriangleCenter.Select4(true, swSelectData);
+            pointToCoincide.Select4(true, swSelectData);
+            MakeSelectedCoincide(ref partModelDoc);
+            ClearSelection(ref partModelDoc);
+
+            // Make the flattest side parallel to the given reference side(should be the flattest side of a full triangle)
+            SketchLine? aLongSidePinHoleTriangle = GetMostHorizontalTriangleSide(ref pinHoleTriangleSegments);
+            ((SketchSegment)aLongSidePinHoleTriangle).Select4(true, swSelectData);
+            sideToParallel.Select4(true, swSelectData);
+            MakeSelectedLinesParallel(ref partModelDoc);
+            ClearSelection(ref partModelDoc);
+
+            // quit editing the pin hole triangle sketch
+            // TODO: try not rebuilding now
+            partModelDoc.InsertSketch2(false);
+            ClearSelection(ref partModelDoc);
+            return pastedPinHoleSketch;
+        }
+
+        /* Create a copy of the chamfered triangle sketch on a given plane using a reference chamfered triangle sketch */
+        public static (Sketch, SketchPoint, SketchLine) CreateChamferedTriangleSketchFromReferenceSketch(ref ModelDoc2 partModelDoc, RefPlane plane, SelectData swSelectData, string chamferedTriangleSketchName, bool isUprightTriangle, SketchPoint pointToCoincide)
+        {
+            // copy the chamfered triangle sketch //
+            (Sketch pastedChamferedSketch, SketchPoint chamferedTriangleCenterPoint, object[] chamferedTriangleSegments) = CreateACopyAndRotateReferenceSketch(
+                                                                                                                        ref partModelDoc,
+                                                                                                                        plane,
+                                                                                                                        swSelectData,
+                                                                                                                        chamferedTriangleSketchName,
+                                                                                                                        isUprightTriangle);
+            chamferedTriangleCenterPoint?.Select4(true, swSelectData);
+            pointToCoincide.Select4(true, swSelectData);
+            MakeSelectedCoincide(ref partModelDoc);
+            ClearSelection(ref partModelDoc);
+
+            // TESTING: make one of the sides to be in parallel to the most positively sloped side of the first reference chamfered triangle
+            // TODO: check if can set one side of the chamfered triangle to be in parallel with the first chamfered triangle
+            //SketchSegment? unchamferedTriangleMostPositiveSlopedSide = GetMostPositiveSlopedSideInChamferedTriangle(ref segments);
+            // TODO: temporary workaround, simply set one of the sides to be in horizontal to fully define each chamfered triangle
+            SketchLine aLongSideChamferedTriangle = GetLongestMostHorizontalTriangleSide(ref chamferedTriangleSegments);
+            ((SketchSegment)aLongSideChamferedTriangle).Select4(true, swSelectData);
+            MakeSelectedLineHorizontal(ref partModelDoc);
+            ClearSelection(ref partModelDoc);
+
+            // get a handle on the longest most horizontal side of a chamfered triangle.
+            // This side will be used as a reference to set parallel constraint to a side of a full triangle
+            //SketchLine? aLongSideChamferedTriangle = GetLongestMostHorizontalTriangleSide(ref chamferedTriangleSegments);
+
+            // quit editing sketch
+            // TODO: try not rebuilding now
+            partModelDoc.InsertSketch2(false);
+
+            return (pastedChamferedSketch, chamferedTriangleCenterPoint, aLongSideChamferedTriangle);
+        }
+
+        /* Create a copy of the full triangle sketch on a given plane using a reference full triangle sketch */
+        public static (Sketch, SketchPoint, SketchSegment) CreateFullTriangleSketchFromReferenceSketch( ref ModelDoc2 partModelDoc, 
+                                                                                                        RefPlane plane, 
+                                                                                                        SelectData swSelectData, 
+                                                                                                        string fullTriangleSketchName, 
+                                                                                                        bool isUprightTriangle, 
+                                                                                                        SketchPoint pointToCoincide, 
+                                                                                                        SketchSegment sideToParallel)
+        {
+            // copy the full triangle sketch //
+            (Sketch lastFullTriangleSketch, SketchPoint fullTriangleCenterPoint, object[] fullTriangleSegments) = CreateACopyAndRotateReferenceSketch(
+                                                                                                                        ref partModelDoc, 
+                                                                                                                        plane, 
+                                                                                                                        swSelectData, 
+                                                                                                                        fullTriangleSketchName, 
+                                                                                                                        isUprightTriangle);
+
+            fullTriangleCenterPoint.Select4(true, swSelectData);
+            pointToCoincide.Select4(true, swSelectData);
+            MakeSelectedCoincide(ref partModelDoc);
+            ClearSelection(ref partModelDoc);
+
+            // make the flattest side parallel to a flattest long side of the chamfered triangle
+            SketchLine? aLongSideFullTriangle = GetMostHorizontalTriangleSide(ref fullTriangleSegments);
+            sideToParallel.Select4(true, swSelectData);
+            ((SketchSegment)aLongSideFullTriangle).Select4(true, swSelectData);
+            MakeSelectedLinesParallel(ref partModelDoc);
+
+            // quit editing the fully triangle sketch
+            // TODO: try not rebuilding now
+            partModelDoc.InsertSketch2(false);
+
+            return (lastFullTriangleSketch, fullTriangleCenterPoint, (SketchSegment)aLongSideFullTriangle);
+        }
+
         /* A wrapper function to enable the dimension dialog when an operation requires some input */
         public static void EnableInputDimensionByUser(ref SldWorks solidworks)
         {
@@ -482,7 +722,7 @@ namespace SolidworksAutomationTool
          */
         public static Dimension AddDimensionToSelected(ref ModelDoc2 partModelDoc, double dimensionValue, double dimLocationX, double dimLocationY, double dimLocationZ)
         {
-            // first create a DisplayDimension that 
+            // first create a DisplayDimension that is displayed in parts, assemblies, drawings
             DisplayDimension displayDimension = (DisplayDimension)partModelDoc.AddDimension2(dimLocationX, dimLocationY, dimLocationZ);
             // The Index argument is valid for chamfer display dimensions only.
             // If the display dimension is not a chamfer display dimension, then Index is ignored.
@@ -498,7 +738,7 @@ namespace SolidworksAutomationTool
          */
         public static Dimension AddDimensionToSelected(ref ModelDoc2 partModelDoc, double dimensionValue, SketchPoint displayDimensionLocation )
         {
-            // first create a DisplayDimension that 
+            // first create a DisplayDimension that is displayed in parts, assemblies, drawings
             DisplayDimension displayDimension = (DisplayDimension)partModelDoc.AddDimension2(displayDimensionLocation.X, displayDimensionLocation.Y, displayDimensionLocation.Z);
             // The Index argument is valid for chamfer display dimensions only.
             // If the display dimension is not a chamfer display dimension, then Index is ignored.
@@ -507,6 +747,25 @@ namespace SolidworksAutomationTool
             // not sure if swSetValue_InThisConfiguration is the best parameter to use
             dimension.SetSystemValue3(dimensionValue, (int)swSetValueInConfiguration_e.swSetValue_InThisConfiguration, "");
             return dimension;
+        }
+
+        /* Add dimension to selected using the proviced global variable name
+         * NOTE: this function does not check selected items are valid for applying the current type of dimension
+         * NOTE: the added relationship to the dimension is not immediately solved. The user should call EquationMgr::EvaluateAll() at the end of a bunch of dimensioning to update these dimensions
+         * */
+        public static DisplayDimension? AddDimensionToSelectedWithGlobalVariable( ref ModelDoc2 partModelDoc, string globalVariableName, double dimLocationX, double dimLocationY, double dimLocationZ, bool solveEquationNow = false)
+        {
+            // first create a DisplayDimension that is displayed in parts, assemblies, drawings
+            DisplayDimension displayDimension = (DisplayDimension)partModelDoc.AddDimension2(dimLocationX, dimLocationY, dimLocationZ);
+            string dimensionName = displayDimension.GetNameForSelection();
+            int addDimStatus = partModelDoc.GetEquationMgr().Add2(-1, $"\"{dimensionName}\"=\"{globalVariableName}\"", solveEquationNow);
+            if (addDimStatus == -1)
+            {
+                Console.WriteLine($"ERROR: failed to create dimension{dimensionName} with global variable: {globalVariableName}");
+                return null;
+            }
+
+            return displayDimension;
         }
 
         /* A function to add chamfer to all vertices on a equilateral triangle.
@@ -584,10 +843,7 @@ namespace SolidworksAutomationTool
         public static SketchBlockDefinition MakeTriangleBlockFromTrianglePolygon(object[] trianglePolygon, ref ModelDoc2 partModelDoc, SelectData swSelectData)
         {
             // Select the triangle polygon
-            foreach (SketchSegment triangleSegment in trianglePolygon.Cast<SketchSegment>())
-            {
-                triangleSegment.Select4(true, swSelectData);
-            }
+            SelectAllSketchSegments(ref trianglePolygon, swSelectData);
             SketchBlockDefinition triangleBlock = partModelDoc.SketchManager.MakeSketchBlockFromSelected(null);
             return triangleBlock;
         }
