@@ -717,12 +717,13 @@ class IntermediateTriangle:
 
 # NOTE: GFA class
 class GFA(SavingResults):
-     def __init__(self, length: float, width: float, nb_gfa: int, saving_df, vigR: float, trimming_angle = 360) -> None:
+     def __init__(self, length: float, width: float, nb_gfa: int, saving_df, vigR: float, trimming_angle = 360, trimming_geometry = None) -> None:
           self.length = length
           self.width = width
           self.vigR = vigR
           self.nb_gfa = nb_gfa
           self.trimming_angle = trimming_angle
+          self.trimming_geometry = trimming_geometry
           self.gdf_gfa = self.make_GFA_array()
 
           super().__init__(saving_df)
@@ -751,6 +752,9 @@ class GFA(SavingResults):
                theta = angles[i]
                gfa = self.make_GFA()
                placed_gfa = rotate_and_translate(gfa, angles[i], x, y)
+
+               if self.trimming_angle != 360 and not placed_gfa.intersects(self.trimming_geometry):
+                    continue
 
                gfa_df['gfa_index'].append(i)
                gfa_df['center'].append([x,y])

@@ -92,12 +92,12 @@ if inner_gap == global_gap and inner_gap != 0:
 """ Define focal surface """
 
 # Available projects: MUST, Megamapper, DESI, WST1, WST2, WST3, Spec-s5
-project_surface = 'MUST'
+project_surface = 'MegaMapper'
 surf = param.FocalSurf(project = project_surface)
 curvature_R = abs(surf.curvature_R)
 vigR = surf.vigR
 BFS = surf.BFS
-trimming_angle = 360
+trimming_angle = 60 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
 
 pizza = surf.make_vigR_polygon(pizza_angle = trimming_angle)
 
@@ -108,7 +108,7 @@ is_timer = False # Display time of final plots before automatic closing; stays o
 plot_time = 20 # [s] plotting time
 ignore_robots_positions = False
 
-save_plots = False # Save most useful plots 
+save_plots = True # Save most useful plots 
 save_all_plots = False  # Save all plots (including intermediate ones)
 save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
 save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
@@ -120,7 +120,7 @@ saving = param.SavingResults(saving_df, project_surface)
 gfa_tune = 1
 nb_gfa = 6
 # gfa = param.GFA(length = 33.3*gfa_tune, width = 61*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df)
-gfa = param.GFA(length = 60*gfa_tune, width = 60*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df)
+gfa = param.GFA(length = 60*gfa_tune, width = 60*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
 gdf_gfa = gfa.gdf_gfa
 polygon_gfa = MultiPolygon(list(gdf_gfa['geometry']))
 
