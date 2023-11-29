@@ -231,7 +231,10 @@ using (ProgressBar createSmallSegmentsProgressBar = new ProgressBar(backSketchPo
         // add a length dimension to the small segment
         frontSketchPoint.Select4(true, swSelectData);
         smallSegmentSketchPoint.Select4(true, swSelectData);
-        AddDimensionToSelected(ref modulePart, supportToTopSurfaceDistance, frontSketchPoint);
+
+        // Using global variable to dimension
+        AddDimensionToSelectedWithGlobalVariable(ref modulePart, nameof(supportToTopSurfaceDistance), frontSketchPoint.X, frontSketchPoint.Y, frontSketchPoint.Z);
+
         ClearSelection(ref modulePart);
         // save the support surface marker point to the list. It will be used in the later support surface extrusion
         supportSurfaceMarkerPointList.Add(smallSegmentSketchPoint);
@@ -240,7 +243,8 @@ using (ProgressBar createSmallSegmentsProgressBar = new ProgressBar(backSketchPo
         createSmallSegmentsProgressBar.Tick();
     }
 }
-   
+
+modulePart.GetEquationMgr().EvaluateAll();
 
 Console.WriteLine("Small segment creation completed");
 // enbale user input box for dimensions

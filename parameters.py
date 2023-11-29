@@ -70,7 +70,7 @@ class FocalSurf():
                                    'a2': -6e-12, 
                                    'a3': 0,
                                    'f-number': 3.699,
-                                   'BFS': 10921.711, # [mm], radius of BFS # Value calculated with Joe's cal_BFS function with MUST data from 2023-09-06
+                                   'BFS': 10992.7, # [mm], radius of BFS # Value calculated with Joe's cal_BFS function with MUST data from 2023-09-06
                                    'FoV': None # [deg]
                                    }
 
@@ -390,7 +390,7 @@ class SavingResults:
 # NOTE: Individual Module class
 class Module(SavingResults):
 
-     def __init__(self, nb_robots, saving_df, is_wall: bool, width_increase = 0, chanfer_length = 7.5):
+     def __init__(self, nb_robots, saving_df, is_wall: bool = True, width_increase = 0, chanfer_length = 7.5):
 
           """Robot parameters""" 
 
