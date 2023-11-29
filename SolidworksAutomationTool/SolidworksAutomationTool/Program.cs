@@ -84,13 +84,13 @@ foreach ((Point3D frontPoint, Point3D backPoint) in frontGridPointCloud.point3Ds
 
 // DEBUG use: check if the points are read in correctly
 Console.WriteLine("\nFront grid point cloud with z-axis offset removed: ");
-frontGridPointCloud.PrintPoint3Ds();
-frontGridPointCloud.PrintModuleOrientations();
+//frontGridPointCloud.PrintPoint3Ds();
+//frontGridPointCloud.PrintModuleOrientations();
 
 // DEBUG use: check if the points are read in correctly
 Console.WriteLine("\nBack grid point cloud with z-axis offset removed: ");
-backGridPointCloud.PrintPoint3Ds();
-backGridPointCloud.PrintModuleOrientations();
+//backGridPointCloud.PrintPoint3Ds();
+//backGridPointCloud.PrintModuleOrientations();
 
 Console.WriteLine("Starting SolidWorks Application ...");
 
@@ -123,8 +123,6 @@ foreach (KeyValuePair<string, double> variableNameValue in solidworksGlobalVaria
 {
     CreateGlobalVariableInAllConfigs(ref modulePart, variableNameValue.Key, variableNameValue.Value);
 }
-
-PromptAndWait("Check if global variables are added");
 
 // Get a handle to the FRONT, TOP, RIGHT planes
 BasicReferenceGeometry basicRefGeometry = GetBasicReferenceGeometry(ref modulePart);
@@ -296,8 +294,8 @@ ClearSelection(ref modulePart);
 
 // Dimension the arc
 ((SketchSegment)arc).Select4(true, swSelectData);
-
-AddDimensionToSelected(ref modulePart, bestFitSphereRadius, arcStartPoint.x / 2.0 + arcEndPoint.x / 2.0,
+AddDimensionToSelectedWithGlobalVariable(ref modulePart, nameof(bestFitSphereRadius), 
+                                                            arcStartPoint.x / 2.0 + arcEndPoint.x / 2.0,
                                                             arcStartPoint.y / 2.0,
                                                             arcStartPoint.z / 2.0 + arcEndPoint.z / 2.0);
 
@@ -329,7 +327,12 @@ SketchLine horizontalLine = (SketchLine)modulePart.SketchManager.CreateLine(revo
 MakeSelectedLineHorizontal(ref modulePart);
 
 // add dimension constraint to the horizontal line
-AddDimensionToSelected(ref modulePart, bottomSurfaceRadius, revolutionAxisVerticalLineEndPoint);
+AddDimensionToSelectedWithGlobalVariable(   ref modulePart, 
+                                            nameof(bottomSurfaceRadius),
+                                            revolutionAxisVerticalLineEndPoint.X,
+                                            revolutionAxisVerticalLineEndPoint.Y,
+                                            revolutionAxisVerticalLineEndPoint.Z );
+//AddDimensionToSelected(ref modulePart, bottomSurfaceRadius, revolutionAxisVerticalLineEndPoint);
 
 ClearSelection(ref modulePart);
 // create vertical line (outer rim of the boarder) connecting the top line 
@@ -350,7 +353,12 @@ ClearSelection(ref modulePart);
 // add dimension to outer rim height
 ((SketchSegment)revolutionAxisVerticalLineToArc).Select4(true, swSelectData);
 
-AddDimensionToSelected(ref modulePart, outerRimHeight, bottomSurfaceTopRightPoint);
+AddDimensionToSelectedWithGlobalVariable(   ref modulePart, 
+                                            nameof(outerRimHeight), 
+                                            bottomSurfaceTopRightPoint.X, 
+                                            bottomSurfaceTopRightPoint.Y, 
+                                            bottomSurfaceTopRightPoint.Z);
+//AddDimensionToSelected(ref modulePart, outerRimHeight, bottomSurfaceTopRightPoint);
 ClearSelection(ref modulePart);
 
 modulePart.SketchManager.AddToDB = false;
@@ -500,11 +508,15 @@ if (oneSideOfTriangle != null)
     // DEBUG: add horizontal constraint on this side - maybe fine
     MakeSelectedLineHorizontal(ref modulePart);
     // Dimension the equilateral triangle's side length
-    AddDimensionToSelected(ref modulePart, equilateralTriangleSideLength, firstBottomSurfaceSketchPoint);
+    AddDimensionToSelectedWithGlobalVariable(ref modulePart, 
+                                                nameof(equilateralTriangleSideLength), 
+                                                firstBottomSurfaceSketchPoint.X, 
+                                                firstBottomSurfaceSketchPoint.Y, 
+                                                firstBottomSurfaceSketchPoint.Z);
     ClearSelection(ref modulePart);
 }
 
-// add the chamfers.
+// TODO: add chamfers using global variables
 MakeChamferedTriangleFromTrianglePolygon(unchamferedTrianglePolygon, chamferLength, ref modulePart, swSelectData);
 ClearSelection(ref modulePart);
 
@@ -529,7 +541,12 @@ if (oneSideOfFullTriangle != null)
     ClearSelection(ref modulePart);
     ((SketchSegment)oneSideOfFullTriangle).Select4(true, swSelectData);
     // Dimension the equilateral triangle's side length
-    AddDimensionToSelected(ref modulePart, equilateralTriangleSideLength, (SketchPoint)oneSideOfFullTriangle.GetEndPoint2());
+    AddDimensionToSelectedWithGlobalVariable(ref modulePart, 
+                                                nameof(equilateralTriangleSideLength),
+                                                firstBottomSurfaceSketchPoint.X, 
+                                                firstBottomSurfaceSketchPoint.Y, 
+                                                firstBottomSurfaceSketchPoint.Z);
+    //AddDimensionToSelected(ref modulePart, equilateralTriangleSideLength, (SketchPoint)oneSideOfFullTriangle.GetEndPoint2());
     ClearSelection(ref modulePart);
 }
 ClearSelection(ref modulePart);
@@ -575,7 +592,11 @@ if (oneSideOfPinHoleTriangle != null)
     ClearSelection(ref modulePart);
     ((SketchSegment)oneSideOfPinHoleTriangle).Select4(true, swSelectData);
     // Dimension the equilateral triangle's side length
-    AddDimensionToSelected(ref modulePart, interPinHoleDistance, (SketchPoint)oneSideOfPinHoleTriangle.GetEndPoint2());
+    AddDimensionToSelectedWithGlobalVariable(ref modulePart, nameof(interPinHoleDistance),
+                                                firstBottomSurfaceSketchPoint.X, 
+                                                firstBottomSurfaceSketchPoint.Y, 
+                                                firstBottomSurfaceSketchPoint.Z);
+    //AddDimensionToSelected(ref modulePart, interPinHoleDistance, (SketchPoint)oneSideOfPinHoleTriangle.GetEndPoint2());
     ClearSelection(ref modulePart);
 }
 // Add the pin holes on 3 vertices
@@ -588,7 +609,8 @@ verticesInPinHoleTriangle.ForEach(vertex =>
     // dimension the pin hole's diammeter
     pinHole.Select4(true, swSelectData);
     // dimension the diammeter
-    AddDimensionToSelected(ref modulePart, pinHoleDiameter, vertex);
+
+    AddDimensionToSelectedWithGlobalVariable(ref modulePart, nameof(pinHoleDiameter), vertex.X, vertex.Y, vertex.Z);
     ClearSelection(ref modulePart);
 });
 
@@ -620,9 +642,6 @@ solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swFeatureMan
 
 using (ProgressBar extrudeModulesProgressBar = new(bottomSurfaceSketchPointList.Count, "Extruding modules", progressBarOptions))
 {
-    // DEBUG:
-    Debug.WriteLine($"Closest to origin index: {closestPointIdx}");
-
     for (int moduleIndex = 0; moduleIndex < bottomSurfaceSketchPointList.Count; moduleIndex++)
     {
         // skip the point closest to the origin
@@ -696,12 +715,12 @@ using (ProgressBar extrudeModulesProgressBar = new(bottomSurfaceSketchPointList.
         ClearSelection(ref modulePart);
 
         // extrude the pin holes
-        double extrusionDepth = GetDistanceBetweenTwoSketchPoints(supportSurfaceMarkerPointList[moduleIndex], bottomSurfaceSketchPointList[moduleIndex])
-                                + pinHoleDepth;
+        double extrusionDepth = GetDistanceBetweenTwoSketchPoints(  supportSurfaceMarkerPointList[moduleIndex], 
+                                                                    bottomSurfaceSketchPointList[moduleIndex])
+                                                                    + pinHoleDepth;
 
-        // DEBUG: check what is the support surface point
-        PrintSketchPoint(bottomSurfaceSketchPointList[moduleIndex], $"support surface center in Sketch Frame {moduleIndex}");
         Debug.WriteLine($"Extrusion depth at module {moduleIndex} is {extrusionDepth, 0:F3} meters");
+
         SelectSketch(ref modulePart, ((Feature)lastPinHoleTriangleSketch).Name);
         Feature pinHoleExtrusion = CreateTwoWayExtrusionD1ToDistanceD2ThroughAll(ref modulePart, extrusionDepth);
         if (pinHoleExtrusion == null)
