@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import math
 from astropy.table import Table, vstack
 from scipy.interpolate import interp1d
+from scipy.optimize import fsolve
 import parameters as param
 import pandas as pd
 from datetime import datetime
@@ -72,7 +73,7 @@ def calc_modules_pos(BFS, module_width, nb_modules, R2Z, on_BFS = False):
 
     return r_modules, z_modules
 
-def get_normals(r_modules, R2Z, h=0.001):
+def get_normals(r_modules, R2Z, h=1e-5):
     """Calculates the normal vectors to the curve
     Their coordinates are stored in "normal" element-wise ex: normal[0]=[nx0,ny0]"""
     normal = []
@@ -87,8 +88,6 @@ def get_normals(r_modules, R2Z, h=0.001):
 
     return np.array(normal)
 
-def get_nomrals2():
-    """Calculates the normal vectors to the curve"""
 
 def get_normals_angles(normal, print_data = True):
     """Calculates the angle between the normal vectors and the vertical"""
@@ -108,7 +107,6 @@ def get_normals_angles(normal, print_data = True):
 
     return angles
   
-
 
 def rotate_modules_tangent_2_surface(x_modules, y_modules, angles):
     new_left_module = []
@@ -278,18 +276,37 @@ def zoom_in_1module(module_number, xbound, ybound, draw=True):
     plt.ylabel('Z [mm]')
     plt.grid()
 
+def makemoduleline(x, start_left, end_right):
+    a = (end_right[1]-start_left[1])/(end_right[0]-start_left[0])
+    b = start_left[1] - a*start_left[0]
 
-def dist2curve(x,y,x_curve):
-    """Calculate the distance between a point and a curve"""
-    y_curve = R2Z(x_curve)
-    return np.sqrt((x-x_curve)**2 + (y-y_curve)**2)
+    return a*x + b
+    
 
-x_modules, y_modules = calc_modules_pos(BFS, module_width, nb_modules, R2Z)
-normal = get_normals(x_modules, R2Z)
-angles = get_normals_angles(normal)
+def normIntersects(normals, module_number, module_left, module_right):
+    a = normals[module_number][1]/normals[module_number][0]
+    x = np.linspace(module_left[module_number][0], module_right[module_number][0], 100)
+    y = makemoduleline(x, module_left[module_number], module_right[module_number])
+    b = y - a*x
+    def fun(r1):
+        print(len(a*r1 + b - R2Z(r1)))
+        return a*r1 + b - R2Z(r1)
+    
+    initial_guess = x
+
+    r1 = fsolve(fun, initial_guess)
+
+    return r1
+
+
+x_modules, y_modules = calc_modules_pos(BFS, module_width, nb_modules, R2Z, on_BFS=False)
+normals = get_normals(x_modules, R2Z)
+angles = get_normals_angles(normals)
 new_left_module, new_right_module = rotate_modules_tangent_2_surface(x_modules, y_modules, angles)
 r_envelop_plus, z_envelop_plus, r_envelop_minus, z_envelop_minus = tolerance_envelop(r,R2Z)
-# print(new_left_module)
+
+r1 = normIntersects(normals, 3, new_left_module, new_right_module)
+z1 = R2Z(r1)
 
 ## Plotting time ##
 
@@ -302,13 +319,18 @@ plot_time = 20 #seconds
 is_timer = False
 save_fig = True
 
-draw_normals(x_modules,y_modules,normal,length=10)
+draw_normals(x_modules,y_modules,normals,length=50)
 # plt.plot(x_radius, y_radius, '-.',label="BFS")
 draw_modules_horizontal()
 draw_modules_oriented(draw = True)
 plt.plot(r,z,'--g',label="Focal surface")
 draw_BFS(BFS,vigR, display_BFS=display_BFS)
-draw_envelop()
+plt.scatter(r1,z1)
+plt.plot((r1,new_left_module[3][0]),(z1, new_left_module[3][1]),'--ok')
+# plt.plot((r1,new_left_module[3][0]),(z1, new_left_module[3][1]),'--ok')
+# z_intersect = normIntersects(normal, 3, new_left_module)
+# print(z_intersect)
+# plt.plot(z, np.interp(z_intersect, r, z), marker="o", ls="", ms=4, color="C1")
 plt.legend(shadow=True)
 plt.title('Project: $\\bf{'+f'{project}''}$'+f'\nFocal surface and module arrangement with normal vectors - {nb_robots} robots/module')
 plt.xlabel('R [mm]')
@@ -329,6 +351,7 @@ elif nb_robots == 75:
 zoom_in_1module(module_number = module_number, xbound=xbound, ybound=ybound, draw=True)
 save.save_figures_to_dir(f'Zoomed_in_module_{module_number+1}')
 draw_R2CRD(r,R_data,CRD_data,R2CRD, draw=False)
+
 
 
 
