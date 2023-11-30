@@ -53,6 +53,7 @@ class FocalSurf():
           self.surfaces_polygon = {} # dictionnary to store the polygons of the focal plane surfaces (main vigR, GFA, donut hole, etc)
           self.surf_name = self.focal_surf_param['name']
           self.FoV = self.focal_surf_param['FoV']
+          self.focus_tolerance_width = self.focal_surf_param['focus_tolerance_width'] # [mm] width of the focus tolerance band
 
 
 
@@ -71,7 +72,8 @@ class FocalSurf():
                                    'a3': 0,
                                    'f-number': 3.699,
                                    'BFS': 10992.7, # [mm], radius of BFS # Value calculated with Joe's cal_BFS function with MUST data from 2023-09-06
-                                   'FoV': None # [deg]
+                                   'FoV': None, # [deg]
+                                   'focus_tolerance_width': 0.02 # [mm]
                                    }
 
           elif self.project == 'MegaMapper':
@@ -83,7 +85,8 @@ class FocalSurf():
                                    'asph_formula': False,
                                    'BFS': 11045.6, # [mm], radius of BFS
                                    'f-number': 3.57,
-                                   'FoV': None # [deg]
+                                   'FoV': None, # [deg]
+                                   'focus_tolerance_width': 0.02 # [mm]
                                    }
 
           elif self.project == 'DESI':
@@ -94,7 +97,8 @@ class FocalSurf():
                                    'asph_formula': False,
                                    'BFS': 11067, # [mm], radius of BFS,
                                    'f-number': 3.699,
-                                   'FoV': None # [deg]
+                                   'FoV': None, # [deg]
+                                   'focus_tolerance_width': 0.1 # [mm]
                                    }
                
           elif self.project == 'WST1':

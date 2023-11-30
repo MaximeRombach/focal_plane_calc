@@ -18,23 +18,23 @@ from datetime import datetime
 
 ## Parameters ##
 
-project = 'MegaMapper'
+project = 'MUST'
 surf = param.FocalSurf(project)
 
 Rc = surf.curvature_R # Curve radius [mm]
 vigR = surf.vigR
 d_plane = 2*vigR # Focal plane diameter [mm]
-nb_robots = 75
+nb_robots = 63
 saving_df = {"save_plots": False, "save_dxf": False, "save_csv": False, "save_txt": False }
 display_BFS = False
 save = param.SavingResults(saving_df, project_name=project)
 mod_param = param.Module(nb_robots, saving_df)
 module_width = mod_param.module_width * np.sqrt(3)/2 #= triangle HEIGHT and NOT side
 nb_modules = 9 #number of modules of one side of the axis
-tolerance_envelop_width = 0.1 # [mm] tolerance in positioning around nominal focal surface
+tolerance_envelop_width = surf.focus_tolerance_width # [mm] tolerance in positioning around nominal focal surface
 start_offset = module_width/2
 
-t = Table.read(f'Data_focal_planes/{project}.csv', comment='#', delimiter=',')
+t = Table.read(f'Data_focal_planes/{project}.csv', comment='#', delimiter=';')
 Z_data = -t['Z']
 CRD_data = t['CRD']
 R_data = t['R']
@@ -51,10 +51,10 @@ z = R2Z(r) # Calculate focal plane curve from csv data
 saving = param.SavingResults(saving_df)
 to_csv_dict = {}
 
-def calc_modules_pos(BFS, module_width, nb_modules, R2Z, on_BFS = False):
+def calc_modules_pos(module_width, nb_modules, R2Z, on_BFS = False):
 
     r_modules = np.arange(start_offset,nb_modules*module_width+start_offset,module_width)
-    if BFS: # Calculate module pos on Best Fit Sphere
+    if on_BFS: # Calculate module pos on Best Fit Sphere
         z_modules = R2Z_BFS(r_modules)
     else: # Calcualte module pos on interpolation of values from Berkeley optical team (csv file)
         z_modules = R2Z(r_modules) 
@@ -284,29 +284,44 @@ def makemoduleline(x, start_left, end_right):
     
 
 def normIntersects(normals, module_number, module_left, module_right):
+    r_curve = np.array([])
     a = normals[module_number][1]/normals[module_number][0]
-    x = np.linspace(module_left[module_number][0], module_right[module_number][0], 100)
-    y = makemoduleline(x, module_left[module_number], module_right[module_number])
-    b = y - a*x
-    def fun(r1):
-        print(len(a*r1 + b - R2Z(r1)))
-        return a*r1 + b - R2Z(r1)
+    x_iterable = np.linspace(module_left[module_number][0], module_right[module_number][0], 100)
+    y = makemoduleline(x_iterable, module_left[module_number], module_right[module_number])
+    b_iterable = y - a*x_iterable
+
+    for b,x in zip(b_iterable, x_iterable):
+
+        def fun(r1):
+            return a*r1 + b - R2Z(r1)
     
-    initial_guess = x
+        initial_guess = x
 
-    r1 = fsolve(fun, initial_guess)
+        r_solved = fsolve(fun, initial_guess)
 
-    return r1
+        r_curve = np.append(r_curve, r_solved, axis=0)
+    
+    z_curve = R2Z(r_curve)
+
+    return x_iterable, y, r_curve, z_curve
+
+def dist2curve(r_module,z_module,r_curve,z_curve):
+    """Calculate the distance between a point and a curve"""
+    dr = r_curve-r_module.reshape(1,len(r_curve))
+    dz = z_curve-z_module.reshape(1,len(z_curve))
+    return np.sqrt(dr**2+dz**2)
 
 
-x_modules, y_modules = calc_modules_pos(BFS, module_width, nb_modules, R2Z, on_BFS=False)
+x_modules, y_modules = calc_modules_pos(module_width, nb_modules, R2Z, on_BFS=False)
 normals = get_normals(x_modules, R2Z)
 angles = get_normals_angles(normals)
 new_left_module, new_right_module = rotate_modules_tangent_2_surface(x_modules, y_modules, angles)
 r_envelop_plus, z_envelop_plus, r_envelop_minus, z_envelop_minus = tolerance_envelop(r,R2Z)
 
-r1 = normIntersects(normals, 3, new_left_module, new_right_module)
-z1 = R2Z(r1)
+module_number = 3
+r_module, z_module, r_curve, z_curve = normIntersects(normals, module_number, new_left_module, new_right_module)
+d = dist2curve(r_module,z_module,r_curve,z_curve)
+
 
 ## Plotting time ##
 
@@ -319,14 +334,13 @@ plot_time = 20 #seconds
 is_timer = False
 save_fig = True
 
-draw_normals(x_modules,y_modules,normals,length=50)
+draw_normals(x_modules,y_modules,normals,length=vigR)
 # plt.plot(x_radius, y_radius, '-.',label="BFS")
 draw_modules_horizontal()
 draw_modules_oriented(draw = True)
 plt.plot(r,z,'--g',label="Focal surface")
 draw_BFS(BFS,vigR, display_BFS=display_BFS)
-plt.scatter(r1,z1)
-plt.plot((r1,new_left_module[3][0]),(z1, new_left_module[3][1]),'--ok')
+plt.scatter(r_curve,z_curve, marker="o", color="C1")
 # plt.plot((r1,new_left_module[3][0]),(z1, new_left_module[3][1]),'--ok')
 # z_intersect = normIntersects(normal, 3, new_left_module)
 # print(z_intersect)
@@ -350,6 +364,15 @@ elif nb_robots == 75:
     ybound=0.9
 zoom_in_1module(module_number = module_number, xbound=xbound, ybound=ybound, draw=True)
 save.save_figures_to_dir(f'Zoomed_in_module_{module_number+1}')
+
+plt.figure('dis2curve')
+plt.scatter(r_module, d*10**3)
+plt.plot((r_module[0], r_module[-1]), (tolerance_envelop_width/2*10**3, tolerance_envelop_width/2*10**3), 'r--')
+plt.grid()
+plt.xlabel('Position on fiber tips plane [mm]')
+plt.ylabel(r'Normal distance to focal surface [$\mu$m]')
+plt.title(f'Distance between module {module_number+1} and focal surface')
+
 draw_R2CRD(r,R_data,CRD_data,R2CRD, draw=False)
 
 
