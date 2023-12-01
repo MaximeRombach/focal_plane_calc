@@ -86,7 +86,7 @@ class FocalSurf():
                                    'BFS': 11045.6, # [mm], radius of BFS
                                    'f-number': 3.57,
                                    'FoV': None, # [deg]
-                                   'focus_tolerance_width': 0.02 # [mm]
+                                   'focus_tolerance_width': 0.1 # [mm]
                                    }
 
           elif self.project == 'DESI':
@@ -356,7 +356,7 @@ class SavingResults:
 
           doc.saveas(self.results_dir_path + f"{name_frame}.dxf")
 
-     def save_figures_to_dir(self, suffix_name: str, dpi: int = 400):
+     def save_figures_to_dir(self, suffix_name: str, save_eps: bool = False, dpi: int = 400):
 
           if not self.save_plots:
                return
@@ -364,6 +364,9 @@ class SavingResults:
           now = datetime.now()
           today_filename = now.strftime("%Y-%m-%d-%H-%M-%S_") + suffix_name + ".png"
           plt.savefig(self.results_dir_path + today_filename, bbox_inches = 'tight', format='png', dpi = dpi)
+          if save_eps:
+               plt.savefig(self.results_dir_path + today_filename, bbox_inches = 'tight', format='eps')
+
           logging.info(f'{suffix_name}.png successfully saved in in {self.results_dir_path}')
 
      def save_grid_to_txt(self, grid, filename, direct_SW = False):

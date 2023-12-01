@@ -18,23 +18,24 @@ from datetime import datetime
 
 ## Parameters ##
 
-project = 'MUST'
+project = 'MegaMapper'
 surf = param.FocalSurf(project)
 
 Rc = surf.curvature_R # Curve radius [mm]
 vigR = surf.vigR
 d_plane = 2*vigR # Focal plane diameter [mm]
-nb_robots = 63
-saving_df = {"save_plots": False, "save_dxf": False, "save_csv": False, "save_txt": False }
+nb_robots = 75
+saving_df = {"save_plots": False}
 display_BFS = False
 save = param.SavingResults(saving_df, project_name=project)
 mod_param = param.Module(nb_robots, saving_df)
 module_width = mod_param.module_width * np.sqrt(3)/2 #= triangle HEIGHT and NOT side
+print(module_width)
 nb_modules = 9 #number of modules of one side of the axis
 tolerance_envelop_width = surf.focus_tolerance_width # [mm] tolerance in positioning around nominal focal surface
 start_offset = module_width/2
 
-t = Table.read(f'Data_focal_planes/{project}.csv', comment='#', delimiter=';')
+t = Table.read(f'Data_focal_planes/{project}.csv', comment='#', delimiter=',')
 Z_data = -t['Z']
 CRD_data = t['CRD']
 R_data = t['R']
@@ -126,10 +127,7 @@ def rotate_modules_tangent_2_surface(x_modules, y_modules, angles):
 
     return np.array(new_left_module), np.array(new_right_module)
 
-def translate_module_in_envelop(dist, module_number, draw = True):
-
-    if not draw:
-        return
+def translate_module_in_envelop(new_left_module, new_right_module, dist):
 
     new_left_module_translated = []
     new_right_module_translated = []
@@ -138,10 +136,8 @@ def translate_module_in_envelop(dist, module_number, draw = True):
         Rt= np.array([[1,0,dx],[0,1,dy],[0,0,1]])
         new_left_module_translated.append(Rt @ module_l)
         new_right_module_translated.append(Rt @ module_r)
-    
-    plt.plot((new_left_module_translated[module_number][0],new_right_module_translated[module_number][0]),
-                        (new_left_module_translated[module_number][1],new_right_module_translated[module_number][1]),'k',
-                        label="Module translated ({} $\mu$m)".format(int(dist*1000)))
+
+    return new_left_module_translated, new_right_module_translated
 
 def tolerance_envelop(r,R2Z):
 
@@ -158,8 +154,7 @@ def tolerance_envelop(r,R2Z):
     return r_envelop_plus, z_envelop_plus, r_envelop_minus, z_envelop_minus
 
 def draw_modules_oriented(plot_axis=0, draw=True, draw_one = False, module_number = None):
-    if not draw:
-        return
+
     if not draw_one:
         for i in range(len(new_left_module)): # draw modules width
             if i == 0:
@@ -171,6 +166,11 @@ def draw_modules_oriented(plot_axis=0, draw=True, draw_one = False, module_numbe
     else:
         plt.plot((new_left_module[module_number][0],new_right_module[module_number][0]),
                         (new_left_module[module_number][1],new_right_module[module_number][1]), color='b', label="Tangent module", linewidth=1.25)
+
+def draw_module_translated(new_left_module_translated, new_right_module_translated, module_number, translation_distance):
+
+    plt.plot((new_left_module_translated[module_number][0],new_right_module_translated[module_number][0]),
+                        (new_left_module_translated[module_number][1],new_right_module_translated[module_number][1]),'k', label="Module translated ({} $\mu$m)".format(int(translation_distance*1000)))
 
 def draw_normals(x_modules, y_modules, normal, length=10, draw=True):
     if not draw:
@@ -265,7 +265,6 @@ def zoom_in_1module(module_number, xbound, ybound, draw=True):
     draw_envelop(plot_axis=1, draw_legend=True)
     draw_modules_oriented(plot_axis=1, draw_one=True, module_number=module_number)
     # draw_normals(x_modules,y_modules,normal,length=1)
-    translate_module_in_envelop(dist=0.025, module_number=module_number)
     draw_BFS(BFS,vigR, display_BFS=display_BFS, full_curve=False)
 
     plt.xlim(xlim_min, xlim_max)
@@ -319,9 +318,23 @@ new_left_module, new_right_module = rotate_modules_tangent_2_surface(x_modules, 
 r_envelop_plus, z_envelop_plus, r_envelop_minus, z_envelop_minus = tolerance_envelop(r,R2Z)
 
 module_number = 3
+new_left_module_translated, new_right_module_translated = translate_module_in_envelop(new_left_module, new_right_module, tolerance_envelop_width/4)
 r_module, z_module, r_curve, z_curve = normIntersects(normals, module_number, new_left_module, new_right_module)
-d = dist2curve(r_module,z_module,r_curve,z_curve)
+r_module_translated, z_module_translated, r_curve_translated, z_curve_translated = normIntersects(normals, module_number, new_left_module_translated, new_right_module_translated)
 
+d = dist2curve(r_module,z_module,r_curve,z_curve)
+d_translated = dist2curve(r_module_translated, z_module_translated, r_curve_translated, z_curve_translated)
+
+# Calculating difference between max distance to focal surface and tolerance envelop
+
+max_dist = np.max(d)
+diff = max_dist - tolerance_envelop_width/2
+max_dist_translated = np.max(d_translated) 
+diff_translated = max_dist_translated - tolerance_envelop_width/2
+print(f"Max distance to focal surface = {max_dist*10**3:.1f} um")
+print(f"Max distance to focal surface translated = {max_dist_translated*10**3:.1f} um")
+print(f"Difference btw max distance and tolerance envelop = {diff*10**3:.1f} um")
+print(f"Difference btw max distance and tolerance envelop translated = {diff_translated*10**3:.1f} um")
 
 ## Plotting time ##
 
@@ -335,16 +348,10 @@ is_timer = False
 save_fig = True
 
 draw_normals(x_modules,y_modules,normals,length=vigR)
-# plt.plot(x_radius, y_radius, '-.',label="BFS")
 draw_modules_horizontal()
 draw_modules_oriented(draw = True)
 plt.plot(r,z,'--g',label="Focal surface")
 draw_BFS(BFS,vigR, display_BFS=display_BFS)
-plt.scatter(r_curve,z_curve, marker="o", color="C1")
-# plt.plot((r1,new_left_module[3][0]),(z1, new_left_module[3][1]),'--ok')
-# z_intersect = normIntersects(normal, 3, new_left_module)
-# print(z_intersect)
-# plt.plot(z, np.interp(z_intersect, r, z), marker="o", ls="", ms=4, color="C1")
 plt.legend(shadow=True)
 plt.title('Project: $\\bf{'+f'{project}''}$'+f'\nFocal surface and module arrangement with normal vectors - {nb_robots} robots/module')
 plt.xlabel('R [mm]')
@@ -363,20 +370,23 @@ elif nb_robots == 75:
     xbound=40
     ybound=0.9
 zoom_in_1module(module_number = module_number, xbound=xbound, ybound=ybound, draw=True)
+draw_module_translated(new_left_module_translated, new_right_module_translated, module_number, tolerance_envelop_width/2)   
+plt.legend(shadow=True)
 save.save_figures_to_dir(f'Zoomed_in_module_{module_number+1}')
 
 plt.figure('dis2curve')
-plt.scatter(r_module, d*10**3)
-plt.plot((r_module[0], r_module[-1]), (tolerance_envelop_width/2*10**3, tolerance_envelop_width/2*10**3), 'r--')
+plt.scatter(r_module-x_modules[module_number], d*10**3, label='Tangent module')
+plt.scatter(r_module_translated-x_modules[module_number], d_translated*10**3, label='Tangent & translated module')
+plt.plot((r_module[0]-x_modules[module_number], r_module[-1]-x_modules[module_number]), (tolerance_envelop_width/2*10**3, tolerance_envelop_width/2*10**3), 'r--',
+         label=rf'Tolerance = {int(tolerance_envelop_width/2*10**3)} $\mu$m')
 plt.grid()
 plt.xlabel('Position on fiber tips plane [mm]')
 plt.ylabel(r'Normal distance to focal surface [$\mu$m]')
-plt.title(f'Distance between module {module_number+1} and focal surface')
+plt.title('Project: $\\bf{'+f'{project}''}$' + f' - {nb_robots} robots/module'+f'\nDistance between module {module_number+1} and focal surface')
+plt.legend(shadow=True)
+save.save_figures_to_dir(f'Normal_dist2surf_module_{module_number+1}')
 
 draw_R2CRD(r,R_data,CRD_data,R2CRD, draw=False)
-
-
-
 
 if is_timer:
     plt.show(block=False)
