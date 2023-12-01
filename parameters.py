@@ -984,7 +984,7 @@ def plot_intermediate(intermediate_collection, nb_robots, ignore_points, interme
                
 def final_title(project: str, vigR:float, nb_robots: int, total_modules: int, total_robots: int, inter_frame_thick, global_frame_thick, allow_small_out: bool, out_allowance: float, disp_robots_info: bool = True):
 
-     project_info = r"$\bf{Project:}$" + project + r" - $\varnothing$" + f" {2*vigR} mm"
+     project_info = r"$\bf{Project:}$" + project + f" - vigR: {vigR:0.1f} mm"
      
      if allow_small_out:
           small_out_info = f"Out allowance: {out_allowance * 100:0.1f} %"

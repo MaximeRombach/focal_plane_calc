@@ -62,8 +62,8 @@ start_time = time.time()
 # out_allowances = np.arange(0, 0.95, 0.05) # how much is a module allowed to stick out of vigR (max value)
 
 ## Study one case at a time
-nbots = [63]
-out_allowances = [0.7]
+nbots = [75]
+out_allowances = [0.3]
 
 width_increase = 0 # [mm] How much we want to increase the base length of a module
 chanfer_length = 10.5 # [mm] Size of chanfers of module vertices (base value: 7.5); increase chanfer decreases coverage as it reduces the module size thus patrol area
@@ -72,7 +72,7 @@ full_framed = False # flag to check wether we are in semi frameless or in full f
 
 """ Intermediate frame parameters """
 
-inner_gap = 1 # [mm] spacing between modules inside intermediate frame
+inner_gap = 3 # [mm] spacing between modules inside intermediate frame
 
 """ Global frame parameters """
 
@@ -108,7 +108,7 @@ is_timer = False # Display time of final plots before automatic closing; stays o
 plot_time = 20 # [s] plotting time
 ignore_robots_positions = False
 
-save_plots = True # Save most useful plots 
+save_plots = False # Save most useful plots 
 save_all_plots = False  # Save all plots (including intermediate ones)
 save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
 save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
@@ -119,8 +119,8 @@ saving = param.SavingResults(saving_df, project_surface)
 """GFA stuff"""
 gfa_tune = 1
 nb_gfa = 6
-# gfa = param.GFA(length = 33.3*gfa_tune, width = 61*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df)
-gfa = param.GFA(length = 60*gfa_tune, width = 60*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
+gfa = param.GFA(length = 33.3*gfa_tune, width = 61*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
+# gfa = param.GFA(length = 60*gfa_tune, width = 60*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
 gdf_gfa = gfa.gdf_gfa
 polygon_gfa = MultiPolygon(list(gdf_gfa['geometry']))
 
