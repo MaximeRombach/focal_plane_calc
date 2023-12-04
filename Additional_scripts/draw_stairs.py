@@ -24,7 +24,7 @@ surf = param.FocalSurf(project)
 Rc = surf.curvature_R # Curve radius [mm]
 vigR = surf.vigR
 d_plane = 2*vigR # Focal plane diameter [mm]
-nb_robots = 75
+nb_robots = 63
 saving_df = {"save_plots": False}
 display_BFS = False
 save = param.SavingResults(saving_df, project_name=project)
@@ -42,10 +42,10 @@ R_data = t['R']
 r = np.linspace(0,vigR,500)
 
 BFS = surf.calc_BFS(R_data, Z_data)
-R2Z_BFS = interp1d(r,-np.sqrt(BFS**2-np.square(r)) + BFS,kind='cubic', fill_value = "extrapolate")
+R2Z_BFS = lambda r: -np.sqrt(BFS**2-np.square(r)) + BFS
 
 R2Z = interp1d(R_data,Z_data,kind='cubic', fill_value = "extrapolate") #leave 'cubic' interpolation for normal vectors calculations
-R2CRD = interp1d(R_data,CRD_data,kind='cubic')
+R2CRD = interp1d(R_data,CRD_data,kind='cubic', fill_value = "extrapolate")
 
 z = R2Z(r) # Calculate focal plane curve from csv data
 
@@ -282,10 +282,10 @@ def makemoduleline(x, start_left, end_right):
     return a*x + b
     
 
-def normIntersects(normals, module_number, module_left, module_right):
+def normIntersects(normals, module_number, module_left, module_right, number_of_points=100):
     r_curve = np.array([])
     a = normals[module_number][1]/normals[module_number][0]
-    x_iterable = np.linspace(module_left[module_number][0], module_right[module_number][0], 100)
+    x_iterable = np.linspace(module_left[module_number][0], module_right[module_number][0], number_of_points)
     y = makemoduleline(x_iterable, module_left[module_number], module_right[module_number])
     b_iterable = y - a*x_iterable
 
@@ -317,10 +317,14 @@ angles = get_normals_angles(normals)
 new_left_module, new_right_module = rotate_modules_tangent_2_surface(x_modules, y_modules, angles)
 r_envelop_plus, z_envelop_plus, r_envelop_minus, z_envelop_minus = tolerance_envelop(r,R2Z)
 
-module_number = 3
+## Study on a particular module ##
+module_number = 6
+number_of_points= 100
+# Focus tolerance
+
 new_left_module_translated, new_right_module_translated = translate_module_in_envelop(new_left_module, new_right_module, tolerance_envelop_width/4)
-r_module, z_module, r_curve, z_curve = normIntersects(normals, module_number, new_left_module, new_right_module)
-r_module_translated, z_module_translated, r_curve_translated, z_curve_translated = normIntersects(normals, module_number, new_left_module_translated, new_right_module_translated)
+r_module, z_module, r_curve, z_curve = normIntersects(normals, module_number, new_left_module, new_right_module, number_of_points)
+r_module_translated, z_module_translated, r_curve_translated, z_curve_translated = normIntersects(normals, module_number, new_left_module_translated, new_right_module_translated, number_of_points)
 
 d = dist2curve(r_module,z_module,r_curve,z_curve)
 d_translated = dist2curve(r_module_translated, z_module_translated, r_curve_translated, z_curve_translated)
@@ -336,6 +340,14 @@ print(f"Max distance to focal surface translated = {max_dist_translated*10**3:.1
 print(f"Difference btw max distance and tolerance envelop = {diff*10**3:.1f} um")
 print(f"Difference btw max distance and tolerance envelop translated = {diff_translated*10**3:.1f} um")
 
+# Tilt tolerance
+
+normals_curve = get_normals(r_curve, R2Z)
+
+angles_normals_curve = get_normals_angles(normals_curve, print_data = True)
+angles_corrected = np.degrees(angles_normals_curve) + R2CRD(r_curve)
+diff_angle = angles_corrected - np.degrees(angles[module_number])*np.ones(len(angles_corrected))
+
 ## Plotting time ##
 
 # fig = plt.figure(figsize=(12,8))
@@ -348,6 +360,7 @@ is_timer = False
 save_fig = True
 
 draw_normals(x_modules,y_modules,normals,length=vigR)
+draw_normals(r_curve,z_curve,normals_curve,length=vigR, draw=True)
 draw_modules_horizontal()
 draw_modules_oriented(draw = True)
 plt.plot(r,z,'--g',label="Focal surface")
@@ -359,7 +372,6 @@ plt.ylabel('Z [mm]')
 plt.grid()
 save.save_figures_to_dir('Focal surface and module arrangement with normal vectors')
 
-module_number = 3
 if nb_robots == 102:
     xbound=45
     ybound=1.2
@@ -370,11 +382,12 @@ elif nb_robots == 75:
     xbound=40
     ybound=0.9
 zoom_in_1module(module_number = module_number, xbound=xbound, ybound=ybound, draw=True)
-draw_module_translated(new_left_module_translated, new_right_module_translated, module_number, tolerance_envelop_width/2)   
+draw_module_translated(new_left_module_translated, new_right_module_translated, module_number, tolerance_envelop_width/2)
+
 plt.legend(shadow=True)
 save.save_figures_to_dir(f'Zoomed_in_module_{module_number+1}')
 
-plt.figure('dis2curve')
+plt.figure('dis2curve',figsize=(8,7))
 plt.scatter(r_module-x_modules[module_number], d*10**3, label='Tangent module')
 plt.scatter(r_module_translated-x_modules[module_number], d_translated*10**3, label='Tangent & translated module')
 plt.plot((r_module[0]-x_modules[module_number], r_module[-1]-x_modules[module_number]), (tolerance_envelop_width/2*10**3, tolerance_envelop_width/2*10**3), 'r--',
@@ -383,8 +396,18 @@ plt.grid()
 plt.xlabel('Position on fiber tips plane [mm]')
 plt.ylabel(r'Normal distance to focal surface [$\mu$m]')
 plt.title('Project: $\\bf{'+f'{project}''}$' + f' - {nb_robots} robots/module'+f'\nDistance between module {module_number+1} and focal surface')
-plt.legend(shadow=True)
+plt.legend(shadow=True, loc='best')
 save.save_figures_to_dir(f'Normal_dist2surf_module_{module_number+1}')
+
+plt.figure('angle_diff',figsize=(8,7))
+plt.grid()
+plt.scatter(r_module-x_modules[module_number],diff_angle)
+plt.scatter(np.max(r_module-x_modules[module_number]),np.max(diff_angle), label=f'Max = {np.max(diff_angle):0.3f} °', color='r')
+plt.scatter(np.min(r_module-x_modules[module_number]),np.min(diff_angle), label=f'Min = {np.min(diff_angle):0.3f} °', color='g')
+plt.xlabel('Position on fiber tips plane [mm]')
+plt.ylabel('Angle difference [deg]')
+plt.legend(shadow=True, loc='best')
+plt.title('Project: $\\bf{'+f'{project}''}$' + f' - {nb_robots} robots/module'+f'\nAngle difference btw normal of module {module_number+1} \n & chief ray along focal surface')
 
 draw_R2CRD(r,R_data,CRD_data,R2CRD, draw=False)
 
