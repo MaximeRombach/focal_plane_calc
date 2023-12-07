@@ -160,7 +160,7 @@ ProgressBarOptions progressBarOptions = new()
     DisplayTimeInRealTime = false
 };
 
-using ( ProgressBar createExtrusionAxesProgressBar = new ProgressBar(frontGridPointCloud.point3Ds.Count, "Creating extrusion axes", progressBarOptions))
+using ( ProgressBar createExtrusionAxesProgressBar = new(frontGridPointCloud.point3Ds.Count, "Creating extrusion axes", progressBarOptions))
 {
     // Try iterating through two point clouds at the same time
     foreach ((Point3D frontPoint, Point3D backPoint) in frontGridPointCloud.point3Ds.Zip(backGridPointCloud.point3Ds))
@@ -211,7 +211,7 @@ List<SketchPoint> supportSurfaceMarkerPointList = new(frontSketchPointList.Count
 modelView.EnableGraphicsUpdate = false;
 
 // Create the support surface markers from the top surface
-using (ProgressBar createSmallSegmentsProgressBar = new ProgressBar(backSketchPointList.Count, "Creating support surface markers", progressBarOptions))
+using (ProgressBar createSmallSegmentsProgressBar = new(backSketchPointList.Count, "Creating support surface markers", progressBarOptions))
 {
     foreach ((SketchPoint frontSketchPoint, SketchPoint backSketchPoint, SketchSegment extrusionAxis) in frontSketchPointList.Zip(backSketchPointList, extrusionAxisList))
     {
@@ -408,8 +408,9 @@ double bottomToFrontPlaneDistance = ((SketchSegment)revolutionAxisVerticalLine).
 basicRefGeometry.frontPlane.Select2(false, 0);
 
 // A trick to flip the offset orientation when creating a ref plane: https://stackoverflow.com/questions/71885722/how-to-create-a-flip-offset-reference-plane-with-solidworks-vba-api
-RefPlane bottomPlane = (RefPlane)modulePart.FeatureManager.InsertRefPlane((int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Distance 
-                                                                                + (int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_OptionFlip, bottomToFrontPlaneDistance,
+RefPlane bottomPlane = (RefPlane)modulePart.FeatureManager.InsertRefPlane(  (int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Distance
+                                                                            + (int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_OptionFlip, 
+                                                                            bottomToFrontPlaneDistance,
                                                                              0, 0, 0, 0);
 ((Feature)bottomPlane).Name = "Bottom Plane";
 
@@ -424,7 +425,7 @@ modulePart.SketchManager.AddToDB = true;
 List<SketchPoint> bottomSurfaceSketchPointList = new( extrusionAxisList.Count );
 
 // 
-using (ProgressBar createBottomSurfacePointsProgressBar = new ProgressBar(extrusionAxisList.Count, "Creating bottom surface points", progressBarOptions))
+using (ProgressBar createBottomSurfacePointsProgressBar = new(extrusionAxisList.Count, "Creating bottom surface points", progressBarOptions))
 {
     foreach (SketchSegment extrusionAxis in extrusionAxisList)
     {
@@ -435,7 +436,7 @@ using (ProgressBar createBottomSurfacePointsProgressBar = new ProgressBar(extrus
         extrusionAxis.Select4(true, swSelectData);
         MakeSelectedCoincide(ref modulePart);
         ClearSelection(ref modulePart);
-        // TODO: the bottom plane will need to be passed in if this loop is used as a function
+
         // using -1 as the mark, meaning that we don't specify the purpose of the selection to Solidworks
         ((Feature)bottomPlane).Select2(true, -1);
         bottomPlaneSketchPoint.Select4(true, swSelectData);
@@ -546,7 +547,6 @@ if (oneSideOfFullTriangle != null)
                                                 firstBottomSurfaceSketchPoint.X, 
                                                 firstBottomSurfaceSketchPoint.Y, 
                                                 firstBottomSurfaceSketchPoint.Z);
-    //AddDimensionToSelected(ref modulePart, equilateralTriangleSideLength, (SketchPoint)oneSideOfFullTriangle.GetEndPoint2());
     ClearSelection(ref modulePart);
 }
 ClearSelection(ref modulePart);
@@ -577,7 +577,6 @@ modulePart.SketchManager.InsertSketch(true);
 ClearSelection(ref modulePart);
 
 /// In progress Create a sketch for the 3 pin holes ///
-/// 
 ((Feature)primisPlane).Select2(true, -1);
 modulePart.SketchManager.InsertSketch(true);
 ///// Done with the first chamfered triangle sketch. Now create the full triangle sketch /////
@@ -596,7 +595,6 @@ if (oneSideOfPinHoleTriangle != null)
                                                 firstBottomSurfaceSketchPoint.X, 
                                                 firstBottomSurfaceSketchPoint.Y, 
                                                 firstBottomSurfaceSketchPoint.Z);
-    //AddDimensionToSelected(ref modulePart, interPinHoleDistance, (SketchPoint)oneSideOfPinHoleTriangle.GetEndPoint2());
     ClearSelection(ref modulePart);
 }
 // Add the pin holes on 3 vertices
@@ -697,7 +695,7 @@ using (ProgressBar extrudeModulesProgressBar = new(bottomSurfaceSketchPointList.
 
         // extrude the full triangle all the way to the "support surface point"
         SelectSketch(ref modulePart, ((Feature)pastedFullTriangleSketch).Name);
-        Feature fullTriangleExtrusion = CreateTwoWayExtrusionD1ToPointD2ThroughAll(ref modulePart, supportSurfaceMarkerPointList[moduleIndex], swSelectData);
+        Feature fullTriangleExtrusion = CreateTwoWayExtrusionD1ThroughAllD2ToPoint(ref modulePart, supportSurfaceMarkerPointList[moduleIndex], swSelectData);
         fullTriangleExtrusion.Name = $"fullTriangleExtrusion_{moduleIndex}";
         ClearSelection(ref modulePart);
 
@@ -722,7 +720,7 @@ using (ProgressBar extrudeModulesProgressBar = new(bottomSurfaceSketchPointList.
         Debug.WriteLine($"Extrusion depth at module {moduleIndex} is {extrusionDepth, 0:F3} meters");
 
         SelectSketch(ref modulePart, ((Feature)lastPinHoleTriangleSketch).Name);
-        Feature pinHoleExtrusion = CreateTwoWayExtrusionD1ToDistanceD2ThroughAll(ref modulePart, extrusionDepth);
+        Feature pinHoleExtrusion = CreateTwoWayExtrusionD1ThroughAllD2ToDistance(ref modulePart, extrusionDepth);
         if (pinHoleExtrusion == null)
         {
             Console.WriteLine($"Failed to extrude pin hole {moduleIndex}");

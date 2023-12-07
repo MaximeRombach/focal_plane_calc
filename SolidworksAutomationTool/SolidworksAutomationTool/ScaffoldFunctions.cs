@@ -128,6 +128,7 @@ namespace SolidworksAutomationTool
         /* Print a math point's coordinates to the Debug stream */
         public static void PrintMathPoint(MathPoint aPoint, string pointName)
         {
+            // the ArrayData object contains an array of 3 doubles. namely x,y,and z
             double[] pointDataArray = (double[])aPoint.ArrayData;
             Debug.WriteLine($"Point {pointName}: x: {pointDataArray[0]}, y: {pointDataArray[1]}, z: {pointDataArray[2]}");
         }
@@ -463,7 +464,8 @@ namespace SolidworksAutomationTool
             point.Select4(true, swSelectData);
             // although the InsertRefPlane function can take 3 constraints, we don't need to provide the third constraint,
             // as the 2 constraints are enough for the "point and normal" method
-            RefPlane refPlane = (RefPlane)featureManager.InsertRefPlane((int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Perpendicular, 0,
+            RefPlane refPlane = (RefPlane)featureManager.InsertRefPlane((int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Perpendicular
+                                                                        + (int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_OptionFlip, 0,
                                                                                           (int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Coincident, 0, 0, 0);
 
             // The user can decide the name of the plane by passing a string. If null is passed in, the plane's name is left to solidworks to decide
@@ -506,7 +508,7 @@ namespace SolidworksAutomationTool
          * Direction 1 is extruded till the given point,
          * Direction 2 is extruded all through.
          */
-        public static Feature CreateTwoWayExtrusionD1ToPointD2ThroughAll(ref ModelDoc2 partModelDoc, SketchPoint vertexD1ExtrudeTo, SelectData swSelectData)
+        public static Feature CreateTwoWayExtrusionD1ThroughAllD2ToPoint(ref ModelDoc2 partModelDoc, SketchPoint vertexD1ExtrudeTo, SelectData swSelectData)
         {
             // Magic number 32 is used when selecting up-to surface, up-to vertex, or offset-from surface.
             // Source: https://help.solidworks.com/2023/english/api/sldworksapi/SOLIDWORKS.Interop.sldworks~SOLIDWORKS.Interop.sldworks.IFeatureManager~FeatureRevolve2.html
@@ -518,9 +520,9 @@ namespace SolidworksAutomationTool
                                     false,  // true for single ended cut, false for double-ended cut
                                     false,  // True to remove material outside of the profile of the flip side to cut, false to not
                                     false,  // True for Direction 1 to be opposite of the default direction
-                                    (int)swEndConditions_e.swEndCondUpToVertex,  // Termination type for the first end
-                                    (int)swEndConditions_e.swEndCondThroughAll,     // Termination type for the second end 
-                                    0.01, 1,   // depth of extrusion for 1st and 2nd end in meters
+                                    (int)swEndConditions_e.swEndCondThroughAll,  // Termination type for the first end
+                                    (int)swEndConditions_e.swEndCondUpToVertex,    // Termination type for the second end 
+                                    0.01, 0.01,   // depth of extrusion for 1st and 2nd end in meters
                                     false, false, // True allows a draft angle in the first/second direction, false does not allow drafting in the first/second direction
                                     false, false, // True for the first/second draft angle to be inward, false to be outward; only valid when Dchk1/Dchk2 is true
                                     1, 1,   // Draft angle for the first end; only valid when Dchk1 is true
@@ -540,15 +542,15 @@ namespace SolidworksAutomationTool
          * Direction 1 is extruded till the given distance,
          * Direction 2 is extruded all through.
          */
-        public static Feature CreateTwoWayExtrusionD1ToDistanceD2ThroughAll(ref ModelDoc2 partModelDoc, double distanceD1ExtrudeTo)
+        public static Feature CreateTwoWayExtrusionD1ThroughAllD2ToDistance(ref ModelDoc2 partModelDoc, double distanceD1ExtrudeTo)
         { // the FeatureCut4 api takes a ton of arguments. This wrapper function is to simplify the calling process.
             // https://help.solidworks.com/2023/english/api/sldworksapi/solidworks.interop.sldworks~solidworks.interop.sldworks.ifeaturemanager~featurecut4.html?verRedirect=1
             Feature extrusionFeature = partModelDoc.FeatureManager.FeatureCut4(
                                     false,  // true for single ended cut, false for double-ended cut
                                     false,  // True to remove material outside of the profile of the flip side to cut, false to not
                                     false,  // True for Direction 1 to be opposite of the default direction
-                                    (int)swEndConditions_e.swEndCondBlind,  // Termination type for the first end
-                                    (int)swEndConditions_e.swEndCondThroughAll,     // Termination type for the second end 
+                                    (int)swEndConditions_e.swEndCondThroughAll,  // Termination type for the first end
+                                    (int)swEndConditions_e.swEndCondBlind,     // Termination type for the second end 
                                     distanceD1ExtrudeTo, distanceD1ExtrudeTo,   // depth of extrusion for 1st and 2nd end in meters
                                     false, false, // True allows a draft angle in the first/second direction, false does not allow drafting in the first/second direction
                                     false, false, // True for the first/second draft angle to be inward, false to be outward; only valid when Dchk1/Dchk2 is true
@@ -569,10 +571,12 @@ namespace SolidworksAutomationTool
         public static (Sketch, SketchPoint, object[]) CreateACopyAndRotateReferenceSketch(ref ModelDoc2 partModelDoc, RefPlane plane, SelectData swSelectData, string referenceSketchName, bool isUprightTriangle)
         {
             // copy and paste the reference sketch
-            SelectSketch(ref partModelDoc, referenceSketchName);
-            partModelDoc.EditCopy();
             ((Feature)plane).Select2(true, -1);
-            partModelDoc.Paste();
+            SelectSketch(ref partModelDoc, referenceSketchName, true);
+            
+            // TODO: Check if derive will keep dimensions derived from global variables
+            partModelDoc.DeriveSketch();
+            ClearSelection(ref  partModelDoc);
 
             // manually update feature tree
             partModelDoc.FeatureManager.UpdateFeatureTree();
@@ -582,7 +586,7 @@ namespace SolidworksAutomationTool
             Sketch pastedSketch = (Sketch)pastedSketchFeature.GetSpecificFeature2();
             ClearSelection(ref partModelDoc);
 
-            // edit the pasted pin hole sketch
+            // edit the pasted sketch
             ((Feature)pastedSketch).Select2(false, -1);
             partModelDoc.EditSketch();
 
