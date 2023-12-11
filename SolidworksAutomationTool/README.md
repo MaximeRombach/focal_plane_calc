@@ -32,6 +32,27 @@ Can repeatedly create sketches of modules(both chamfered and unchamfered) and ex
 
 Click on the project title `SolidworksAutomationTool`, go to the `Build` tab and click `Publish Selection`
 
+![Screenshot 2023-12-11 154524](https://github.com/MaximeRombach/focal_plane_calc/assets/85515041/6d5b3ec0-0d1f-4024-8395-33f1d98b9f2c)
+
+Create a publish profile:
+![image](https://github.com/MaximeRombach/focal_plane_calc/assets/85515041/e16e340b-5d8e-4f5c-a353-1c9804edb67b)
+
+For publishing to your local disk:
+
+![image](https://github.com/MaximeRombach/focal_plane_calc/assets/85515041/d7040488-f5c5-41a0-bb6d-7cd8a2958494)
+
+Choose the location where the deployed program is at and click `Finish`:
+
+![image](https://github.com/MaximeRombach/focal_plane_calc/assets/85515041/a04776d9-3e8a-4bc9-a708-c5133b26b85b)
+
+Once the profile is completed, edit the publish settings to tailor to your personal need:
+![image](https://github.com/MaximeRombach/focal_plane_calc/assets/85515041/0133e44d-9b86-4625-9ff0-4eea852b32b8)
+
+For example, in the popup window, I modified the `Deployment mode` to be self-contained. Visual studio will then add DotNet dependencies to the deployment directory to make the program independent of the installation of DotNet.
+I also changed the target runtime to target 64bit Windows computer, since Solidworks runs on Windows only. 
+For optimal program performance, change `Configuration` to "Release". The compiler will optimize the program to improve runtime performance. 
+
+![image](https://github.com/MaximeRombach/focal_plane_calc/assets/85515041/87f89055-148b-4b37-8261-c084bebf4189)
 
 
 
