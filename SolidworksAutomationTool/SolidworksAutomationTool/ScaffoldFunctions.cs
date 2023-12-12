@@ -5,7 +5,16 @@ using System.Diagnostics;
 
 namespace SolidworksAutomationTool
 {
-    /* A struct storing the 3 basic reference planes */
+    /// <summary>
+    /// A struct storing the 4 basic reference geometries.
+    /// Members of the struct should be updated to point to the corresponding reference geometries in the main program.
+    /// <remarks>
+    /// The reason to use this struct is to avoid directly selecting reference geometries by name(string). 
+    /// Selecting by name only works with the English version of Solidworks. The ID of the front plane is "Front Plane", but this is not the case in other languages. 
+    /// Therefore, selecting a reference geometry by its English ID will likely fail in other Solidworks versions.
+    /// Since the members of the struct directly point to the reference geometry objects, this way of reference is language neutral
+    /// </remarks>
+    /// </summary>
     public struct BasicReferenceGeometry
     {
         public Feature frontPlane;
@@ -14,24 +23,39 @@ namespace SolidworksAutomationTool
         public SketchPoint origin;
     }
 
+    /// <summary>
+    /// A collection of helper/scaffold functions to make reduce boilerplate code and make our lives easier
+    /// </summary>
     public class ScaffoldFunctions
     {
-        /* Display a prompt to the console and wait for the user's input before continuing */
+        /// <summary>
+        /// Display a prompt to the console and wait for the user's input before continuing
+        /// </summary>
+        /// <param name="prompt">Prompt to display to the user</param>
         public static void PromptAndWait(string prompt)
         {
             Console.WriteLine(prompt);
             Console.ReadKey();
         }
+
+        /// <summary>
+        /// Convert the given angle from degrees to radian
+        /// </summary>
+        /// <param name="angleInDegrees">Angle to be converted to radians</param>
+        /// <returns></returns>
         public static double DegreeToRadian(double angleInDegrees)
         {
             return angleInDegrees / 180.0 * Math.PI;
         }
 
         // some scaffold functions. So far none of the functions clears selection. So the user should remember to manually clear selection
-        /*
-            Wrapper function to make selected segments coincident
-            Note that this function doesn't check if the selected segments are valid to be make coincident with each others.
-         */
+
+        /// <summary>
+        /// Make selected segments coincident.
+        /// Note that this function does NOT check if the selected segments are valid to be make coincident with each others.
+        /// This function does not clear selections
+        /// </summary>
+        /// <param name="partModelDoc">reference to the ModelDoc2 instance</param>
         public static void MakeSelectedCoincide(ref ModelDoc2 partModelDoc)
             => partModelDoc.SketchAddConstraints("sgCOINCIDENT");
 

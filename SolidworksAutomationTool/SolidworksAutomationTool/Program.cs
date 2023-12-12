@@ -82,13 +82,13 @@ foreach ((Point3D frontPoint, Point3D backPoint) in frontGridPointCloud.point3Ds
     backPoint.z += bestFitSphereRadius;
 }
 
-// DEBUG use: check if the points are read in correctly
 Console.WriteLine("\nFront grid point cloud with z-axis offset removed: ");
+// DEBUG use: check if the points are read in correctly
 //frontGridPointCloud.PrintPoint3Ds();
 //frontGridPointCloud.PrintModuleOrientations();
 
-// DEBUG use: check if the points are read in correctly
 Console.WriteLine("\nBack grid point cloud with z-axis offset removed: ");
+// DEBUG use: check if the points are read in correctly
 //backGridPointCloud.PrintPoint3Ds();
 //backGridPointCloud.PrintModuleOrientations();
 
@@ -332,7 +332,6 @@ AddDimensionToSelectedWithGlobalVariable(   ref modulePart,
                                             revolutionAxisVerticalLineEndPoint.X,
                                             revolutionAxisVerticalLineEndPoint.Y,
                                             revolutionAxisVerticalLineEndPoint.Z );
-//AddDimensionToSelected(ref modulePart, bottomSurfaceRadius, revolutionAxisVerticalLineEndPoint);
 
 ClearSelection(ref modulePart);
 // create vertical line (outer rim of the boarder) connecting the top line 
@@ -754,11 +753,11 @@ modulePart.SketchManager.AddToDB = false;
 EnableInputDimensionByUser(ref solidworksApp);
 
 // DEBUG: print the feature tree
-PrintFeaturesInFeatureManagerDesignTree(ref modulePart);
+//PrintFeaturesInFeatureManagerDesignTree(ref modulePart);
 
 Console.WriteLine("Module extrusions completed");
 
 // wait for user input before closing
 PromptAndWait("Press any key to close Solidworks");
 // close Solidworks that runs in the background
-solidworksApp.ExitApp();
+//solidworksApp.ExitApp();

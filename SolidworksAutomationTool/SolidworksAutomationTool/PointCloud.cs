@@ -2,19 +2,30 @@
 
 namespace SolidworksAutomationTool
 {
-    // this enum defines the allowed units in the txt file to be parsed in
+    /// <summary>
+    /// This enum defines the allowed units in the txt file to be parsed in. 
+    /// Developers can populate this enum to include other units in the future.
+    /// </summary>
     public enum Units: ushort
     {
         Millimeter = 0,
         Meter = 1,
     }
-    /* Point Cloud class that supports reading generated a point cloud from a txt file */
+
+    /// <summary>
+    /// Point Cloud class that supports reading from a txt file and generating a list of 3D points out of it.
+    /// </summary>
     public class PointCloud
     {
-        // All 3D points are stored in an array
+        /// <summary>
+        /// A list to store all the parsed 3D points
+        /// </summary>
         public List<Point3D> point3Ds = new();
         
-        // The orientation of the modules are stored in an array
+        /// <summary>
+        /// A list to store the orientaion flags of the modules whose center is colinear with the 3D points
+        /// A "true" at means the corresponding module/triangle is upright. A "false" means the corresponding module/triangle is upside-down.
+        /// </summary>
         public List<bool> moduleOrientations = new();
 
         /* The backbone of reading a point cloud from a txt file. 
@@ -22,7 +33,9 @@ namespace SolidworksAutomationTool
          *          true if the txt file is read successfully. The resulting list of 3D points is stored in the class attribute point3Ds
          */
 
-        // Simple points-printing function. Could be used for debugging
+        /// <summary>
+        /// Simple points-printing function. Could be used to verify the points in the text file are parsed correctly.
+        /// </summary>
         public void PrintPoint3Ds()
         {
             // this number controls the field width (the fixed space taken in the console) for each number.
@@ -35,7 +48,9 @@ namespace SolidworksAutomationTool
             }
         }
 
-        // Simple orientation-printing function. Could be used for debugging
+        /// <summary>
+        /// Simple orientation-printing function. Could be used to verify the orientation flags are parsed correctly.
+        /// </summary>
         public void PrintModuleOrientations()
         {
             int moduleOrientationIndex = -1;
@@ -51,11 +66,17 @@ namespace SolidworksAutomationTool
             }
         }
 
-        /* 
-         * Reads a txt file and parse all points into a list of 3D points
-         * Returns: true if the parse was sucessful
-         *          false otherwise
-         */
+        /// <summary>
+        /// Reads a txt file and parse all points into a list of 3D points
+        /// </summary>
+        /// <param name="fileName">The complete text file path as a string</param>
+        /// <param name="dataUnit">One of the data units defined in the Units enum</param>
+        /// <returns>
+        /// true if the parse was sucessful.
+        /// false otherwise.
+        /// </returns>
+        /// <exception cref="FileNotFoundException">When the path of the text file is not valid or cannot find the text file</exception>
+        /// <exception cref="InvalidDataException"></exception>
         public bool ReadPointCloudFromTxt(string fileName, Units dataUnit)
         {
             // security check
@@ -81,7 +102,7 @@ namespace SolidworksAutomationTool
                 char[] splitOptions = { ' ' };
 
                 // do a first read to go over the header. 
-                string lineRead = streamReader.ReadLine();
+                string? lineRead = streamReader.ReadLine();
 
                 // start actually reading the first line of data
                 lineRead = streamReader.ReadLine() ;
@@ -167,15 +188,27 @@ namespace SolidworksAutomationTool
         }
     }
 
-    /* A simple class to hold a 3D point */
+    /// <summary>
+    /// A simple class to hold a 3D point.
+    /// The class has 3 public double values representing the x, y and z component of a 3D point
+    /// </summary>
     public class Point3D : IEquatable<Point3D>
     {
         public double x = 0.0f;
         public double y = 0.0f;
         public double z = 0.0f;
 
-        // Constructors of Point3D
+        /// <summary>
+        /// Default constructors of class Point3D
+        /// </summary>
         public Point3D() { }
+
+        /// <summary>
+        /// Constructor that takes 3 doubles to create a 3D point instance
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <param name="z"></param>
         public Point3D(double x, double y, double z)
         {
             this.x = x;
@@ -183,18 +216,30 @@ namespace SolidworksAutomationTool
             this.z = z;
         }
 
+        /// <summary>
+        /// Constructor that takes an double array of 3 elements to create an instance of Point3D class.
+        /// </summary>
+        /// <param name="values"></param>
+        /// <exception cref="InvalidDataException">Throws when the input double array does not have 3 doubles</exception>
         public Point3D(double[] values)
         {
             if (values.Length != 3)
             {
-                return;
+                throw new InvalidDataException("The double array used to construct a Point3D instance does not have 3 elements");
             }
-            this.x = values[0];
-            this.y = values[1];
-            this.z = values[2];
+            x = values[0];
+            y = values[1];
+            z = values[2];
         }
 
-        // Function to help inter-point comparison
+        /// <summary>
+        /// Function to help inter-point comparison
+        /// </summary>
+        /// <param name="otherPoint">Instance of Point3D class</param>
+        /// <returns>
+        /// true if the other Point3D instance is value-wise equal to this Point3D instance
+        /// false otherwise
+        /// </returns>
         public bool Equals(Point3D otherPoint)
         {
             if (otherPoint == null)
@@ -207,14 +252,21 @@ namespace SolidworksAutomationTool
                 return true;
             }
             // only makes sense to compare apples with apples
-            if (this.GetType() != otherPoint.GetType())
+            if (GetType() != otherPoint.GetType())
             {
                 return false;
             }
-            return this.x == otherPoint.x && this.y == otherPoint.y && this.z == otherPoint.z;
+            return x == otherPoint.x && y == otherPoint.y && z == otherPoint.z;
         }
 
-        // Create a mid point in between two points. The two points are passed in as "const reference"
+        /// <summary>
+        /// Create a mid point in between two points. The two points are passed in as "const reference"
+        /// </summary>
+        /// <param name="firstPoint">Constant Point3D instance</param>
+        /// <param name="secondPoint">Constant Point3D instance</param>
+        /// <returns>
+        /// A newly created Point3D instance that spatially lives midway between the two input Point3D instances
+        /// </returns>
         public static Point3D CreateMidPoint(in Point3D firstPoint, in Point3D secondPoint)
         {
             return new Point3D( firstPoint.x / 2 + secondPoint.x / 2, 
