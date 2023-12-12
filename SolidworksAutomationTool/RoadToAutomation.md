@@ -30,4 +30,41 @@ This is likely due to the miscommunication between solidworks and the automation
 
 If you are developing the automation tool, then it's common to encounter this issue when you did a NULL dereference or other things that crashed the automation tool. The solution is the same: closing all solidworks instances in the Task Manager. 
 
+## Wrap repetitively used Solidworks APIs in functions
 
+Solidworks often deprecates APIs. In order to be future proof, we try to have fewer direct API calls in the automation tool. Commonly used API calls are often wrapped in functions. 
+
+In the case of updating the deprecated API calls, the developer will change the underlying API calls instead of the wrapper function used in the automation tool's main program.
+
+An example of Solidworks' chain of deprecated API calls:
+
+![SolidworksDeprecatedAPIs](https://github.com/MaximeRombach/focal_plane_calc/assets/85515041/b01dc626-42f5-4c9e-9058-afe5a538ab80)
+
+## An API is not doing what it supposed to do
+
+Sometimes you might realize some lastest API, let's call it "someFunction3", is not doing what it should do. 
+
+You digged into the API documentation and found no example. However, there is a deprecated API named "someFunction2". 
+
+Well, I suggest to give the deprecated API a try. It might do what you expected. So far I had this issue once and had to fall back to the deprecated API.
+
+## The API does not have examples
+
+Sometimes Solidworks only provides VBA (Visual Basic for Applications) examples or even no examples at all for some APIs.
+
+- If there are VBA examples, you can reference the logic to write C#. The APIs in VBA are quite similar to those in C#.
+- If there is no example at all, you could look online. Given that using Solidworks APIs is a niche field, your chance to find good examples online is also slim. 
+  I suggest to just try the API and see if it behaves as expected. 
+
+## Use the Macro recording function in Solidworks
+
+A simple way to quickly create a function to achieve some part automation is to do it in Solidworks GUI manually and record the process as a macro.
+
+Solidworks will record a whole bunch of reference frame transformations but you normally can ignore those. 
+
+Focus on how Solidworks made your part with APIs. Once you understood the logic, it wil be easier to implement the logic in C#.
+
+Note that this method does not always work. For example, Solidworks often does area selection when you select a few sketch segments in the GUI. 
+However, area selection can be very hard to use when you select sketch segments with APIs since you need to know in which area the segments are in.
+
+Also, some operations are not recorded in the macro. For example, the operation corresponding to flipping the normal of a plane is not recorded in the macro.
