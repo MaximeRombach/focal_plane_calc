@@ -419,13 +419,17 @@ namespace SolidworksAutomationTool
             return null;
         }
 
-
         /// <summary>
-        /// Get the most horizontal side of a triangle polygon
+        /// Get the most horizontal side(based on the XY plane) of a triangle polygon.
+        /// The function traverses all the sketch segments in a triangle polygon. 
+        /// The magnitude of the slope of each side of the triangle is calculated. The side having the smallest magnitude of slope is returned.
         /// TODO: add more descriptions on the trick used
         /// </summary>
         /// <param name="polygon">reference to an array of sketch segments in a triangle polygon</param>
-        /// <returns>the most horizontal side in a triangle. If no sketch line exist in the polygon, returns null</returns>
+        /// <returns>
+        /// the most horizontal side in a triangle. 
+        /// If no sketch line exist in the polygon, returns null
+        /// </returns>
         public static SketchLine? GetMostHorizontalTriangleSide(ref object[] polygon)
         {
             SketchLine? mostHorizontalSide = null;
@@ -448,8 +452,12 @@ namespace SolidworksAutomationTool
             return mostHorizontalSide;
         }
 
-        /* Get the longest horizontal side of a chamfered triangle polygon
-         */
+        /// <summary>
+        /// Get the longest horizontal side of a chamfered triangle polygon
+        /// This function largely resembles the behavior of GetMostHorizontalTriangleSide but additionally finds the longest side
+        /// </summary>
+        /// <param name="chamferedTrianglePolygon">reference to an array of sketch segments in a chamfered triangle polygon</param>
+        /// <returns></returns>
         public static SketchLine? GetLongestMostHorizontalTriangleSide(ref object[] chamferedTrianglePolygon)
         {
             SketchLine? mostHorizontalLongSide = null;
@@ -486,12 +494,17 @@ namespace SolidworksAutomationTool
             return mostHorizontalLongSide;
         }
 
-        /* Get the side with the most positive slope (only considering the projection on the local skecth XY plane) in a chamfered triangle
+        /* 
          * This function is often used for finding the side used to setting parallel constraints to the first triangle in a pizza slice
          * This function is designed to be called when the chamfered triangle is relatively upright
          * Since the chamfered triangle has two side in parallel within itself, we will find two sides having similar slopes.
          * We choose the side with the most positive slope
          */
+        /// <summary>
+        /// Get the side with the most positive slope (only considering the projection on the local skecth XY plane) in a chamfered triangle
+        /// </summary>
+        /// <param name="polygon"></param>
+        /// <returns></returns>
         public static SketchSegment? GetMostPositiveSlopedSideInChamferedTriangle(ref object[] polygon)
         {
             SketchSegment? mostPositiveSlopedSide = null;

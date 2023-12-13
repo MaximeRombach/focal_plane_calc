@@ -141,10 +141,9 @@ modelView =(ModelView)modulePart.GetFirstModelView();
 modelView.EnableGraphicsUpdate = false;
 modulePart.SketchManager.AddToDB = true;
 
-// try diabling feature tree updates to gain performance
+// try disabling feature tree updates to gain performance
 modulePart.FeatureManager.EnableFeatureTree = false;
 // EnableGraphicsUpdate affects whether to refresh the model view during a selection, such as IEntity::Select4 or IFeature::Select2.
-modelView.EnableGraphicsUpdate = false;
 
 // try to allocate space for front sketchpoints and back sketchpoints
 List<SketchPoint> frontSketchPointList = new(frontGridPointCloud.point3Ds.Count);
@@ -187,7 +186,7 @@ modelView.EnableGraphicsUpdate = true;
 // Sometimes the camera is not pointing toward the part. So repoint the camera to the part.
 modulePart.ViewZoomtofit2();
 
-// The documentation says: Inserts a new 3D sketch in a model or closes the active sketch. ?? 
+// The documentation says: Inserts a new 3D sketch in a model or closes the active sketch.
 modulePart.SketchManager.Insert3DSketch(true);
 
 // magic clear selection method
@@ -241,10 +240,10 @@ using (ProgressBar createSmallSegmentsProgressBar = new(backSketchPointList.Coun
         createSmallSegmentsProgressBar.Tick();
     }
 }
-
+// Evaluate all the expressions in the global equation table
 modulePart.GetEquationMgr().EvaluateAll();
 
-Console.WriteLine("Small segment creation completed");
+Console.WriteLine("Support surface markers are created");
 // enbale user input box for dimensions
 EnableInputDimensionByUser(ref solidworksApp);
 
@@ -288,7 +287,6 @@ ClearSelection(ref modulePart);
 SketchPoint arcStartSketchPoint = (SketchPoint)arc.GetStartPoint2();
 arcStartSketchPoint.Select4(true, swSelectData);
 basicRefGeometry.origin.Select4(false, swSelectData);
-//SelectOrigin(ref modulePart);
 MakeSelectedCoincide(ref modulePart);
 ClearSelection(ref modulePart);
 
@@ -578,7 +576,7 @@ ClearSelection(ref modulePart);
 /// In progress Create a sketch for the 3 pin holes ///
 ((Feature)primisPlane).Select2(true, -1);
 modulePart.SketchManager.InsertSketch(true);
-///// Done with the first chamfered triangle sketch. Now create the full triangle sketch /////
+///// Done with the first full triangle sketch. Now create the pin hole triangle sketch /////
 object[] pinHoleConstructionTriangle = (object[])modulePart.SketchManager.CreatePolygon(firstBottomSurfaceSketchPoint.X, firstBottomSurfaceSketchPoint.Y, firstBottomSurfaceSketchPoint.Z,
                                                                             topVertixTriangle.x, topVertixTriangle.y, topVertixTriangle.z, 3, true);
 // Since the whole pin hole triangle is selected, we can directly call the API to make all of it as construction geometries
@@ -758,6 +756,6 @@ EnableInputDimensionByUser(ref solidworksApp);
 Console.WriteLine("Module extrusions completed");
 
 // wait for user input before closing
-PromptAndWait("Press any key to close Solidworks");
+//PromptAndWait("Press any key to close Solidworks");
 // close Solidworks that runs in the background
 //solidworksApp.ExitApp();

@@ -70,7 +70,7 @@ namespace SolidworksAutomationTool
         /// Reads a txt file and parse all points into a list of 3D points
         /// </summary>
         /// <param name="fileName">The complete text file path as a string</param>
-        /// <param name="dataUnit">One of the data units defined in the Units enum</param>
+        /// <param name="dataUnit">Specify the data unit in the text file. This variable has to be one of the data units defined in the Units enum</param>
         /// <returns>
         /// true if the parse was sucessful.
         /// false otherwise.

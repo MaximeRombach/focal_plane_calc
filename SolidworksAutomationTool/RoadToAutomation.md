@@ -1,5 +1,7 @@
 # A collection of notes for future developers
 
+## Remember Solidworks APIs only uses meters
+
 ## Reference frames in Solidworks
 
 According to an [example ](https://help.solidworks.com/2022/english/api/sldworksapi/Transform_Coordinates_from_Sketch_to_Model_Space_Example_VB.htm?verRedirect=1)buried in Solidworks' API docs, if you select a sketch point from a 3D sketch, the sketch point is already in the global (model) frame. But if the sketch point is selected from a 2D sketch, it's coordinates are in the local sketch frame.
