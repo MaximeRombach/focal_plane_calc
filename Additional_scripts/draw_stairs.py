@@ -30,24 +30,26 @@ display_BFS = False
 save = param.SavingResults(saving_df, project_name=project)
 mod_param = param.Module(nb_robots, saving_df)
 module_width = mod_param.module_width * np.sqrt(3)/2 #= triangle HEIGHT and NOT side
-print(module_width)
 nb_modules = 9 #number of modules of one side of the axis
 tolerance_envelop_width = surf.focus_tolerance_width # [mm] tolerance in positioning around nominal focal surface
 start_offset = module_width/2
 
-t = Table.read(f'Data_focal_planes/{project}.csv', comment='#', delimiter=',')
-Z_data = -t['Z']
-CRD_data = t['CRD']
-R_data = t['R']
-r = np.linspace(0,vigR,500)
+optics_data = surf.read_focal_plane_data() # Read data from csv file
+optics_data['Z'] = -optics_data['Z'] 
+R2Z, R2CRD, R2NORM, R2S = surf.transfer_functions(optics_data)
+# t = Table.read(f'Data_focal_planes/{project}.csv', comment='#', delimiter=';')
+Z_data = optics_data['Z']
+CRD_data = optics_data['CRD']
+R_data = optics_data['R']
 
-BFS = surf.calc_BFS(R_data, Z_data)
+r = np.linspace(0,surf.vigR,500) # Define radius vector for focal plane curve
+z = R2Z(r) # Calculate focal plane curve from csv data
+
+BFS = surf.calc_BFS(r, z)
 R2Z_BFS = lambda r: -np.sqrt(BFS**2-np.square(r)) + BFS
 
-R2Z = interp1d(R_data,Z_data,kind='cubic', fill_value = "extrapolate") #leave 'cubic' interpolation for normal vectors calculations
-R2CRD = interp1d(R_data,CRD_data,kind='cubic', fill_value = "extrapolate")
-
-z = R2Z(r) # Calculate focal plane curve from csv data
+# R2Z = interp1d(R_data,Z_data,kind='cubic', fill_value = "extrapolate") #leave 'cubic' interpolation for normal vectors calculations
+# R2CRD = interp1d(R_data,CRD_data,kind='cubic', fill_value = "extrapolate")
 
 saving = param.SavingResults(saving_df)
 to_csv_dict = {}
@@ -90,7 +92,7 @@ def get_normals(r_modules, R2Z, h=1e-5):
     return np.array(normal)
 
 
-def get_normals_angles(normal, print_data = True):
+def get_normals_angles(normal,print_data = True):
     """Calculates the angle between the normal vectors and the vertical"""
     angles = []
 
@@ -103,8 +105,6 @@ def get_normals_angles(normal, print_data = True):
     to_csv_dict["angle to normal [deg]"] = 0
     if print_data:
         print("angle to normal [deg]: ", angles_deg)
-
-    
 
     return angles
   
@@ -182,15 +182,7 @@ def draw_normals(x_modules, y_modules, normal, length=10, draw=True):
             plt.plot((x0, x0+nx), (y0, y0+ny))
             # plt.quiver(x0, y0,  y0-ny, x0+nx)
             # axs[0].plot((x0, x0), (y0, y0+1*length),'r--')def draw_normals(x_modules, y_modules, normal, length=10, draw=True):
-    if not draw:
-        return
-    else:
-        for idx in range(len(x_modules)):
-            x0, y0 = x_modules[idx], y_modules[idx]
-            nx, ny = normal[idx][0]*length, normal[idx][1]*length
-            plt.plot((x0, x0+nx), (y0, y0+ny))
-            # plt.quiver(x0, y0,  y0-ny, x0+nx)
-            # axs[0].plot((x0, x0), (y0, y0+1*length),'r--')
+
 def draw_modules_horizontal(plot_axis=0, draw=True, draw_one = False, module_number = None):
     if not draw:
         return
@@ -230,7 +222,7 @@ def draw_R2CRD(r,R_data,CRD_data,R2CRD, draw=True):
         return
     fig = plt.figure(num='R2CRD')
     plt.plot(r,R2CRD(r),label='interpolation')
-    plt.scatter(R_data,CRD_data,marker='.',color='red',label='data')
+    # plt.scatter(R_data,CRD_data,marker='.',color='red',label='data')
     plt.legend()
     plt.title('Chief Ray Deviation in terms of radial pos on focal surface')
     plt.xlabel('R [mm]')
@@ -261,8 +253,8 @@ def zoom_in_1module(module_number, xbound, ybound, draw=True):
     xlim_min, xlim_max, ylim_min, ylim_max = x_center - xbound, x_center + xbound,  y_center - ybound, y_center + ybound
 
     plt.plot(r,z,'--g',label="Focal surface")
-    draw_modules_horizontal(plot_axis=1, draw=True, draw_one=True, module_number=module_number)
-    draw_envelop(plot_axis=1, draw_legend=True)
+    draw_modules_horizontal(plot_axis=1, draw=False, draw_one=False, module_number=module_number)
+    draw_envelop(plot_axis=1, draw_legend=False)
     draw_modules_oriented(plot_axis=1, draw_one=True, module_number=module_number)
     # draw_normals(x_modules,y_modules,normal,length=1)
     draw_BFS(BFS,vigR, display_BFS=display_BFS, full_curve=False)
@@ -313,12 +305,12 @@ def dist2curve(r_module,z_module,r_curve,z_curve):
 
 x_modules, y_modules = calc_modules_pos(module_width, nb_modules, R2Z, on_BFS=False)
 normals = get_normals(x_modules, R2Z)
-angles = get_normals_angles(normals)
+angles = get_normals_angles(normals, print_data = True)
 new_left_module, new_right_module = rotate_modules_tangent_2_surface(x_modules, y_modules, angles)
 r_envelop_plus, z_envelop_plus, r_envelop_minus, z_envelop_minus = tolerance_envelop(r,R2Z)
 
 ## Study on a particular module ##
-module_number = 6
+module_number = 3
 number_of_points= 100
 # Focus tolerance
 
@@ -346,11 +338,11 @@ normals_curve = get_normals(r_curve, R2Z)
 
 angles_normals_curve = get_normals_angles(normals_curve, print_data = True)
 angles_corrected = np.degrees(angles_normals_curve) + R2CRD(r_curve)
+angles_corrected = R2NORM(r_curve) + R2CRD(r_curve)
 diff_angle = angles_corrected - np.degrees(angles[module_number])*np.ones(len(angles_corrected))
 
 ## Plotting time ##
 
-# fig = plt.figure(figsize=(12,8))
 fig = plt.figure('Full focal surface',figsize=(15,5))
 # fig, ax = plt.subplots()
 
@@ -359,9 +351,8 @@ plot_time = 20 #seconds
 is_timer = False
 save_fig = True
 
-draw_normals(x_modules,y_modules,normals,length=vigR)
-draw_normals(r_curve,z_curve,normals_curve,length=vigR, draw=True)
-draw_modules_horizontal()
+draw_normals(x_modules,y_modules,normals,length=10, draw=True)
+draw_modules_horizontal(draw=True)
 draw_modules_oriented(draw = True)
 plt.plot(r,z,'--g',label="Focal surface")
 draw_BFS(BFS,vigR, display_BFS=display_BFS)
@@ -408,8 +399,10 @@ plt.xlabel('Position on fiber tips plane [mm]')
 plt.ylabel('Angle difference [deg]')
 plt.legend(shadow=True, loc='best')
 plt.title('Project: $\\bf{'+f'{project}''}$' + f' - {nb_robots} robots/module'+f'\nAngle difference btw normal of module {module_number+1} \n & chief ray along focal surface')
+save.save_figures_to_dir(f'Angle_diff_module_{module_number+1}')
 
 draw_R2CRD(r,R_data,CRD_data,R2CRD, draw=False)
+save.save_figures_to_dir(f'R2CRD')
 
 if is_timer:
     plt.show(block=False)
