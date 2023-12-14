@@ -659,6 +659,7 @@ modelView.EnableGraphicsUpdate = true; // This property affects whether to refre
 modulePart.SketchManager.DisplayWhenAdded = true;
 // try the magic disable feature manager scroll to view to hopefully boost performance
 solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swFeatureManagerEnsureVisible, false);
+// try to gain speed by locking the user interface
 //modulePart.Lock();
 
 using (ProgressBar extrudeModulesProgressBar = new(bottomSurfaceSketchPointList.Count, "Extruding modules", progressBarOptions))

@@ -80,6 +80,13 @@ namespace SolidworksAutomationTool
             => partModelDoc.SketchAddConstraints("sgHORIZONTAL2D");
 
         /// <summary>
+        /// Make two selected lines colinear
+        /// </summary>
+        /// <param name="partModelDoc">reference to the ModelDoc2 instance</param>
+        public static void MakeSelectedLinesColinear(ref ModelDoc2 partModelDoc)
+            => partModelDoc.SketchAddConstraints("sgCOLINEAR");
+
+        /// <summary>
         /// Make selected two lines parallel
         /// <remarks>
         /// This function does NOT check if the selected objects are just two lines or something else
