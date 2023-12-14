@@ -99,6 +99,31 @@ namespace SolidworksAutomationTool
             => partModelDoc.ClearSelection2(true);
 
         /// <summary>
+        /// Save the current model as a copy and continue editing.
+        /// This function wraps the SaveAs3 function from ModelDocExtension class
+        /// </summary>
+        /// <param name="partModelDoc">reference to the ModelDoc2 instance</param>
+        /// <param name="modelName">full path to the model to be saved</param>
+        /// <param name="extension">extension of the model, default to .SLDPRT</param>
+        /// <returns>true if save was successful, false otherwise
+        /// </returns>
+        public static bool SaveModel(ref ModelDoc2 partModelDoc, string modelName, string extension = ".SLDPRT")
+        {
+            int errorCode = 0;
+            int warningCode = 0;
+            string modelFullPath = modelName + extension;
+            bool saveModelSuccess = partModelDoc.Extension.SaveAs3(modelFullPath,
+                                                                    (int)swSaveAsVersion_e.swSaveAsCurrentVersion,
+                                                                    (int)swSaveAsOptions_e.swSaveAsOptions_Copy,
+                                                                    null,
+                                                                    null,
+                                                                    ref errorCode,
+                                                                    ref warningCode
+                                                                    );
+            return saveModelSuccess;
+        }
+
+        /// <summary>
         /// Select the origin. ONLY WORKS IN THE ENGLISH VERSION OF SOLIDWORKS
         /// </summary>
         /// <param name="partModelDoc">reference to the ModelDoc2 instance</param>

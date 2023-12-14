@@ -8,12 +8,14 @@ using ShellProgressBar;
 using System.Diagnostics;
 
 /* Define some parameters here. These parameters should be configurable in the GUI */
+// TODO: param: specify the project. e.g. MUST
+const string project = "MUST";
 // TODO: param: chamfer length of a chamfered triangle
 const double chamferLength = 10.5e-3;               // in meters
 // TODO: param: pin hole diameter
 const double pinHoleDiameter = 2.5e-3;              // in meters
 // TODO: param: pin hole depth
-const double pinHoleDepth = 35e-3;                  // in meters
+const double pinHoleDepth = 3.5e-3;                  // in meters
 // TODO: param: inter pin hole distance 
 const double interPinHoleDistance = 64e-3;          // in meters
 // TODO: param: fillet radius in full triangle
@@ -82,12 +84,26 @@ foreach ((Point3D frontPoint, Point3D backPoint) in frontGridPointCloud.point3Ds
     backPoint.z += bestFitSphereRadius;
 }
 
-Console.WriteLine("\nFront grid point cloud with z-axis offset removed: ");
+//  Please give the directory where the created models would be placed
+//  string modelOutputDirectory = Console.ReadLine();
+//  Otherwise models will be stored in a folder on Desktop
+string currentTime = DateTime.Now.ToString("dd-MM-yyyy_HH-mm");
+string desktopPath = System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop);
+string modelOutputDirectory = Path.Join(desktopPath, $"{project}_Models_{currentTime}");
+
+// create the directory to store models. Since we timestamp the output directory, there is almost chance to have another directory with the same name
+if (!Path.Exists(modelOutputDirectory))
+{
+    DirectoryInfo _ = Directory.CreateDirectory(modelOutputDirectory);
+}
+
+
+//Console.WriteLine("\nFront grid point cloud with z-axis offset removed: ");
 // DEBUG use: check if the points are read in correctly
 //frontGridPointCloud.PrintPoint3Ds();
 //frontGridPointCloud.PrintModuleOrientations();
 
-Console.WriteLine("\nBack grid point cloud with z-axis offset removed: ");
+//Console.WriteLine("\nBack grid point cloud with z-axis offset removed: ");
 // DEBUG use: check if the points are read in correctly
 //backGridPointCloud.PrintPoint3Ds();
 //backGridPointCloud.PrintModuleOrientations();
@@ -127,7 +143,7 @@ foreach (KeyValuePair<string, double> variableNameValue in solidworksGlobalVaria
 // Get a handle to the FRONT, TOP, RIGHT planes
 BasicReferenceGeometry basicRefGeometry = GetBasicReferenceGeometry(ref modulePart);
 
-//PromptAndWait("Press any key to insert 3D sketch");
+// Create a 3D sketch to put point clouds on 
 modulePart.SketchManager.Insert3DSketch(true);
 
 // set the view to isometric. The empty string tells solidworks to use the view indicated by the swStandardViews_e enum.
@@ -186,7 +202,8 @@ modelView.EnableGraphicsUpdate = true;
 // Sometimes the camera is not pointing toward the part. So repoint the camera to the part.
 modulePart.ViewZoomtofit2();
 
-// The documentation says: Inserts a new 3D sketch in a model or closes the active sketch.
+// Close the 3D sketch. Calling Insert3DSketch will either Inserts a new 3D sketch in a model or closes the active sketch.
+// Since Insert3DSketch was called once already, calling it twice will close the 3D sketch
 modulePart.SketchManager.Insert3DSketch(true);
 
 // magic clear selection method
@@ -252,9 +269,17 @@ modulePart.SketchManager.AddToDB = false;
 modelView.EnableGraphicsUpdate = true;
 modulePart.FeatureManager.EnableFeatureTree = true;
 
+// Close the 3D sketch with support surface markers
 modulePart.SketchManager.Insert3DSketch(true);
 ClearSelection(ref modulePart);
 ZoomToFit(ref modulePart);
+
+// SAVE model
+if (!SaveModel(ref modulePart, Path.Join(modelOutputDirectory, "ExtrusionAxes")))
+{
+    Console.WriteLine("Error! Saving extrusion axes model failed!");
+}
+
 
 modulePart.SketchManager.AddToDB = true;
 
@@ -368,7 +393,7 @@ ClearSelection(ref modulePart);
 // get the current sketch's name
 string pizzaSketchName = ((Feature)modulePart.SketchManager.ActiveSketch).Name;
 
-// quit editing sketch 
+// quit editing sketch the pizza slice sketch
 modulePart.SketchManager.InsertSketch(true);
 ClearSelection(ref modulePart);
 
@@ -387,6 +412,13 @@ Feature pizzaSlice = modulePart.FeatureManager.FeatureRevolve2(true, true, false
 ClearSelection(ref modulePart);
 Console.WriteLine("1/6 of the pizza created");
 ZoomToFit(ref modulePart);
+
+// SAVE model
+if(!SaveModel(ref modulePart, Path.Join(modelOutputDirectory, "plainPizzaSlice")))
+{
+    Console.WriteLine("Error! Saving plain pizza slice model failed!");
+}
+
 // enbale user input box for dimensions
 EnableInputDimensionByUser(ref solidworksApp);
 
