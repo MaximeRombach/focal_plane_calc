@@ -448,7 +448,7 @@ class Module(SavingResults):
           self.y_inc = 5.369 # [mm] Vertical increment at each row
           self.test_pitch = norm(np.array([self.x_inc,self.y_inc]))
 
-          self.safety_distance = 0.3 # [mm] physical distance kept between shields and edge of beta arm
+          self.safety_distance = 0.2 # [mm] physical distance kept between shields and edge of beta arm
           self.offset_from_module_edges = self.safety_distance + self.beta2fibre
           self.start_offset_x = 6.2 # [mm]
           self.start_offset_y = 3.41 # [mm]
@@ -457,7 +457,7 @@ class Module(SavingResults):
 
           self.module_length = 590 # [mm] last dimension updae for length of module unit
 
-          # 1 row addition from one case to another 
+          # Add 1 row of positioners from one case to another
           if self.nb_robots == 42:
 
                self.module_width = 62.4 + self.width_increase # [mm] triangle side length
@@ -472,7 +472,8 @@ class Module(SavingResults):
 
           elif self.nb_robots == 63:
                
-               self.module_width = 73.8 + self.width_increase# [mm] triangle side length
+               self.module_width = 73.8 + self.width_increase # [mm] triangle side length
+               self.width_hole_in_frame = self.module_width + self.width_increase # [mm] ONGOING TEST: width of the module hole in the frame, represents the clearance between the module and the frame --> influences coverage
                self.nb_rows = 10 # number of rows of positioners
                self.key = 'n63'
 
@@ -494,7 +495,7 @@ class Module(SavingResults):
                self.key = 'n102'
 
           else:
-               raise Exception('Error: only 52, 63, 75, 88, 102 robots per module supported')
+               raise Exception('Error: only 42, 52, 63, 75, 88, 102 robots per module supported')
           
           self.module_collection, self.multi_wks_list, self.coverages = self.create_module()
           self.module = self.module_collection.geoms[0]
