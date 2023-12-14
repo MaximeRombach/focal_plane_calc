@@ -59,14 +59,14 @@ start_time = time.time()
 ## Study several cases at once
 
 # nbots = [63, 75, 88, 102] # number of robots per module
-nbots = [63, 75, 102] # number of robots per module
+# nbots = [63, 75, 102] # number of robots per module
 # out_allowances = np.arange(0, 0.95, 0.05) # how much is a module allowed to stick out of vigR (max value)
 
 ## Study one case at a time
-# nbots = [75]
+nbots = [63]
 out_allowances = [0.3]
 
-width_increase = 0 # [mm] How much we want to increase the base length of a module
+width_increase = 1 # [mm] How much we want to increase the base length of a module
 chanfer_length = 10.5 # [mm] Size of chanfers of module vertices (base value: 7.5); increase chanfer decreases coverage as it reduces the module size thus patrol area
 centered_on_triangle = False # move the center of the grid (red dot) on the centroid on a triangle instead of the edge
 full_framed = False # flag to check wether we are in semi frameless or in full framed case (turns True if inter_gap = global_gap = 0 mm)
@@ -113,7 +113,7 @@ save_plots = False # Save most useful plots
 save_all_plots = False  # Save all plots (including intermediate ones)
 save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
 save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
-save_txt = False # Save positions of modules along curved focal surface
+save_txt = True # Save positions of modules along curved focal surface
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
 saving = param.SavingResults(saving_df, project_surface)
 
@@ -157,12 +157,14 @@ for nb_robots in nbots: # iterate over number of robots/module cases
      module_collection, wks_list, coverages = mod_param.module_collection, mod_param.multi_wks_list, mod_param.coverages
      module, module_w_beta_and_safety_dist, effective_wks, triang_meshgrid = module_collection.geoms
      coverage_with_walls, coverage_no_walls = coverages
+
      
      # plot_polygon(module, add_points= False, facecolor='None', edgecolor='black')
+     # plot_polygon(module.buffer(width_increase, join_style='mitre'), add_points= False, facecolor='None', edgecolor='red', linestyle = '--', label = f'Width increase = {width_increase} mm')
+     mod_param.plot_raw_module()
      # plot_polygon(effective_wks, add_points= False, alpha = 0.2, edgecolor='black', label=f'Coverage = {coverage_with_walls} %')
      # plot_points(triang_meshgrid, color='black')
-     # plt.legend()
-     # plt.show()
+     plt.show()
 
      # %% 2)a) Meshing the grid for intermediate frame (4 triangles: 3 upwards + 1 downwards)
 
