@@ -7,10 +7,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import logging
+import circle_fit as cf
 
 # Choose project
 # Available: MUST, Megamapper
-project = 'MUST'
+project = 'MegaMapper'
 surf = param.FocalSurf(project = project)
 logging.basicConfig(level=logging.INFO)
 logging.info('Project loaded: %s', project)
@@ -21,7 +22,11 @@ saving = param.SavingResults(saving_df)
 
 draw = True
 
-R2Z_analytical = surf.asph_R2Z()
+if surf.asph_formula:
+    R2Z_analytical = surf.asph_R2Z()
+    r = np.linspace(0,surf.vigR,500) # Define radius vector for focal plane curve
+    z_analytical = R2Z_analytical(r)
+    BFS_analytical = surf.calc_BFS(r,z_analytical)
 
 # elif not surf.asph_formula and project == 'Spec-s5':
 #     filename = "./Data_focal_planes/2023_10_16_Spec-s5.txt" # optics data from Zemax
@@ -30,12 +35,11 @@ R2Z_analytical = surf.asph_R2Z()
 filename = f"./Data_focal_planes/{project}.txt" # optics data from Zemax
 optics_data = surf.read_focal_plane_data() # Read data from csv file
 
-R2Z, R2CRD = surf.transfer_functions(optics_data)
+R2Z, R2CRD, R2NORM, R2S = surf.transfer_functions(optics_data)
 
 r = np.linspace(0,surf.vigR,500) # Define radius vector for focal plane curve
 z = R2Z(r) # Calculate focal plane curve from csv data
 
-z_analytical = R2Z_analytical(r)
 
 #%% Plot 3D focal plane from curve
 
@@ -67,8 +71,7 @@ z_analytical = R2Z_analytical(r)
 #%% 2) Define BFS
 
 BFS = surf.calc_BFS(r,z)
-BFS_analytical = surf.calc_BFS(r,z_analytical)
-print(f"BFS = {BFS :.3f} mm \n BFS = {BFS_analytical :.3f} mm" )
+
 z_BFS = np.sqrt(BFS**2 - r**2) - BFS # Define z coordinate of BFS
 tol = 50e-3
 z_tol_up = z + tol*np.ones(len(z))
@@ -79,7 +82,7 @@ plt.title('Focal plane aspherical curve and Best Fit Sphere')
 plt.plot(r,z, label = 'Aspherical curve')
 plt.xlabel('r [mm]')
 plt.ylabel('z [mm]')
-plt.plot(r,z_BFS, '--', label = 'BFS')
+plt.plot(r,z_BFS, '--', label = f'BFS = {BFS :.1f} mm')
 plt.plot(r,z_tol_up, '--', color = 'g', label = fr'Tolerance = $\pm$ {tol} mm')
 plt.plot(r,z_tol_down, '--' , color = 'g',)
 plt.grid()
@@ -92,6 +95,9 @@ plt.xlabel('r [mm]')
 plt.ylabel('Error [mm]')
 plt.grid()
 plt.legend()
+
+plt.figure()
+plt.plot(r, R2NORM(r), label = 'Normals')
 
 if draw:
     plt.show()
