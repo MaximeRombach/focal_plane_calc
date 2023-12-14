@@ -59,10 +59,11 @@ start_time = time.time()
 ## Study several cases at once
 
 # nbots = [63, 75, 88, 102] # number of robots per module
+nbots = [63, 75, 102] # number of robots per module
 # out_allowances = np.arange(0, 0.95, 0.05) # how much is a module allowed to stick out of vigR (max value)
 
 ## Study one case at a time
-nbots = [75]
+# nbots = [75]
 out_allowances = [0.3]
 
 width_increase = 0 # [mm] How much we want to increase the base length of a module
@@ -97,7 +98,7 @@ surf = param.FocalSurf(project = project_surface)
 curvature_R = abs(surf.curvature_R)
 vigR = surf.vigR
 BFS = surf.BFS
-trimming_angle = 60 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
+trimming_angle = 360 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
 
 pizza = surf.make_vigR_polygon(pizza_angle = trimming_angle)
 
@@ -195,11 +196,11 @@ for nb_robots in nbots: # iterate over number of robots/module cases
 
      #%% 2)c) Place the intermediate triangles accordingly on the grid
 
-     for outage in out_allowances: #iterate over how much we allow a module coverage to be out of the vignetting radius
+     for out_allowance in out_allowances: #iterate over how much we allow a module coverage to be out of the vignetting radius
 
           fill_empty = True # Fill empty spaces by individual modules
           allow_small_out = True # allow covered area of module to stick out of vigR (i.e. useless covered area because does not receive light)
-          out_allowance = outage # percentage of the covered area of a module authorized to stick out of vigR
+          out_allowance = out_allowance # percentage of the covered area of a module authorized to stick out of vigR
           covered_area = 0 # total covered area of vigR
           total_modules = 0 # total number of modules in vigR
           useless_robots = 0 # robots that are not in the vigR
@@ -368,13 +369,6 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                     final_grid['indiv']['geometry_modules'].append(new_mod)
                     final_grid['robots']['geometry'].append(new_rob)
 
-               # Store individual xy location for each intermediate frame
-               # final_grid['intermediate']['x'].append(dx)
-               # final_grid['intermediate']['y'].append(dy)
-               # final_grid['intermediate']['z'].append(dz)
-               # final_grid['intermediate']['xyz'].append([dx, dy, dz])
-               # final_grid['intermediate']['geometry'].append(Point(dx,dy))
-
                final_grid['inter']['x'].append(new_boundary.centroid.x)
                final_grid['inter']['y'].append(new_boundary.centroid.y)
                final_grid['inter']['z'].append(dz)
@@ -413,7 +407,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
 
           global_dict[key]['modules_df'] = modules_df
           global_dict[key]['coverage_df'] = coverage_df
-          global_dict[key]['coverage_df']['label'] = f'Coverage vigR: {global_coverage} %'
+          global_dict[key]['coverage_df']['label'] = f'Coverage: {global_coverage} %'
 
           global_dict[key]['global_coverage'] = global_coverage
           global_dict[key]['nb_robots'] = nb_robots
@@ -432,7 +426,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
           global_dict[key]['useless_robots_list'].append(useless_robots)
           global_dict[key]['useful_robots_list'].append(total_robots-useless_robots)
           global_dict[key]['efficiency_list'].append((total_robots - useless_robots)/total_robots)
-          print(f"Out allowance: {outage} \n", f"Total # modules: {total_modules} \n", f"Total # robots: {total_robots} \n", f"Coverage: {global_coverage} %")
+          print(f"Out allowance: {out_allowance} \n", f"Total # modules: {total_modules} \n", f"Total # robots: {total_robots} \n", f"Coverage: {global_coverage} %")
 
 #%% 2)d) Project grid on focal surface (BFS as a first try, aspherical will come later)
 # NOTE : Project on BFS and save modules in txt file for Solidworks integration
@@ -479,7 +473,6 @@ projection['front']['theta'] = np.rad2deg(lat.value)
 projection['front']['phi'] = np.rad2deg(lon.value)
 cols = ['x', 'y', 'z', 'theta', 'phi']
 df = pd.DataFrame(projection['front'], columns = cols)
-print(df)
 
 # proj[:,2] = proj[:,2] + BFS
 
@@ -578,7 +571,6 @@ if global_gap > 0:
           saving.save_dxf_to_dir(to_dxf_dict, f'frame_{robots}_robots_{modules}_modules')
           ax.set_title('Outline saved to DXF file')     
      
-print(surf.surf_name)
 figtitle = param.final_title(surf.surf_name, vigR, nb_robots, total_modules, total_robots, inner_gap, global_gap, allow_small_out, out_allowance)
 filename = f"Coverage_global_{nb_robots}_rob__Inner_{inner_gap}_mm__Global_{global_gap}_mm"
 f, ax= plt.subplots(figsize=(12, 12), sharex = True, sharey=True)
@@ -634,7 +626,7 @@ gdf_gfa.plot(ax=ax,facecolor = 'None', edgecolor=gdf_gfa['color'], linestyle='--
 saving.save_figures_to_dir(filename)
 
 if len(nbots)>1: # Useless to do multiple plots for only one case
-     figtitle = param.final_title(surf.surf_name ,nb_robots, total_modules, total_robots, inner_gap, global_gap, allow_small_out, out_allowance, disp_robots_info=False)
+     figtitle = param.final_title(surf.surf_name , vigR, nb_robots, total_modules, total_robots, inner_gap, global_gap, allow_small_out, out_allowance, disp_robots_info=False, )
      filename = f"Summary_of_coverages_for_inner_{inner_gap}_and_global_{global_gap}"
      f, axes= plt.subplots(nrows=2,ncols=2, figsize=(12, 12), sharex = True, sharey=True)
      f.suptitle(figtitle)
@@ -649,34 +641,14 @@ if len(nbots)>1: # Useless to do multiple plots for only one case
           gdf_modules.plot(ax=ax,facecolor='None')
           gdf_bound.plot(ax=ax,facecolor='None', edgecolor=gdf_bound['color'])
           gdf_coverage.plot(column='label',ax=ax, alpha=0.2, legend=True, legend_kwds={'loc': 'upper right'})
-          gdf_gfa.plot(ax=ax,facecolor = 'None', edgecolor=gdf_gfa['color'], linestyle='--')
+          gdf_gfa.plot(column= 'label',ax=ax,facecolor = 'None', edgecolor=gdf_gfa['color'], linestyle='--')
 
           plot_polygon(pizza, ax=ax, add_points=False, edgecolor='black', facecolor='None', linestyle='--')
-          # plot_polygon(global_dict[k]['global_bounding_polygon'], ax=ax, add_points=False, edgecolor='orange', facecolor='None', linestyle='--',label='Instrumented area')
-
           ax.scatter(0,0,s=7,color='red')
           ax.set_title(f"{global_dict[k]['nb_robots']} robots / module \n # modules: {global_dict[k]['total_modules']} - # robots: {global_dict[k]['total_robots']}")
           ax.set_xlabel('x position [mm]')
           ax.set_ylabel('y position [mm]')
      saving.save_figures_to_dir(filename)
-
-     # fig,ax = plt.subplots(figsize = (8,8))
-     # figtitle = f"Coverages and # robots for {keys} cases"
-     # filename = figtitle
-     # fig.suptitle(figtitle)
-     # ax.plot(nbots, global_dict['Overall_results']['coverages_list'],
-     #      color="red", marker="o")
-     # ax.set_xlabel("# robots/module")
-     # ax.set_ylabel("Coverage [% of vigR area]",
-     #           color="red")
-
-     # ax2=ax.twinx()
-     # # make a plot with different y-axis using second axis object
-     # ax2.plot(nbots, global_dict['Overall_results']['total_robots_list'],
-     #      color="blue",marker="o")
-     # ax2.set_ylabel("Total # robots",color="blue")
-     # ax.grid()
-     # saving.save_figures_to_dir(filename)
 
 
 fig,ax = plt.subplots(figsize = (8,8))

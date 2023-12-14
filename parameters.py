@@ -3,6 +3,8 @@
 import numpy as np
 from numpy.linalg import norm
 from numpy.polynomial import Polynomial
+from astropy.table import Table, vstack
+
 import logging
 from shapely import affinity, MultiPolygon, MultiPoint, GeometryCollection
 import matplotlib.pyplot as plt
@@ -54,8 +56,6 @@ class FocalSurf():
           self.surf_name = self.focal_surf_param['name']
           self.FoV = self.focal_surf_param['FoV']
           self.focus_tolerance_width = self.focal_surf_param['focus_tolerance_width'] # [mm] width of the focus tolerance band
-
-
 
      def set_surface_parameters(self):
 
@@ -158,13 +158,17 @@ class FocalSurf():
                filename = f"./Data_focal_planes/{self.project}.csv" # optics data from Zemax
                comment_character = "#"  # The character that indicates a commented line
                # Read CSV file and ignore commented lines
-               optics_data = pd.read_csv(filename, comment=comment_character, sep=';')
+               if self.project == 'MUST':
+                    sep = ';'
+               elif self.project == 'MegaMapper':
+                    sep = ','
+               optics_data = pd.read_csv(filename, comment=comment_character, sep=sep)
 
                # Set headers using the first non-comment line
                with open(filename, 'r') as file:
                     for line in file:
                          if not line.startswith(comment_character):
-                              headers = line.strip().split(';')
+                              headers = line.strip().split(sep)
                               break
                optics_data.columns = headers
 
@@ -189,9 +193,32 @@ class FocalSurf():
           CRD = optics_data['CRD']
 
           R2Z = interp1d(R,Z,kind='cubic', fill_value = "extrapolate") #leave 'cubic' interpolation for normal vectors calculations
-          R2CRD = interp1d(R,CRD,kind='cubic')
+          R2CRD = interp1d(R,CRD,kind='cubic', fill_value = "extrapolate")
 
-          return R2Z, R2CRD
+          r = np.linspace(0,self.vigR,500)
+          z = R2Z(r) # Calculate focal plane curve from csv data
+          dr = np.diff(r)
+          dz = np.diff(z)
+          dzdr = dz/dr # Get derivative of focal plane curve at the sample points
+          normal_angles_focsurf = np.degrees(np.arctan(dzdr)) # Calculate normal angles at the sample points
+          R2NORM = interp1d(r[:-1],normal_angles_focsurf,kind='cubic', fill_value = "extrapolate")
+
+
+          ds = (1 + dzdr**2)**0.5 * dr
+          s = np.cumsum(ds)
+          s = np.insert(s, 0, 0.)  # first value of path length is 0
+          Z2R = interp1d(z, r)
+          R2S = interp1d(r, s)
+          S2R = interp1d(s, r)
+          norm = np.degrees(np.arctan(dzdr))
+          R2NORM = interp1d(r[:-1], norm)
+          NORM2R = interp1d(norm, r[:-1])
+          crd = R2CRD(r)
+          nut = -(norm + crd[:-1])
+          R2NUT = interp1d(r[:-1], nut)
+          NUT2R = interp1d(nut, r[:-1])
+
+          return R2Z, R2CRD, R2NORM, R2S
 
      def asph_R2Z(self):
           """ 
