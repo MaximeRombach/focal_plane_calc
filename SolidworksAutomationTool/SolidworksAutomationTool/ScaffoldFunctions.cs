@@ -120,6 +120,12 @@ namespace SolidworksAutomationTool
                                                                     ref errorCode,
                                                                     ref warningCode
                                                                     );
+            if (!saveModelSuccess)
+            {
+                // In case of error, refer to the error documentation
+                // https://help.solidworks.com/2023/english/api/swconst/SOLIDWORKS.Interop.swconst~SOLIDWORKS.Interop.swconst.swFileSaveError_e.html?verRedirect=1
+                Console.WriteLine($"Error! Saving {modelFullPath} failed. \nError code: {errorCode}. Warning code: {warningCode}");
+            }
             return saveModelSuccess;
         }
 

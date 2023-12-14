@@ -274,12 +274,8 @@ modulePart.SketchManager.Insert3DSketch(true);
 ClearSelection(ref modulePart);
 ZoomToFit(ref modulePart);
 
-// SAVE model
-if (!SaveModel(ref modulePart, Path.Join(modelOutputDirectory, "ExtrusionAxes")))
-{
-    Console.WriteLine("Error! Saving extrusion axes model failed!");
-}
-
+// SAVE model. In case of error, you will see error message in the console
+SaveModel(ref modulePart, Path.Join(modelOutputDirectory, "ExtrusionAxes"));
 
 modulePart.SketchManager.AddToDB = true;
 
@@ -413,11 +409,6 @@ ClearSelection(ref modulePart);
 Console.WriteLine("1/6 of the pizza created");
 ZoomToFit(ref modulePart);
 
-// SAVE model
-if(!SaveModel(ref modulePart, Path.Join(modelOutputDirectory, "plainPizzaSlice")))
-{
-    Console.WriteLine("Error! Saving plain pizza slice model failed!");
-}
 
 // enbale user input box for dimensions
 EnableInputDimensionByUser(ref solidworksApp);
@@ -482,6 +473,9 @@ modulePart.SketchManager.AddToDB = false;
 // close the sketch
 modulePart.Insert3DSketch();
 ClearSelection(ref modulePart);
+
+// SAVE model. In case of error, you will see error message in the console
+SaveModel(ref modulePart, Path.Join(modelOutputDirectory, "plainPizzaSlice"));
 
 /* First, create "reference sketches". These sketches will be copied and pasted to genereate all the modules
  * 1. Find the point on the bottom plane that is the closest to the origin. 
