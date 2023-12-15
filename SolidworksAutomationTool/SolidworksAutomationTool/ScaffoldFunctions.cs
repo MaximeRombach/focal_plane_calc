@@ -2,6 +2,7 @@
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 using System.Diagnostics;
+using System.Globalization;
 
 namespace SolidworksAutomationTool
 {
@@ -28,6 +29,10 @@ namespace SolidworksAutomationTool
     /// </summary>
     public class ScaffoldFunctions
     {
+        // define the culture info to be used to parse numeric values to strings in a culture neutral way.
+        // Mainly used to avoid problems with different representations of decimal points
+        public readonly static CultureInfo invariantCultureInfo = CultureInfo.InvariantCulture;
+
         /// <summary>
         /// Display a prompt to the console and wait for the user's input before continuing
         /// </summary>
@@ -82,6 +87,9 @@ namespace SolidworksAutomationTool
         /// <summary>
         /// Make two selected lines colinear
         /// </summary>
+        /// <remarks>
+        /// This function doesn't check if the selected are two lines or something else.  
+        /// </remarks>
         /// <param name="partModelDoc">reference to the ModelDoc2 instance</param>
         public static void MakeSelectedLinesColinear(ref ModelDoc2 partModelDoc)
             => partModelDoc.SketchAddConstraints("sgCOLINEAR");
