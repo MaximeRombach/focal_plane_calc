@@ -2,10 +2,20 @@
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 using System.Diagnostics;
+using System.Globalization;
 
 namespace SolidworksAutomationTool
 {
-    /* A struct storing the 3 basic reference planes */
+    /// <summary>
+    /// A struct storing the 4 basic reference geometries.
+    /// Members of the struct should be updated to point to the corresponding reference geometries in the main program.
+    /// <remarks>
+    /// The reason to use this struct is to avoid directly selecting reference geometries by name(string). 
+    /// Selecting by name only works with the English version of Solidworks. The ID of the front plane is "Front Plane", but this is not the case in other languages. 
+    /// Therefore, selecting a reference geometry by its English ID will likely fail in other Solidworks versions.
+    /// Since the members of the struct directly point to the reference geometry objects, this way of reference is language neutral
+    /// </remarks>
+    /// </summary>
     public struct BasicReferenceGeometry
     {
         public Feature frontPlane;
@@ -14,67 +24,152 @@ namespace SolidworksAutomationTool
         public SketchPoint origin;
     }
 
+    /// <summary>
+    /// A collection of helper/scaffold functions to make reduce boilerplate code and make our lives easier
+    /// </summary>
     public class ScaffoldFunctions
     {
-        /* Display a prompt to the console and wait for the user's input before continuing */
+        // define the culture info to be used to parse numeric values to strings in a culture neutral way.
+        // Mainly used to avoid problems with different representations of decimal points
+        public readonly static CultureInfo invariantCultureInfo = CultureInfo.InvariantCulture;
+
+        /// <summary>
+        /// Display a prompt to the console and wait for the user's input before continuing
+        /// </summary>
+        /// <param name="prompt">Prompt to display to the user</param>
         public static void PromptAndWait(string prompt)
         {
             Console.WriteLine(prompt);
             Console.ReadKey();
         }
+
+        /// <summary>
+        /// Convert the given angle from degrees to radian
+        /// </summary>
+        /// <param name="angleInDegrees">Angle to be converted to radians</param>
+        /// <returns></returns>
         public static double DegreeToRadian(double angleInDegrees)
         {
             return angleInDegrees / 180.0 * Math.PI;
         }
 
         // some scaffold functions. So far none of the functions clears selection. So the user should remember to manually clear selection
-        /*
-            Wrapper function to make selected segments coincident
-            Note that this function doesn't check if the selected segments are valid to be make coincident with each others.
-         */
+
+        /// <summary>
+        /// Make selected segments coincident.
+        /// Note that this function does NOT check if the selected segments are valid to be make coincident with each others.
+        /// This function does not clear selections
+        /// </summary>
+        /// <param name="partModelDoc">reference to the ModelDoc2 instance</param>
         public static void MakeSelectedCoincide(ref ModelDoc2 partModelDoc)
             => partModelDoc.SketchAddConstraints("sgCOINCIDENT");
 
-        /*
-            Wrapper function to make a selected line vertical. 
-            Note that this function doesn't check if the selected is a line or something else. 
-            TODO: add check to make sure the selected item is a valid line
-         */
+
+        /// <summary>
+        /// Make a selected line vertical.  
+        /// <remarks>
+        /// This function doesn't check if the selected is a line or something else.  
+        /// </remarks>
+        /// TODO: add check to make sure the selected item is a valid line
+        /// </summary>
+        /// <param name="partModelDoc">reference to the ModelDoc2 instance</param>
         public static void MakeSelectedLineVertical(ref ModelDoc2 partModelDoc)
             => partModelDoc.SketchAddConstraints("sgVERTICAL2D");
 
-        /*
-            Wrapper function to make a selected line horizontal. 
-            Note that this function doesn't check if the selected is a line or something else. 
-            TODO: add check to make sure the selected item is a valid line
-         */
+        /// <summary>
+        /// Make a selected line horizontal. Note that this function doesn't check if the selected is a line or something else. 
+        /// TODO: add check to make sure the selected item is a valid line
+        /// </summary>
+        /// <param name="partModelDoc">reference to the ModelDoc2 instance</param>
         public static void MakeSelectedLineHorizontal(ref ModelDoc2 partModelDoc)
             => partModelDoc.SketchAddConstraints("sgHORIZONTAL2D");
 
-        /* Wrapper function to make selected two lines parallel - Untested
-         * NOTE: this function does NOT check if the selected objects are just two lines or something else
-         * NOTE: this function does not clear the selection. The user should manually clear selection
-         */
+        /// <summary>
+        /// Make two selected lines colinear
+        /// </summary>
+        /// <remarks>
+        /// This function doesn't check if the selected are two lines or something else.  
+        /// </remarks>
+        /// <param name="partModelDoc">reference to the ModelDoc2 instance</param>
+        public static void MakeSelectedLinesColinear(ref ModelDoc2 partModelDoc)
+            => partModelDoc.SketchAddConstraints("sgCOLINEAR");
+
+        /// <summary>
+        /// Make selected two lines parallel
+        /// <remarks>
+        /// This function does NOT check if the selected objects are just two lines or something else
+        /// This function does not clear the selection.The user should manually clear selection
+        /// </remarks> 
+        /// </summary>
+        /// <param name="partModelDoc">reference to the ModelDoc2 instance</param>
+
         public static void MakeSelectedLinesParallel(ref ModelDoc2 partModelDoc)
             => partModelDoc.SketchAddConstraints("sgPARALLEL");
 
-        // Wrapper function to clear selection
+        /// <summary>
+        /// Clear currently selected items
+        /// </summary>
+        /// <param name="partModelDoc">reference to the ModelDoc2 instance</param>
         public static void ClearSelection(ref ModelDoc2 partModelDoc)
             => partModelDoc.ClearSelection2(true);
 
-        // Wrapper function to select the origin. ONLY WORKS IN THE ENGLISH VERSION OF SOLIDWORKS
+        /// <summary>
+        /// Save the current model as a copy and continue editing.
+        /// This function wraps the SaveAs3 function from ModelDocExtension class
+        /// </summary>
+        /// <param name="partModelDoc">reference to the ModelDoc2 instance</param>
+        /// <param name="modelName">full path to the model to be saved</param>
+        /// <param name="extension">extension of the model, default to .SLDPRT</param>
+        /// <returns>true if save was successful, false otherwise
+        /// </returns>
+        public static bool SaveModel(ref ModelDoc2 partModelDoc, string modelName, string extension = ".SLDPRT")
+        {
+            int errorCode = 0;
+            int warningCode = 0;
+            string modelFullPath = modelName + extension;
+            bool saveModelSuccess = partModelDoc.Extension.SaveAs3(modelFullPath,
+                                                                    (int)swSaveAsVersion_e.swSaveAsCurrentVersion,
+                                                                    (int)swSaveAsOptions_e.swSaveAsOptions_Copy,
+                                                                    null,
+                                                                    null,
+                                                                    ref errorCode,
+                                                                    ref warningCode
+                                                                    );
+            if (!saveModelSuccess)
+            {
+                // In case of error, refer to the error documentation
+                // https://help.solidworks.com/2023/english/api/swconst/SOLIDWORKS.Interop.swconst~SOLIDWORKS.Interop.swconst.swFileSaveError_e.html?verRedirect=1
+                Console.WriteLine($"Error! Saving {modelFullPath} failed. \nError code: {errorCode}. Warning code: {warningCode}");
+            }
+            return saveModelSuccess;
+        }
+
+        /// <summary>
+        /// Select the origin. ONLY WORKS IN THE ENGLISH VERSION OF SOLIDWORKS
+        /// </summary>
+        /// <param name="partModelDoc">reference to the ModelDoc2 instance</param>
         public static void SelectOrigin(ref ModelDoc2 partModelDoc)
             => partModelDoc.Extension.SelectByID2("Point1@Origin", "EXTSKETCHPOINT", 0, 0, 0, false, 0, null, 0);
 
-        /* Wrapper function to select the sketch with the given name */
+        /// <summary>
+        /// Select the sketch with the given name
+        /// </summary>
+        /// <param name="partModelDoc">reference to the ModelDoc2 instance</param>
+        /// <param name="sketchName">name of the sketch to be selected</param>
+        /// <param name="appendToSelection">whether to append the sketch to the selection collection</param>
         public static void SelectSketch(ref ModelDoc2 partModelDoc, string sketchName, bool appendToSelection = false)
         {
             partModelDoc.Extension.SelectByID2(sketchName, "SKETCH", 0, 0, 0, appendToSelection, 0, null, 0);
         }
 
-        /* Wrapper function to select all sketch segments in a given array.
-         * NOTE: this function does not clear previous selections. The user should manually clear selections if needed
-         */
+        /// <summary>
+        /// Select all sketch segments in a given array.
+        /// </summary>
+        /// <remarks>
+        /// this function does not clear previous selections. The user should manually clear selections if needed
+        /// </remarks>
+        /// <param name="segmentArray">reference to an array of sketch segment objects</param>
+        /// <param name="swSelectData">Solidworks SelectData object</param>
         public static void SelectAllSketchSegments(ref object[] segmentArray, SelectData swSelectData)
         {
             foreach (SketchSegment segment in segmentArray.Cast<SketchSegment>())
@@ -83,22 +178,31 @@ namespace SolidworksAutomationTool
             }
         }
 
-        /*Wrapper function to rotate selected sketch segments by certain angle.
-         * NOTE: this function preserves the sketch relations from the source sketch
-         */
+        /// <summary>
+        /// Rotate selected sketch segments by certain angle.
+        /// </summary>
+        /// <remarks>this function preserves the sketch relations from the source sketch</remarks>
+        /// <param name="partModelDoc">reference to the ModelDoc2 instance</param>
+        /// <param name="rotationCenterX">the x coordinate of the rotation center</param>
+        /// <param name="rotationCenterY">the y coordinate of the rotation center</param>
+        /// <param name="angleInRad">angle at which to rotate sketch entities</param>
         public static void RotateSelected(ref ModelDoc2 partModelDoc, double rotationCenterX, double rotationCenterY, double angleInRad)
         {
             // preserve the sketch relations when copying a sketch
             partModelDoc.Extension.RotateOrCopy(false, 1, true, rotationCenterX, rotationCenterY, 0, 0, 0, 1, angleInRad);
         }
 
-        /* Wrapper function to zoom-to-fit the view */
+        /// <summary>
+        /// Function to zoom-to-fit the view
+        /// </summary>
+        /// <param name="partModelDoc">reference to the ModelDoc2 instance</param>
         public static void ZoomToFit(ref ModelDoc2 partModelDoc)
             => partModelDoc.ViewZoomtofit2();
 
-        /* A debug function that traverses the sketch segments in a polygon and prints the type of each sketch segment
-         * There's no built-in funciton to get see the structure of the polygon. 
-         */
+        /// <summary>
+        /// A debug function to traverse the sketch segments in a polygon and print the type of each sketch segment
+        /// </summary>
+        /// <param name="polygon">reference to an array of sketch segment objects</param>
         public static void PrintPolygonDataStructure(ref object[] polygon)
         {
             Debug.WriteLine($"Found {polygon.Length} sketch segments in the polygon");
@@ -119,22 +223,33 @@ namespace SolidworksAutomationTool
             }
         }
 
-        /* Print a sketch point's coordinates to the Debug stream */
+        /// <summary>
+        /// Print a sketch point's coordinates to the Debug stream
+        /// </summary>
+        /// <param name="aPoint">sketch point of interest</param>
+        /// <param name="pointName">name used to identify the point. Useful when calling this function on multiple sketch points</param>
         public static void PrintSketchPoint(SketchPoint aPoint, string pointName)
         {
             Debug.WriteLine($"Point {pointName}: x: {aPoint.X}, y: {aPoint.Y}, z: {aPoint.Z}");
         }
 
-        /* Print a math point's coordinates to the Debug stream */
+        /// <summary>
+        /// Print a math point's coordinates to the Debug stream
+        /// </summary>
+        /// <param name="aPoint">math point of interest</param>
+        /// <param name="pointName">name used to identify the point. Useful when calling this function on multiple sketch points</param>
         public static void PrintMathPoint(MathPoint aPoint, string pointName)
         {
+            // the ArrayData object contains an array of 3 doubles. namely x,y,and z
             double[] pointDataArray = (double[])aPoint.ArrayData;
             Debug.WriteLine($"Point {pointName}: x: {pointDataArray[0]}, y: {pointDataArray[1]}, z: {pointDataArray[2]}");
         }
 
-        /* Debug function to see the features inside the feature manager design tree
-     * This function can be used to check if a feature is created as expected
-     */
+        /// <summary>
+        /// Debug function to see the features inside the feature manager design tree
+        /// This function can be used to check if a feature is created as expected
+        /// </summary>
+        /// <param name="partModelDoc">reference to the ModelDoc2 instance</param>
         public static void PrintFeaturesInFeatureManagerDesignTree(ref ModelDoc2 partModelDoc)
         {
             Debug.WriteLine("Printing features in this part:");
@@ -149,7 +264,11 @@ namespace SolidworksAutomationTool
             }
         }
 
-        /* A wrapper function to get the name of the current active sketch*/
+        /// <summary>
+        /// Get the name of the current active sketch
+        /// </summary>
+        /// <param name="partModelDoc">reference to the ModelDoc2 instance</param>
+        /// <returns>The name of the active sketch</returns>
         public static string GetActiveSketchName(ref ModelDoc2 partModelDoc)
         {
             // TODO: add a check on the active status of the active sketch. There could be no active sketch
@@ -160,6 +279,12 @@ namespace SolidworksAutomationTool
          * This function tries to get the basic reference planes without using their names to avoid unexpected behavior on computers using other languages than English
          * For example, when selecting planes using their english names, french-based solidworks will fail to locate the planes
          */
+        /// <summary>
+        /// Get the under lying basic reference geometry: front, top, right, and the origin.
+        /// This function tries to get the basic reference planes without using their names to avoid unexpected behavior on computers using other languages than English
+        /// </summary>
+        /// <param name="partModelDoc">reference to the ModelDoc2 instance</param>
+        /// <returns>an instance of the BasicReferenceGeometry</returns>
         public static BasicReferenceGeometry GetBasicReferenceGeometry(ref ModelDoc2 partModelDoc)
         {
             BasicReferenceGeometry basicReferenceGeometry = new();
@@ -213,7 +338,12 @@ namespace SolidworksAutomationTool
             return basicReferenceGeometry;
         }
 
-        /* Get the distance between two math points */
+        /// <summary>
+        /// Get the distance between two 3D math points
+        /// </summary>
+        /// <param name="p1">3D math point 1</param>
+        /// <param name="p2">3D math point 2</param>
+        /// <returns>distance between the two 3D math points</returns>
         public static double GetDistanceBetweenTwoMathPoints(MathPoint p1, MathPoint p2)
         {
             double[] p1DataArray = (double[])p1.ArrayData;
@@ -224,7 +354,12 @@ namespace SolidworksAutomationTool
                                 Math.Pow(p1DataArray[2] - p2DataArray[2], 2.0));
         }
 
-        /* Get the distance between two sketch points */
+        /// <summary>
+        /// Get the distance between two sketch points
+        /// </summary>
+        /// <param name="p1"></param>
+        /// <param name="p2"></param>
+        /// <returns>distance between the two 3D sketch points</returns>
         public static double GetDistanceBetweenTwoSketchPoints(SketchPoint p1, SketchPoint p2)
         {
             return Math.Sqrt(   Math.Pow(p1.X - p2.X, 2.0) +
@@ -232,15 +367,22 @@ namespace SolidworksAutomationTool
                                 Math.Pow(p1.Z - p2.Z, 2.0));
         }
 
-        /* Get the number of features in this document */
+        /// <summary>
+        /// Get the number of features in this document
+        /// </summary>
+        /// <param name="partModelDoc">reference to the ModelDoc2 instance</param>
+        /// <returns>the number of features in this document</returns>
         public static int GetFeatureCount(ref ModelDoc2 partModelDoc)
             => partModelDoc.FeatureManager.GetFeatureCount(false);
 
-        /* Get the index of the closest sketch point to the origin. 
-         * Params: sketchPoints: reference to a list of sketchPoints
-         * Returns: the index of the closest sketch point
-         * This function looks for the closest sketchpoint based on the shortest Euclidean distance in 3D (aka L2 norm of 3D vector) from the origin
-         */
+        /// <summary>
+        /// Get the index of the closest sketch point to the origin. 
+        /// </summary>
+        /// <remarks>
+        /// This function looks for the closest sketchpoint based on the shortest Euclidean distance in 3D (aka L2 norm of 3D vector) from the origin
+        /// </remarks>
+        /// <param name="sketchPoints">reference to a list of sketchPoints</param>
+        /// <returns>the index of the closest sketch point</returns>
         public static int GetIndexSketchPointClosestToOrigin(ref List<SketchPoint> sketchPoints)
         {
             double shortestDistance = double.MaxValue;
@@ -259,10 +401,14 @@ namespace SolidworksAutomationTool
             return closestPointIdx;
         }
 
-        /* A function to get the center point of the inscribed construction circle inside the triangle polygon
-         * Returns the center point as a sketch point if the polygon contains a Sketch Arc
-         *          else, returns null.
-         */
+        /// <summary>
+        /// Get the center point of the inscribed construction circle inside the triangle polygon
+        /// </summary>
+        /// <param name="trianglePolygon"></param>
+        /// <returns>
+        /// the center point as a sketch point if the polygon contains a Sketch Arc.
+        /// else, returns null.
+        /// </returns>
         public static SketchPoint? GetTriangleCenterPoint(ref object[] trianglePolygon)
         {
 
@@ -278,7 +424,11 @@ namespace SolidworksAutomationTool
             return null;
         }
 
-        /* Returns a list of the vertices in a full triangle */
+        /// <summary>
+        /// Get the vertices in a triangle polygon
+        /// </summary>
+        /// <param name="trianglePolygon">reference to an array of sketch segments in a polygon</param>
+        /// <returns>a list of the vertices in a full triangle</returns>
         public static List<SketchPoint> GetVerticesInTriangle(ref object[] trianglePolygon)
         {
             // get the vertices of the triangle.
@@ -295,10 +445,14 @@ namespace SolidworksAutomationTool
             return verticesInTriangleSet.ToList();
         }
 
-        /* A function to get one of the sides of a triangle polygon
-         * Returns a side of the triangle if the polygon contains at least a Sketch line
-         *  else Returns null
-         */
+        /// <summary>
+        /// Get one of the sides of a triangle polygon
+        /// </summary>
+        /// <param name="polygon">reference to an array of sketch segments in a polygon</param>
+        /// <returns>
+        /// a side of the triangle if the polygon contains at least a Sketch line.
+        /// null, otherwise
+        /// </returns>
         public static SketchLine? GetOneTriangleSide(ref object[] polygon)
         {
             foreach (SketchSegment triangleSegment in polygon.Cast<SketchSegment>())
@@ -311,9 +465,17 @@ namespace SolidworksAutomationTool
             return null;
         }
 
-        /* Get the most horizontal side of a triangle polygon
-         * TODO: add more descriptions on the trick used
-         * */
+        /// <summary>
+        /// Get the most horizontal side(based on the XY plane) of a triangle polygon.
+        /// The function traverses all the sketch segments in a triangle polygon. 
+        /// The magnitude of the slope of each side of the triangle is calculated. The side having the smallest magnitude of slope is returned.
+        /// TODO: add more descriptions on the trick used
+        /// </summary>
+        /// <param name="polygon">reference to an array of sketch segments in a triangle polygon</param>
+        /// <returns>
+        /// the most horizontal side in a triangle. 
+        /// If no sketch line exist in the polygon, returns null
+        /// </returns>
         public static SketchLine? GetMostHorizontalTriangleSide(ref object[] polygon)
         {
             SketchLine? mostHorizontalSide = null;
@@ -336,8 +498,12 @@ namespace SolidworksAutomationTool
             return mostHorizontalSide;
         }
 
-        /* Get the longest horizontal side of a chamfered triangle polygon
-         */
+        /// <summary>
+        /// Get the longest horizontal side of a chamfered triangle polygon
+        /// This function largely resembles the behavior of GetMostHorizontalTriangleSide but additionally finds the longest side
+        /// </summary>
+        /// <param name="chamferedTrianglePolygon">reference to an array of sketch segments in a chamfered triangle polygon</param>
+        /// <returns></returns>
         public static SketchLine? GetLongestMostHorizontalTriangleSide(ref object[] chamferedTrianglePolygon)
         {
             SketchLine? mostHorizontalLongSide = null;
@@ -374,12 +540,17 @@ namespace SolidworksAutomationTool
             return mostHorizontalLongSide;
         }
 
-        /* Get the side with the most positive slope (only considering the projection on the local skecth XY plane) in a chamfered triangle
+        /* 
          * This function is often used for finding the side used to setting parallel constraints to the first triangle in a pizza slice
          * This function is designed to be called when the chamfered triangle is relatively upright
          * Since the chamfered triangle has two side in parallel within itself, we will find two sides having similar slopes.
          * We choose the side with the most positive slope
          */
+        /// <summary>
+        /// Get the side with the most positive slope (only considering the projection on the local skecth XY plane) in a chamfered triangle
+        /// </summary>
+        /// <param name="polygon"></param>
+        /// <returns></returns>
         public static SketchSegment? GetMostPositiveSlopedSideInChamferedTriangle(ref object[] polygon)
         {
             SketchSegment? mostPositiveSlopedSide = null;
@@ -436,11 +607,15 @@ namespace SolidworksAutomationTool
         public static int CreateGlobalVariableInAllConfigs(ref ModelDoc2 partModelDoc, string variableName, double variableValue)
         {
             EquationMgr equationManager = partModelDoc.GetEquationMgr();
+            // Parse the numeric value of variable into a string. Default to preserve 6 digits after the decimal point
+            // Using the culture neutral way of representing numbers: e.g. 123.456 instead of 123,456
+            string parsedVariableValue = variableValue.ToString("0.000000", invariantCultureInfo);
+            // Create the expression used to add global variables.The variable is added with meters as unit
+            string variableAssignmentExpression = $"\"{variableName}\" = {parsedVariableValue}m";
             // syntax is referenced from https://help.solidworks.com/2022/English/api/sldworksapi/Add_Equations_Example_CSharp.htm?verRedirect=1
             // by default adding the global variable to the end of the equation list
-            //int variableIndex = equationManager.Add3(-1, $"\"{variableName}\" = {variableValue}m", true, (int)swInConfigurationOpts_e.swAllConfiguration, null);
-            string variableAssignmentExpression = $"\"{variableName}\" = {variableValue,0:F6}m";
             int variableIndex = equationManager.Add2(-1, variableAssignmentExpression, true);
+
             // TODO: check if the feature manager update is necessary
             partModelDoc.FeatureManager.UpdateFeatureTree();
             if (variableIndex == -1)
@@ -463,7 +638,8 @@ namespace SolidworksAutomationTool
             point.Select4(true, swSelectData);
             // although the InsertRefPlane function can take 3 constraints, we don't need to provide the third constraint,
             // as the 2 constraints are enough for the "point and normal" method
-            RefPlane refPlane = (RefPlane)featureManager.InsertRefPlane((int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Perpendicular, 0,
+            RefPlane refPlane = (RefPlane)featureManager.InsertRefPlane((int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Perpendicular
+                                                                        + (int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_OptionFlip, 0,
                                                                                           (int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Coincident, 0, 0, 0);
 
             // The user can decide the name of the plane by passing a string. If null is passed in, the plane's name is left to solidworks to decide
@@ -506,7 +682,7 @@ namespace SolidworksAutomationTool
          * Direction 1 is extruded till the given point,
          * Direction 2 is extruded all through.
          */
-        public static Feature CreateTwoWayExtrusionD1ToPointD2ThroughAll(ref ModelDoc2 partModelDoc, SketchPoint vertexD1ExtrudeTo, SelectData swSelectData)
+        public static Feature CreateTwoWayExtrusionD1ThroughAllD2ToPoint(ref ModelDoc2 partModelDoc, SketchPoint vertexD1ExtrudeTo, SelectData swSelectData)
         {
             // Magic number 32 is used when selecting up-to surface, up-to vertex, or offset-from surface.
             // Source: https://help.solidworks.com/2023/english/api/sldworksapi/SOLIDWORKS.Interop.sldworks~SOLIDWORKS.Interop.sldworks.IFeatureManager~FeatureRevolve2.html
@@ -518,9 +694,9 @@ namespace SolidworksAutomationTool
                                     false,  // true for single ended cut, false for double-ended cut
                                     false,  // True to remove material outside of the profile of the flip side to cut, false to not
                                     false,  // True for Direction 1 to be opposite of the default direction
-                                    (int)swEndConditions_e.swEndCondUpToVertex,  // Termination type for the first end
-                                    (int)swEndConditions_e.swEndCondThroughAll,     // Termination type for the second end 
-                                    0.01, 1,   // depth of extrusion for 1st and 2nd end in meters
+                                    (int)swEndConditions_e.swEndCondThroughAll,  // Termination type for the first end
+                                    (int)swEndConditions_e.swEndCondUpToVertex,    // Termination type for the second end 
+                                    0.01, 0.01,   // depth of extrusion for 1st and 2nd end in meters
                                     false, false, // True allows a draft angle in the first/second direction, false does not allow drafting in the first/second direction
                                     false, false, // True for the first/second draft angle to be inward, false to be outward; only valid when Dchk1/Dchk2 is true
                                     1, 1,   // Draft angle for the first end; only valid when Dchk1 is true
@@ -540,15 +716,15 @@ namespace SolidworksAutomationTool
          * Direction 1 is extruded till the given distance,
          * Direction 2 is extruded all through.
          */
-        public static Feature CreateTwoWayExtrusionD1ToDistanceD2ThroughAll(ref ModelDoc2 partModelDoc, double distanceD1ExtrudeTo)
+        public static Feature CreateTwoWayExtrusionD1ThroughAllD2ToDistance(ref ModelDoc2 partModelDoc, double distanceD1ExtrudeTo)
         { // the FeatureCut4 api takes a ton of arguments. This wrapper function is to simplify the calling process.
             // https://help.solidworks.com/2023/english/api/sldworksapi/solidworks.interop.sldworks~solidworks.interop.sldworks.ifeaturemanager~featurecut4.html?verRedirect=1
             Feature extrusionFeature = partModelDoc.FeatureManager.FeatureCut4(
                                     false,  // true for single ended cut, false for double-ended cut
                                     false,  // True to remove material outside of the profile of the flip side to cut, false to not
                                     false,  // True for Direction 1 to be opposite of the default direction
-                                    (int)swEndConditions_e.swEndCondBlind,  // Termination type for the first end
-                                    (int)swEndConditions_e.swEndCondThroughAll,     // Termination type for the second end 
+                                    (int)swEndConditions_e.swEndCondThroughAll,  // Termination type for the first end
+                                    (int)swEndConditions_e.swEndCondBlind,     // Termination type for the second end 
                                     distanceD1ExtrudeTo, distanceD1ExtrudeTo,   // depth of extrusion for 1st and 2nd end in meters
                                     false, false, // True allows a draft angle in the first/second direction, false does not allow drafting in the first/second direction
                                     false, false, // True for the first/second draft angle to be inward, false to be outward; only valid when Dchk1/Dchk2 is true
@@ -569,10 +745,12 @@ namespace SolidworksAutomationTool
         public static (Sketch, SketchPoint, object[]) CreateACopyAndRotateReferenceSketch(ref ModelDoc2 partModelDoc, RefPlane plane, SelectData swSelectData, string referenceSketchName, bool isUprightTriangle)
         {
             // copy and paste the reference sketch
-            SelectSketch(ref partModelDoc, referenceSketchName);
-            partModelDoc.EditCopy();
             ((Feature)plane).Select2(true, -1);
-            partModelDoc.Paste();
+            SelectSketch(ref partModelDoc, referenceSketchName, true);
+            
+            // TODO: Check if derive will keep dimensions derived from global variables
+            partModelDoc.DeriveSketch();
+            ClearSelection(ref  partModelDoc);
 
             // manually update feature tree
             partModelDoc.FeatureManager.UpdateFeatureTree();
@@ -582,7 +760,7 @@ namespace SolidworksAutomationTool
             Sketch pastedSketch = (Sketch)pastedSketchFeature.GetSpecificFeature2();
             ClearSelection(ref partModelDoc);
 
-            // edit the pasted pin hole sketch
+            // edit the pasted sketch
             ((Feature)pastedSketch).Select2(false, -1);
             partModelDoc.EditSketch();
 
