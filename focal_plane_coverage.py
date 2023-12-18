@@ -98,7 +98,7 @@ surf = param.FocalSurf(project = project_surface)
 curvature_R = abs(surf.curvature_R)
 vigR = surf.vigR
 BFS = surf.BFS
-trimming_angle = 360 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
+trimming_angle = 180 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
 
 pizza = surf.make_vigR_polygon(pizza_angle = trimming_angle)
 
@@ -113,7 +113,7 @@ save_plots = False # Save most useful plots
 save_all_plots = False  # Save all plots (including intermediate ones)
 save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
 save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
-save_txt = True # Save positions of modules along curved focal surface
+save_txt = False # Save positions of modules along curved focal surface
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
 saving = param.SavingResults(saving_df, project_surface)
 
@@ -189,7 +189,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
 
      grid = param.Grid(module_width, inner_gap, global_gap, vigR, BFS, centered_on_triangle = centered_on_triangle)
      grid_df = grid.grid_df
-     grid.plot_2D_grid()
+     # grid.plot_2D_grid()
 
      flip_global = grid_df['flip_global']
 
@@ -468,7 +468,10 @@ projection['front']['theta'] = np.rad2deg(lat.value)
 projection['front']['phi'] = np.rad2deg(lon.value)
 cols = ['x', 'y', 'z', 'theta', 'phi']
 df = pd.DataFrame(projection['front'], columns = cols)
-
+df= df.sort_values(by = ['x','y'])
+df.plot(x='x',y='y',kind='scatter')
+df.plot()
+plt.show()
 # proj[:,2] = proj[:,2] + BFS
 
 saving.save_grid_to_txt(proj, f'grid_indiv_{nb_robots}', direct_SW = True)
