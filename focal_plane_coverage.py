@@ -135,14 +135,15 @@ logging.info(f'Loaded parameters: \n - Surface:  {project_surface} \n - Inter ga
 """ Data storage """
 keys = []
 
-global_dict = {'n42': {'local_total_robots_list' : [], 'local_total_modules_list':[], 'local_coverages_list':[], 'local_unused_area_list':[], 'useless_robots_list': [], 'useful_robots_list': [], 'efficiency_list': [] },
-               'n52': {'local_total_robots_list' : [], 'local_total_modules_list':[], 'local_coverages_list':[], 'local_unused_area_list':[], 'useless_robots_list': [], 'useful_robots_list': [], 'efficiency_list': [] },
-               'n63': {'local_total_robots_list' : [], 'local_total_modules_list':[], 'local_coverages_list':[], 'local_unused_area_list':[], 'useless_robots_list': [], 'useful_robots_list': [], 'efficiency_list': [] },
-               'n75': {'local_total_robots_list' : [], 'local_total_modules_list':[], 'local_coverages_list':[], 'local_unused_area_list':[], 'useless_robots_list': [], 'useful_robots_list': [], 'efficiency_list': [] },
-               'n88': {'local_total_robots_list' : [], 'local_total_modules_list':[], 'local_coverages_list':[], 'local_unused_area_list':[], 'useless_robots_list': [], 'useful_robots_list': [], 'efficiency_list': [] },
-               'n102': {'local_total_robots_list' : [], 'local_total_modules_list':[], 'local_coverages_list':[], 'local_unused_area_list':[], 'useless_robots_list': [], 'useful_robots_list': [], 'efficiency_list': []},
-               'Overall_results': {'nb_robots_list':[], 'total_robots_list' : [],
-                                    'total_modules_list':[], 'coverages_list':[]}}
+global_dict = {}
+for number in nbots:
+     main_key = 'n'+str(number)
+     global_dict[main_key]={'local_total_robots_list' : [], 'local_total_modules_list':[], 'local_coverages_list':[], 'local_unused_area_list':[], 'useless_robots_list': [], 'useful_robots_list': [], 'efficiency_list': [] }
+
+global_dict['Overall_results'] = {'nb_robots_list':[], 'total_robots_list' : [],
+                                   'total_modules_list':[], 'coverages_list':[]}
+
+
 to_dxf_dict = {}
 
 
@@ -161,7 +162,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
      
      # plot_polygon(module, add_points= False, facecolor='None', edgecolor='black')
      # plot_polygon(module.buffer(width_increase, join_style='mitre'), add_points= False, facecolor='None', edgecolor='red', linestyle = '--', label = f'Width increase = {width_increase} mm')
-     mod_param.plot_raw_module()
+     # mod_param.plot_raw_module()
      # plot_polygon(effective_wks, add_points= False, alpha = 0.2, edgecolor='black', label=f'Coverage = {coverage_with_walls} %')
      # plot_points(triang_meshgrid, color='black')
      plt.show()
