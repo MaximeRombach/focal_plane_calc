@@ -136,12 +136,10 @@ logging.info(f'Loaded parameters: \n - Surface:  {project_surface} \n - Inter ga
 keys = []
 
 global_dict = {}
+# Declaring global dictionnaries for storing results
 for number in nbots:
      main_key = 'n'+str(number)
      global_dict[main_key]={'local_total_robots_list' : [], 'local_total_modules_list':[], 'local_coverages_list':[], 'local_unused_area_list':[], 'useless_robots_list': [], 'useful_robots_list': [], 'efficiency_list': [] }
-
-global_dict['Overall_results'] = {'nb_robots_list':[], 'total_robots_list' : [],
-                                   'total_modules_list':[], 'coverages_list':[]}
 
 
 to_dxf_dict = {}
@@ -299,7 +297,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                               
                          elif allow_small_out and cov_out.area/cov.area < out_allowance and not mod_overlaps_GFA and not mod_overlaps_donut:
                               # If the coverage area of a module sticks out by less than the authorized amount, we keep it
-                              plot_polygon(cov)
+                              # plot_polygon(cov)
                               remaining_cov = cov.intersection(pizza)
 
                               # Sometimes coverage polygon is split in 2 polygons by pizza at the level of the arc de cercle given by the workspaces
@@ -404,7 +402,6 @@ for nb_robots in nbots: # iterate over number of robots/module cases
           gdf_final_grid_int = gpd.GeoDataFrame(final_grid['inter'])
           
           gdf_final_grid_indiv = gpd.GeoDataFrame(final_grid['indiv'])
-          print(gdf_final_grid_indiv)
 
           global_dict[key]['boundaries_df'] = boundaries_df
 
@@ -416,11 +413,6 @@ for nb_robots in nbots: # iterate over number of robots/module cases
           global_dict[key]['nb_robots'] = nb_robots
           global_dict[key]['total_modules'] = total_modules
           global_dict[key]['total_robots'] = total_robots
-
-          global_dict['Overall_results']['nb_robots_list'].append(nb_robots)
-          global_dict['Overall_results']['total_robots_list'].append(total_robots)
-          global_dict['Overall_results']['total_modules_list'].append(total_modules) 
-          global_dict['Overall_results']['coverages_list'].append(global_coverage)
 
           global_dict[key]['local_coverages_list'].append(global_coverage)
           global_dict[key]['local_unused_area_list'].append(unused_area)
