@@ -26,7 +26,16 @@ We chose C# because of its high performance, high-level syntax and built-in garb
 
 ![image](https://github.com/MaximeRombach/focal_plane_calc/assets/85515041/a318a5ba-255b-46d2-bc5c-120a5eb87579)
 
-Can repeatedly create sketches of modules(both chamfered and unchamfered) and extrude using them.
+Can repeatedly create sketches of chamfered, unchamfered modules and pin holes. These sketches are further used for extrusions.
+
+**The main logic of the automation process is**:
+- Import two point cloud text files (one for the front point cloud and one for the bottom point cloud). A top point and a corresponding bottom point define an extrusion axis (a 3D line segment in Solidworks). We used to use a Solidworks plugin to for importing text files directly to point cloud objects in Solidworks. However, we now directly create 3D sketch points with the coordinates specified in the text files, bypassing the need to use external plugins.
+- Create extrusion axes as construction lines.
+- Create 1/6 of a "pizza", aka the "pizza slice".
+- Create a bottom plane on bottom of the pizza slice and create 3D sketch points located at the intersections between the bottom plane and the extrusion axes.
+- Create 3 "reference sketches" centered at the extrusion axis closest to the origin (in the global frame): a chamfered triangle sketch, a unchamfered/full triangle sketch and a pin hole triangle sketch. 
+- Create derived sketches from the 3 "reference sketches" at each extrusion axis, position them correctly, add constraints and extrude these derived sketches.
+- Finally extrude the reference sketches.
 
 # Deploying the Automation Tool
 
@@ -53,8 +62,6 @@ I also changed the target runtime to target 64bit Windows computer, since Solidw
 For optimal program performance, change `Configuration` to "Release". The compiler will optimize the program to improve runtime performance. 
 
 ![image](https://github.com/MaximeRombach/focal_plane_calc/assets/85515041/87f89055-148b-4b37-8261-c084bebf4189)
-
-
 
 
 # For future developers/maintainers
