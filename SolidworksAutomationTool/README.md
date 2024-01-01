@@ -103,6 +103,6 @@ I cover many of the pitchfalls I encountered during development. Hopefully it wi
 
 ## On documentation
 
-- [ ] Generate documentation using Doxygen or docFX.
+- [ ] Generate documentation using Doxygen or docFX. In progress migrating comments to Doxygen style.
 
 - [ ] Add a gif of the whole automation process as part of the readme
