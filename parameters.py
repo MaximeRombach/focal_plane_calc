@@ -41,9 +41,11 @@ class FocalSurf():
                
                self.k = self.focal_surf_param['k']
                self.a2 = self.focal_surf_param['a2']
-               self.a3 = self.focal_surf_param['a3']
+               self.a4 = self.focal_surf_param['a4']
+               self.a6 = self.focal_surf_param['a6']
+               self.a8 = self.focal_surf_param['a8']
                self.c = 1/self.curvature_R
-               self.asph_coeff = [self.k, self.a2, self.a3]
+               self.asph_coeff = [self.k, self.a2, self.a4, self.a6, self.a8]
 
           self.vigR = self.focal_surf_param['vigR'] # vignetting radius
           self.BFS = self.focal_surf_param['BFS']
@@ -60,22 +62,39 @@ class FocalSurf():
      def set_surface_parameters(self):
 
           if self.project == 'MUST':
+               ## Last update of MUST focal plane parameters (update from: 2024-01-22)
                focal_surf_param = {
                                    'name': 'MUST',
-                                   'curvature_R': -11365, # [mm], curvature radius
-                                   'vigD': 1068, # [mm], vigneting diameter: last updated 2023-11-08 (previous value: 589.27 * 2)
-                                   'vigR': 1068/2, # [mm], vignetting radius
+                                   'curvature_R': -11918, # [mm], curvature radius
+                                   'vigD': 1184.7, # [mm], vigneting diameter: last updated 2023-11-08 (previous value: 589.27 * 2)
+                                   'vigR': 1184.7/2, # [mm], vignetting radius
                                    'asph_formula': True,
                                    'k': 0,
-                                   'a1': 0, 
-                                   'a2': -6e-12, 
-                                   'a3': 0,
-                                   'f-number': 3.699,
+                                   'a2': 0, 
+                                   'a4': -3.913848e-11, 
+                                   'a6': 5.905507e-17,
+                                   'a8': 0,
+                                   'f-number': 3.72059,
                                    'BFS': 10992.7, # [mm], radius of BFS # Value calculated with Joe's cal_BFS function with MUST data from 2023-09-06
                                    'FoV': None, # [deg]
                                    'focus_tolerance_width': 0.02 # [mm]
                                    }
-
+               ## Previous values for MUST focal plane parameters (update from: 2023-11-08)
+               # focal_surf_param = {
+               #                     'name': 'MUST',
+               #                     'curvature_R': -11365, # [mm], curvature radius
+               #                     'vigD': 1068, # [mm], vigneting diameter: last updated 2023-11-08 (previous value: 589.27 * 2)
+               #                     'vigR': 1068/2, # [mm], vignetting radius
+               #                     'asph_formula': True,
+               #                     'k': 0,
+               #                     'a1': 0, 
+               #                     'a2': -6e-12, 
+               #                     'a3': 0,
+               #                     'f-number': 3.699,
+               #                     'BFS': 10992.7, # [mm], radius of BFS # Value calculated with Joe's cal_BFS function with MUST data from 2023-09-06
+               #                     'FoV': None, # [deg]
+               #                     'focus_tolerance_width': 0.02 # [mm]
+               #                     }
           elif self.project == 'MegaMapper':
                focal_surf_param = {
                                    'name': 'MegaMapper',

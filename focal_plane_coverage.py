@@ -51,7 +51,6 @@ The effective coverage is calculated as the usable positioner area vs total area
             # count a row then switch to left side of next one to continue
             # last positoner: top one
 
-
 start_time = time.time()
 
 """ Global variables """
@@ -64,7 +63,7 @@ start_time = time.time()
 
 ## Study one case at a time
 nbots = [63]
-out_allowances = [0.3]
+out_allowances = [0.8]
 
 width_increase = 1 # [mm] How much we want to increase the base length of a module
 chanfer_length = 10.5 # [mm] Size of chanfers of module vertices (base value: 7.5); increase chanfer decreases coverage as it reduces the module size thus patrol area
@@ -73,7 +72,7 @@ full_framed = False # flag to check wether we are in semi frameless or in full f
 
 """ Intermediate frame parameters """
 
-inner_gap = 3 # [mm] spacing between modules inside intermediate frame
+inner_gap = 1 # [mm] spacing between modules inside intermediate frame
 
 """ Global frame parameters """
 
@@ -98,7 +97,7 @@ surf = param.FocalSurf(project = project_surface)
 curvature_R = abs(surf.curvature_R)
 vigR = surf.vigR
 BFS = surf.BFS
-trimming_angle = 180 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
+trimming_angle = 360 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
 
 pizza = surf.make_vigR_polygon(pizza_angle = trimming_angle)
 
@@ -468,10 +467,10 @@ projection['front']['theta'] = np.rad2deg(lat.value)
 projection['front']['phi'] = np.rad2deg(lon.value)
 cols = ['x', 'y', 'z', 'theta', 'phi']
 df = pd.DataFrame(projection['front'], columns = cols)
-df= df.sort_values(by = ['x','y'])
-df.plot(x='x',y='y',kind='scatter')
-df.plot()
-plt.show()
+# df= df.sort_values(by = ['x','y'])
+# df.plot(x='x',y='y',kind='scatter')
+# df.plot()
+# plt.show()
 # proj[:,2] = proj[:,2] + BFS
 
 saving.save_grid_to_txt(proj, f'grid_indiv_{nb_robots}', direct_SW = True)
