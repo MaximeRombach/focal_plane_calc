@@ -426,7 +426,7 @@ class SavingResults:
           z = grid[:,2]
           up_tri = grid[:,3]
           with open(self.results_dir_path + now.strftime("%Y-%m-%d-%H-%M-%S_") + f'{filename}.txt', 'w') as file:
-               if direct_SW: # removes orientation column to directly read cloup point in solidworks
+               if direct_SW: # removes orientation column to directly read cloud point in solidworks
                     file.write("x[mm] y[mm] z[mm]\n")
                else:
                     file.write("x[mm] y[mm] z[mm] upward_tri [bool]\n")
@@ -846,20 +846,22 @@ class GFA(SavingResults):
           self.gdf_gfa.to_csv(self.results_dir_path() + today_filename)
 
 # NOTE: Grid generation class
-class Grid:
+class Grid(FocalSurf):
 
-     def __init__(self, module_width: float, inter_frame_thick: float, global_frame_thick: float, vigR: float, BFS: float, centered_on_triangle: bool  = False) -> None:
-
+     def __init__(self, project_surface: str, module_width: float, inter_frame_thick: float, global_frame_thick: float, centered_on_triangle: bool  = False) -> None:
+          
+          
           self.centered_on_triangle = centered_on_triangle
           self.module_width = module_width
           self.inter_frame_thick = inter_frame_thick
           self.global_frame_thick = global_frame_thick
           self.inter_frame_width = 2*self.module_width + 2*self.inter_frame_thick*np.cos(np.deg2rad(30)) + 2*self.global_frame_thick*np.cos(np.deg2rad(30))
-          self.vigR = vigR
-          self.BFS = BFS
           
+          super().__init__(project_surface)
+
           self.grid_df = {}
           self.x_grid, self.y_grid, self.z_grid = self.create_flat_grid()
+          
           
      def create_flat_grid(self):
                     # Make global grid out of triangular grid method credited in updown_tri.py
@@ -912,28 +914,77 @@ class Grid:
           self.grid_df['flip_global'] = np.array(flip_global)
 
           return x_grid, y_grid, z_grid
+     
+     def trim_grid(self, final_grid: dict, trim_angle = 360):
 
-     def project_grid_on_sphere(self, grid_points, sphere_radius: float, proj_name: str):
+          """
+          Input:
 
-          """Input:
+          - final_grid: [dict] contains final grids of both modules and intermediate triangles center points
+               - final_grid['indiv']['xyz']: (N,3) [numpy array] contains x,y,z coordinates of each module center point
+               - final_grid['indiv']['upward_tri']: (N,1) [numpy array] contains 0 or 1 depending on the orientation of the module (0 = up, 1 = down)
+          - trim_angle: [float] angle of the pizza slice to trim the grid with (default = 360 --> no trimming, full grid taken)
+
+
+          Output:
+
+          - grid_points: (N,3) [numpy array] contains x,y,z coordinates of each module center point within the trimming angle
+          - module_up: (N,1) [numpy array] contains 0 or 1 depending on the orientation of the module (0 = up, 1 = down) within the trimming angle
+          """
+
+          if trim_angle == 360:
+               grid_points = np.asarray(final_grid['indiv']['xyz'])
+               module_up = np.asarray(final_grid['indiv']['upward_tri'])
+          else:
+               pizza_slice = FocalSurf.make_vigR_polygon(self, pizza_angle = trim_angle)
+               grid_points = []
+               module_up = []
+               for idx, point in enumerate(final_grid['indiv']['geometry']):
+                    if point.within(pizza_slice):
+                         grid_points.append(final_grid['indiv']['xyz'][idx])
+                         module_up.append(final_grid['indiv']['upward_tri'][idx])
+               grid_points = np.asarray(grid_points)
+               module_up = np.asarray(module_up)
+
+          return grid_points, module_up
+
+     def project_grid_on_sphere(self, grid_points: np.array, sphere_radius: float, module_length: float, module_up: np.array):
+
+          """
+               Input:
 
                - grid_points: (N,3) [numpy array]
                - sphere_radius: [float] radius of the sphere onto which the grid is projected
-               - proj_name: [string] name of the projection for later logging
+               - module_length: [float] length of the module (used to project the grid on the back of the sphere)
+               - module_up: (N,1) [numpy array] contains 0 or 1 depending on the orientation of the module (0 = up, 1 = down)
 
+               Doing:
+               1) Takes flat grid and projectes it on a sphere of given radius (use case: focal surface BFS radius)
+               2) Saves result in "projection" dictionnary in 3 different formats developped below for further manipulations
+
+               Output:
+
+               - front_proj: (N,4) [numpy array] projected grid on the front of the sphere
+               - back_proj: (N,4) [numpy array] projected grid on the back of the sphere (where the back of the modules is)
+               - proj: (2*N,4) [numpy array] contains both front and back projections
           """
-          # Normalize 3D flat grid so that every point lie on the unit sphere
+          projection = {}
+          ## Normalize 3D flat grid so that every point lie on the unit sphere
           norm_points = norm(grid_points, axis=1)
           normalized = grid_points/norm_points[:, np.newaxis]
-          # Scale the unit sphere to the desired sphere with radius R
-          projected = normalized * sphere_radius
+          ## Scale the unit sphere to the desired sphere with radius R
+          front_proj = normalized * sphere_radius
+          front_proj[:,2] = front_proj[:,2] + sphere_radius # brings back z coordinates to centered around 0 instead of BFS
+          back_proj = normalized * (sphere_radius + module_length)
+          back_proj[:,2] = back_proj[:,2] + sphere_radius # brings back z coordinates to centered around 0 instead of BFS
 
-          self.grid_df[f'x_grid_{proj_name}'] = projected[:,0]
-          self.grid_df[f'y_grid_{proj_name}'] = projected[:,1]
-          self.grid_df[f'z_grid_{proj_name}'] = projected[:,2]
-          self.grid_df[f'grid_{proj_name}'] = MultiPoint(to_polygon_format(projected[:,0], projected[:,1], projected[:,2]))
+          projection['front_proj'] = np.hstack((front_proj, module_up.reshape(len(module_up),1)))
+          projection['back_proj'] = np.hstack((back_proj, module_up.reshape(len(module_up),1)))
+          projection['proj'] = np.vstack((projection['front_proj'], projection['back_proj']))
 
-          return projected
+          self.grid_df['projected_grid_on_BFS'] = MultiPoint(to_polygon_format(projection['front_proj'][:,0], projection['front_proj'][:,1], projection['front_proj'][:,2]))
+
+          return projection
 
 
      def plot_3D_grid(self):

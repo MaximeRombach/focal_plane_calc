@@ -93,7 +93,7 @@ if inner_gap == global_gap and inner_gap != 0:
 
 # Available projects: MUST, Megamapper, DESI, WST1, WST2, WST3, Spec-s5
 project_surface = 'MegaMapper'
-surf = param.FocalSurf(project = project_surface)
+surf = param.FocalSurf(project=project_surface)
 curvature_R = abs(surf.curvature_R)
 vigR = surf.vigR
 BFS = surf.BFS
@@ -112,7 +112,7 @@ save_plots = False # Save most useful plots
 save_all_plots = False  # Save all plots (including intermediate ones)
 save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
 save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
-save_txt = False # Save positions of modules along curved focal surface
+save_txt = True # Save positions of modules along curved focal surface
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
 saving = param.SavingResults(saving_df, project_surface)
 
@@ -147,6 +147,7 @@ to_dxf_dict = {}
 for nb_robots in nbots: # iterate over number of robots/module cases
 
      mod_param = param.Module(nb_robots, saving_df, is_wall, width_increase, chanfer_length)
+     module_length = mod_param.module_length
      key = mod_param.key
      keys.append(key)
      global_dict[key]['nbots/module'] = nb_robots
@@ -186,7 +187,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
      dist_global = 2*rho
      inter_centroid = inter_frame_width*np.sqrt(3)/3*np.array([np.cos(np.deg2rad(30)), np.sin(np.deg2rad(30))])
 
-     grid = param.Grid(module_width, inner_gap, global_gap, vigR, BFS, centered_on_triangle = centered_on_triangle)
+     grid = param.Grid(project_surface, module_width, inner_gap, global_gap, centered_on_triangle = centered_on_triangle)
      grid_df = grid.grid_df
      # grid.plot_2D_grid()
 
@@ -429,53 +430,19 @@ projection = {'front': {'x': [], 'y': [], 'z': [], 'xyz': [], 'theta': [], 'phi'
 
 trim_angle = 60 # [deg], put 360° for full grid
 
-if trim_angle == 360:
-     grid_points = np.asarray(final_grid['indiv']['xyz'])
-     grid_points_inter = np.asarray(final_grid['inter']['xyz'])
-     module_up = np.asarray(final_grid['indiv']['upward_tri'])
-else:
-     pizza_slice = surf.make_vigR_polygon(pizza_angle = trim_angle)
-     grid_points = []
-     grid_points_inter = []
-     module_up = []
-     for idx, point in enumerate(final_grid['indiv']['geometry']):
-          if point.within(pizza_slice):
-               grid_points.append(final_grid['indiv']['xyz'][idx])
-               module_up.append(final_grid['indiv']['upward_tri'][idx])
-     grid_points = np.asarray(grid_points)
-     module_up = np.asarray(module_up)
+grid_points, module_up = grid.trim_grid(final_grid, trim_angle)
 
-     # TODO: check if inter grid really needed otherwise delete
-     for idx, point in enumerate(final_grid['inter']['geometry']):
-          if point.within(pizza_slice):
-               grid_points_inter.append(final_grid['inter']['xyz'][idx])
-     grid_points_inter = np.asarray(grid_points_inter)
+projected_on_BFS = grid.project_grid_on_sphere(grid_points, BFS, module_length, module_up)
 
-front_proj = grid.project_grid_on_sphere(grid_points, BFS, 'front_proj')
-front_proj = np.hstack((front_proj, module_up.reshape(len(module_up),1)))
-# front_proj[:,2] = front_proj[:,2] - BFS # brings back z coordinates to centered around 0 instead of BFS
-back_proj = grid.project_grid_on_sphere(grid_points, BFS + mod_param.module_length, 'back_proj')
-back_proj = np.hstack((back_proj, module_up.reshape(len(module_up),1)))
-# front_proj[:,2] = front_proj[:,2] - BFS # brings back z coordinates to centered around 0 instead of BFS
-proj = np.vstack((front_proj, back_proj))
-r, lat, lon = cartesian_to_spherical(front_proj[:,0], front_proj[:,1], front_proj[:,2],)
-projection['front']['x'] = front_proj[:,0]
-projection['front']['y'] = front_proj[:,1]
-projection['front']['z'] = front_proj[:,2]
-projection['front']['xyz'] = front_proj
-projection['front']['theta'] = np.rad2deg(lat.value)
-projection['front']['phi'] = np.rad2deg(lon.value)
-cols = ['x', 'y', 'z', 'theta', 'phi']
-df = pd.DataFrame(projection['front'], columns = cols)
-# df= df.sort_values(by = ['x','y'])
-# df.plot(x='x',y='y',kind='scatter')
-# df.plot()
-# plt.show()
-# proj[:,2] = proj[:,2] + BFS
+saving.save_grid_to_txt(projected_on_BFS['proj'], f'grid_indiv_{nb_robots}', direct_SW = True)
+saving.save_grid_to_txt(projected_on_BFS['front_proj'], f'front_grid_indiv_{nb_robots}')
+saving.save_grid_to_txt(projected_on_BFS['back_proj'], f'back_grid_indiv_{nb_robots}')
 
-saving.save_grid_to_txt(proj, f'grid_indiv_{nb_robots}', direct_SW = True)
-saving.save_grid_to_txt(front_proj, f'front_grid_indiv_{nb_robots}')
-saving.save_grid_to_txt(back_proj, f'back_grid_indiv_{nb_robots}')
+# r, lat, lon = cartesian_to_spherical(front_proj[:,0], front_proj[:,1], front_proj[:,2],)
+# projected['theta'] = np.rad2deg(lat.value)
+
+
+
 # %% Plot plot time 
 
 fig = plt.figure(figsize=(8,8))
