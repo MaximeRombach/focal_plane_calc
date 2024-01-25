@@ -860,6 +860,8 @@ class Grid(FocalSurf):
           super().__init__(project_surface)
 
           self.grid_df = {}
+          self.grid_flat_init = {}
+          self.grid_BFS = {'front':{}, 'back':{}}
           self.x_grid, self.y_grid, self.z_grid = self.create_flat_grid()
           
           
@@ -904,14 +906,19 @@ class Grid(FocalSurf):
           x_grid = np.array(x_grid)
           y_grid = np.array(y_grid)
           z_grid = -np.sqrt(self.BFS**2 - (self.vigR)**2)*np.ones(len(x_grid))
+          # z_grid = 0*np.ones(len(x_grid))
 
           self.grid_df['x_grid_flat'] = x_grid
           self.grid_df['y_grid_flat'] = y_grid
           self.grid_df['z_grid_flat'] = z_grid
-
-          self.grid_df['grid_flat'] = MultiPoint(to_polygon_format(x_grid, y_grid, z_grid))
-          
           self.grid_df['flip_global'] = np.array(flip_global)
+          self.grid_df['grid_flat'] = MultiPoint(to_polygon_format(x_grid, y_grid, z_grid))
+
+          self.grid_flat_init['x'] = x_grid
+          self.grid_flat_init['y'] = y_grid
+          self.grid_flat_init['z'] = z_grid
+          self.grid_flat_init['tri_orientation'] = np.array(flip_global)
+          self.grid_flat_init['geometry'] = MultiPoint(to_polygon_format(x_grid, y_grid, z_grid))
 
           return x_grid, y_grid, z_grid
      
@@ -978,11 +985,16 @@ class Grid(FocalSurf):
           back_proj = normalized * (sphere_radius + module_length)
           back_proj[:,2] = back_proj[:,2] + sphere_radius # brings back z coordinates to centered around 0 instead of BFS
 
-          projection['front_proj'] = np.hstack((front_proj, module_up.reshape(len(module_up),1)))
-          projection['back_proj'] = np.hstack((back_proj, module_up.reshape(len(module_up),1)))
-          projection['proj'] = np.vstack((projection['front_proj'], projection['back_proj']))
+          projection['front'] = np.hstack((front_proj, module_up.reshape(len(module_up),1)))
+          projection['back'] = np.hstack((back_proj, module_up.reshape(len(module_up),1)))
+          projection['proj'] = np.vstack((projection['front'], projection['back']))
 
-          self.grid_df['projected_grid_on_BFS'] = MultiPoint(to_polygon_format(projection['front_proj'][:,0], projection['front_proj'][:,1], projection['front_proj'][:,2]))
+          for key in ['front', 'back']:
+               self.grid_BFS[key]['x'] = projection[key][:,0]
+               self.grid_BFS[key]['y'] = projection[key][:,1]
+               self.grid_BFS[key]['z'] = projection[key][:,2]
+
+          self.grid_BFS['geometry'] = MultiPoint(to_polygon_format(projection['front'][:,0], projection['front'][:,1], projection['front'][:,2]))
 
           return projection
 
@@ -1003,7 +1015,7 @@ class Grid(FocalSurf):
 
           fig = plt.figure('2D grid', figsize=(8,8))
           ax = fig.add_subplot()
-          ax.scatter(self.x_grid, self.y_grid, label=f'Projected', color='red')
+          ax.scatter(self.grid_flat_init['x'], self.grid_flat_init['y'], label=f'Projected', color='red')
           # ax.scatter(self.grid_df['x_grid_flat'], self.grid_df['y_grid_flat'], label=f'Flat', color='blue')
           ax.set_box_aspect(1)
           plt.legend()

@@ -112,7 +112,7 @@ save_plots = False # Save most useful plots
 save_all_plots = False  # Save all plots (including intermediate ones)
 save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
 save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
-save_txt = True # Save positions of modules along curved focal surface
+save_txt = False # Save positions of modules along curved focal surface
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
 saving = param.SavingResults(saving_df, project_surface)
 
@@ -163,7 +163,6 @@ for nb_robots in nbots: # iterate over number of robots/module cases
      # mod_param.plot_raw_module()
      # plot_polygon(effective_wks, add_points= False, alpha = 0.2, edgecolor='black', label=f'Coverage = {coverage_with_walls} %')
      # plot_points(triang_meshgrid, color='black')
-     plt.show()
 
      # %% 2)a) Meshing the grid for intermediate frame (4 triangles: 3 upwards + 1 downwards)
 
@@ -187,13 +186,10 @@ for nb_robots in nbots: # iterate over number of robots/module cases
      dist_global = 2*rho
      inter_centroid = inter_frame_width*np.sqrt(3)/3*np.array([np.cos(np.deg2rad(30)), np.sin(np.deg2rad(30))])
 
+     # Generate initial flat grid of modules center points
      grid = param.Grid(project_surface, module_width, inner_gap, global_gap, centered_on_triangle = centered_on_triangle)
-     grid_df = grid.grid_df
+
      # grid.plot_2D_grid()
-
-     flip_global = grid_df['flip_global']
-
-
 
      #%% 2)c) Place the intermediate triangles accordingly on the grid
 
@@ -219,7 +215,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
 
           # Create module arrangement from the global grid
           logging.info(f'Arranging focal plane for {nb_robots} robots case')
-          for idx, (rotate, dx, dy, dz) in enumerate(zip(flip_global, grid.x_grid, grid.y_grid, grid.z_grid)):
+          for idx, (rotate, dx, dy, dz) in enumerate(zip(grid.grid_flat_init['tri_orientation'], grid.grid_flat_init['x'], grid.grid_flat_init['y'], grid.grid_flat_init['z'])):
 
                if rotate:
                     angle = 180
@@ -429,17 +425,23 @@ projection = {'front': {'x': [], 'y': [], 'z': [], 'xyz': [], 'theta': [], 'phi'
               'back': {'x': [], 'y': [], 'z': [], 'xyz': [], 'theta': [], 'phi': []}}
 
 trim_angle = 60 # [deg], put 360° for full grid
-
 grid_points, module_up = grid.trim_grid(final_grid, trim_angle)
 
 projected_on_BFS = grid.project_grid_on_sphere(grid_points, BFS, module_length, module_up)
 
 saving.save_grid_to_txt(projected_on_BFS['proj'], f'grid_indiv_{nb_robots}', direct_SW = True)
-saving.save_grid_to_txt(projected_on_BFS['front_proj'], f'front_grid_indiv_{nb_robots}')
-saving.save_grid_to_txt(projected_on_BFS['back_proj'], f'back_grid_indiv_{nb_robots}')
+saving.save_grid_to_txt(projected_on_BFS['front'], f'front_grid_indiv_{nb_robots}')
+saving.save_grid_to_txt(projected_on_BFS['back'], f'back_grid_indiv_{nb_robots}')
 
 # r, lat, lon = cartesian_to_spherical(front_proj[:,0], front_proj[:,1], front_proj[:,2],)
 # projected['theta'] = np.rad2deg(lat.value)
+
+#%% 2)e) Project final flat grid on aspherical surface 
+
+# First calculate the r of each module
+grid_aspherical = {}
+grid_aspherical['r'] = np.sqrt(np.array(final_grid['indiv']['x'])**2 + np.array(final_grid['indiv']['y'])**2)
+grid_aspherical['phi']= np.arctan2(np.array(final_grid['indiv']['y']), np.array(final_grid['indiv']['x']))
 
 
 
