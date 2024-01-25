@@ -92,7 +92,7 @@ if inner_gap == global_gap and inner_gap != 0:
 """ Define focal surface """
 
 # Available projects: MUST, Megamapper, DESI, WST1, WST2, WST3, Spec-s5
-project_surface = 'MegaMapper'
+project_surface = 'MUST'
 surf = param.FocalSurf(project=project_surface)
 curvature_R = abs(surf.curvature_R)
 vigR = surf.vigR
@@ -112,7 +112,7 @@ save_plots = False # Save most useful plots
 save_all_plots = False  # Save all plots (including intermediate ones)
 save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
 save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
-save_txt = False # Save positions of modules along curved focal surface
+save_txt = True # Save positions of modules along curved focal surface
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
 saving = param.SavingResults(saving_df, project_surface)
 
@@ -439,12 +439,25 @@ saving.save_grid_to_txt(projected_on_BFS['back'], f'back_grid_indiv_{nb_robots}'
 #%% 2)e) Project final flat grid on aspherical surface 
 
 # First calculate the r of each module
-grid_aspherical = {}
-grid_aspherical['r'] = np.sqrt(np.array(final_grid['indiv']['x'])**2 + np.array(final_grid['indiv']['y'])**2)
+grid_aspherical = {'back': {}}
+grid_aspherical['s'] = np.sqrt(np.array(final_grid['indiv']['x'])**2 + np.array(final_grid['indiv']['y'])**2)
 grid_aspherical['phi']= np.arctan2(np.array(final_grid['indiv']['y']), np.array(final_grid['indiv']['x']))
 
+R2Z, R2CRD, R2NORM, R2S, R2NUT, S2R = surf.transfer_functions()
+r = S2R(grid_aspherical['s'])
+grid_aspherical['x'] = r * np.cos(grid_aspherical['phi'])
+grid_aspherical['y'] = r * np.sin(grid_aspherical['phi'])
+grid_aspherical['z'] = -R2Z(r)
 
+grid_aspherical['xyz'] = np.vstack((grid_aspherical['x'], grid_aspherical['y'], grid_aspherical['z'])).T
+grid_aspherical['back']['x'] = module_length / norm(grid_aspherical['xyz']) * grid_aspherical['x']
+grid_aspherical['back']['y'] = module_length / norm(grid_aspherical['xyz']) * grid_aspherical['y']
+grid_aspherical['back']['z'] = module_length / norm(grid_aspherical['xyz']) * grid_aspherical['z']
 
+grid_aspherical['back']['xyz'] = np.vstack((grid_aspherical['back']['x'], grid_aspherical['back']['y'], grid_aspherical['back']['z'])).T
+
+full_asph = np.vstack((grid_aspherical['xyz'], grid_aspherical['back']['xyz']))
+saving.save_grid_to_txt(full_asph, f'asph_grid_indiv_{nb_robots}', direct_SW = True)
 # %% Plot plot time 
 
 fig = plt.figure(figsize=(8,8))

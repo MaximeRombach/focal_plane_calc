@@ -13,6 +13,7 @@ from shapely.ops import unary_union
 from scipy import optimize
 from scipy.interpolate import interp1d
 from shapely.plotting import plot_polygon, plot_points
+from types import SimpleNamespace  # Python 3.3+ only.
 import os
 from datetime import datetime
 import geopandas as gpd
@@ -36,20 +37,20 @@ class FocalSurf():
           self.focal_surf_param = self.set_surface_parameters()
 
           self.curvature_R = self.focal_surf_param['curvature_R'] #curvature radius of focal plane
+          self.vigR = self.focal_surf_param['vigR'] # vignetting radius
+          self.BFS = self.focal_surf_param['BFS']
+          self.f_number = self.focal_surf_param['f-number']
+          
           self.asph_formula = self.focal_surf_param['asph_formula'] # Checks the presence or not of aspherical coefficients
           if self.asph_formula: # Store spherical focal plane parameters if known
-               
-               self.k = self.focal_surf_param['k']
+               ## TODO: use that to unwrap focal surf param --> replace everything call in the code
+               # self.asph_coeff = SimpleNamespace(**self.focal_surf_param)
                self.a2 = self.focal_surf_param['a2']
                self.a4 = self.focal_surf_param['a4']
                self.a6 = self.focal_surf_param['a6']
                self.a8 = self.focal_surf_param['a8']
+               self.k = self.focal_surf_param['k']
                self.c = 1/self.curvature_R
-               self.asph_coeff = [self.k, self.a2, self.a4, self.a6, self.a8]
-
-          self.vigR = self.focal_surf_param['vigR'] # vignetting radius
-          self.BFS = self.focal_surf_param['BFS']
-          self.f_number = self.focal_surf_param['f-number']
 
           if 'WST' in self.project:
                self.donutR = self.focal_surf_param['donutDiam']/2
@@ -57,7 +58,7 @@ class FocalSurf():
           self.surfaces_polygon = {} # dictionnary to store the polygons of the focal plane surfaces (main vigR, GFA, donut hole, etc)
           self.surf_name = self.focal_surf_param['name']
           self.FoV = self.focal_surf_param['FoV']
-          self.focus_tolerance_width = self.focal_surf_param['focus_tolerance_width'] # [mm] width of the focus tolerance band
+          self.focus_tolerance_width = self.focal_surf_param['focus_tolerance_width'] # [mm] width of the focus tolerance band around the focal surface
 
      def set_surface_parameters(self):
 
@@ -66,7 +67,7 @@ class FocalSurf():
                focal_surf_param = {
                                    'name': 'MUST',
                                    'curvature_R': -11918, # [mm], curvature radius
-                                   'vigD': 1184.7, # [mm], vigneting diameter: last updated 2023-11-08 (previous value: 589.27 * 2)
+                                   'vigD': 1184.7, # [mm], vignetting diameter
                                    'vigR': 1184.7/2, # [mm], vignetting radius
                                    'asph_formula': True,
                                    'k': 0,
@@ -196,23 +197,31 @@ class FocalSurf():
                print(f"{self.project} focal plane data successfully read from {filename}")
                return optics_data
      
-     def transfer_functions(self, optics_data):
+     def transfer_functions(self):
 
           """ 
           Input: 
                - optics_data: pandas dataframe containing the focal plane data from zmax csv file
+               - analytical: [bool] flag to use analytical solution of R2Z instead of data 
 
           Output:
                - R2Z: functions to convert radius to height on focal surface
                - R2CRD: function to get chief ray deviation interms of radial position on focal surface
           
           ATTENTION: Needs csv file to contain columns named: R, Z, CRD """
-          Z = optics_data['Z']
-          R = optics_data['R']
-          CRD = optics_data['CRD']
 
-          R2Z = interp1d(R,Z,kind='cubic', fill_value = "extrapolate") #leave 'cubic' interpolation for normal vectors calculations
-          R2CRD = interp1d(R,CRD,kind='cubic', fill_value = "extrapolate")
+          if not self.asph_formula:
+               optics_data = self.read_focal_plane_data()
+               Z = optics_data['Z']
+               R = optics_data['R']
+               CRD = optics_data['CRD']
+
+               R2Z = interp1d(R,Z,kind='cubic', fill_value = "extrapolate") #leave 'cubic' interpolation for normal vectors calculations
+               R2CRD = interp1d(R,CRD,kind='cubic', fill_value = "extrapolate")
+
+          else:
+               R2Z = self.analytical_R2Z
+               R2CRD = None
 
           r = np.linspace(0,self.vigR,500)
           z = R2Z(r) # Calculate focal plane curve from csv data
@@ -222,38 +231,41 @@ class FocalSurf():
           normal_angles_focsurf = np.degrees(np.arctan(dzdr)) # Calculate normal angles at the sample points
           R2NORM = interp1d(r[:-1],normal_angles_focsurf,kind='cubic', fill_value = "extrapolate")
 
-
           ds = (1 + dzdr**2)**0.5 * dr
           s = np.cumsum(ds)
           s = np.insert(s, 0, 0.)  # first value of path length is 0
           Z2R = interp1d(z, r)
           R2S = interp1d(r, s)
-          S2R = interp1d(s, r)
+          S2R = interp1d(s, r, kind='cubic', fill_value = "extrapolate")
           norm = np.degrees(np.arctan(dzdr))
           R2NORM = interp1d(r[:-1], norm)
           NORM2R = interp1d(norm, r[:-1])
-          crd = R2CRD(r)
+          if not self.asph_formula:
+               crd = R2CRD(r)
+          else:
+               crd = np.zeros_like(r)
           nut = -(norm + crd[:-1])
           R2NUT = interp1d(r[:-1], nut)
           NUT2R = interp1d(nut, r[:-1])
 
-          return R2Z, R2CRD, R2NORM, R2S
+          return R2Z, R2CRD, R2NORM, R2S, R2NUT, S2R
 
-     def asph_R2Z(self):
+     def analytical_R2Z(self, r: np.array):
           """ 
           Returns the aspherical focal plane curve from the aspherical coefficients
 
           Input:
-                    - r: radial position on focal plane
+                    - r: [np.array] radial positions on focal plane
           Output:   
-                    - z: height position on focal plane
+                    - z: [np.array] height positions on focal plane
           """
           if self.focal_surf_param['asph_formula']:
-               main_term = lambda r: self.c * np.power(r, 2) / (1 + np.sqrt(1 - (1 + self.k) * self.c**2 * np.power(r, 2)))
-               secondary_terms = lambda r: self.a2 * np.power(r, 4) + self.a3 * np.power(r, 6)
-               return lambda r: main_term(r) + secondary_terms(r)
+               main_term = self.c * np.power(r, 2) / (1 + np.sqrt(1 - (1 + self.k) * self.c**2 * np.power(r, 2)))
+               secondary_terms = self.a2 * np.power(r, 2) + self.a4 * np.power(r, 4) + self.a6 * np.power(r, 6) + self.a8 * np.power(r, 8)
+               return  main_term + secondary_terms
           else:
                return print('Aspherical coefficients not defined for this project \n Taking sampled data from csv file instead')
+          
      
      def calc_BFS(self, r, z):
 
@@ -265,7 +277,7 @@ class FocalSurf():
                errors = sphR_test - np.mean(sphR_test) 
                scalar_error = np.sum(np.power(errors, 2)) # metric for optimization 
                return scalar_error
-          typical_fov = 3.0  # deg
+          typical_fov = 3.7  # deg
           z_guess = np.sign(np.mean(z)) * np.max(r) / np.radians(typical_fov/2)
           result = optimize.least_squares(fun=calc_sphR_err, x0=z_guess)
           z_ctr = float(result.x) # signed BFS radius
@@ -424,17 +436,17 @@ class SavingResults:
           x = grid[:,0]
           y = grid[:,1]
           z = grid[:,2]
-          up_tri = grid[:,3]
+          if not direct_SW:
+               up_tri = grid[:,3]
           with open(self.results_dir_path + now.strftime("%Y-%m-%d-%H-%M-%S_") + f'{filename}.txt', 'w') as file:
                if direct_SW: # removes orientation column to directly read cloud point in solidworks
                     file.write("x[mm] y[mm] z[mm]\n")
+                    for (dx,dy,dz) in zip(x,y,z):
+                         file.write(f"{dx:.3f} {dy:.3f} {dz:.3f}\n")
                else:
                     file.write("x[mm] y[mm] z[mm] upward_tri [bool]\n")
-               for (dx,dy,dz,up) in zip(x,y,z, up_tri):
-                    if direct_SW:
-                         file.write(f"{dx:.3f} {dy:.3f} {dz:.3f}\n")
-                    else:
-                         file.write(f"{dx:.3f} {dy:.3f} {dz:.3f} {int(up)}\n")
+                    for (dx,dy,dz,up) in zip(x,y,z, up_tri):
+                              file.write(f"{dx:.3f} {dy:.3f} {dz:.3f} {int(up)}\n")
           
           logging.info(f'{filename}.txt succesfully saved in {self.results_dir_path}')
 
@@ -845,7 +857,7 @@ class GFA(SavingResults):
           today_filename = now.strftime("%Y-%m-%d-%H-%M-%S_") + "GFA.csv"
           self.gdf_gfa.to_csv(self.results_dir_path() + today_filename)
 
-# NOTE: Grid generation class
+     # NOTE: Grid generation class
 class Grid(FocalSurf):
 
      def __init__(self, project_surface: str, module_width: float, inter_frame_thick: float, global_frame_thick: float, centered_on_triangle: bool  = False) -> None:
