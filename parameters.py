@@ -3,6 +3,8 @@
 import numpy as np
 from numpy.linalg import norm
 from numpy.polynomial import Polynomial
+from astropy.table import Table, vstack
+
 import logging
 from shapely import affinity, MultiPolygon, MultiPoint, GeometryCollection
 import matplotlib.pyplot as plt
@@ -11,6 +13,7 @@ from shapely.ops import unary_union
 from scipy import optimize
 from scipy.interpolate import interp1d
 from shapely.plotting import plot_polygon, plot_points
+from types import SimpleNamespace  # Python 3.3+ only.
 import os
 from datetime import datetime
 import geopandas as gpd
@@ -34,18 +37,20 @@ class FocalSurf():
           self.focal_surf_param = self.set_surface_parameters()
 
           self.curvature_R = self.focal_surf_param['curvature_R'] #curvature radius of focal plane
-          self.asph_formula = self.focal_surf_param['asph_formula'] # Checks the presence or not of aspherical coefficients
-          if self.asph_formula: # Store spherical focal plane parameters if known
-               
-               self.k = self.focal_surf_param['k']
-               self.a2 = self.focal_surf_param['a2']
-               self.a3 = self.focal_surf_param['a3']
-               self.c = 1/self.curvature_R
-               self.asph_coeff = [self.k, self.a2, self.a3]
-
           self.vigR = self.focal_surf_param['vigR'] # vignetting radius
           self.BFS = self.focal_surf_param['BFS']
           self.f_number = self.focal_surf_param['f-number']
+          
+          self.asph_formula = self.focal_surf_param['asph_formula'] # Checks the presence or not of aspherical coefficients
+          if self.asph_formula: # Store spherical focal plane parameters if known
+               ## TODO: use that to unwrap focal surf param --> replace everything call in the code
+               # self.asph_coeff = SimpleNamespace(**self.focal_surf_param)
+               self.a2 = self.focal_surf_param['a2']
+               self.a4 = self.focal_surf_param['a4']
+               self.a6 = self.focal_surf_param['a6']
+               self.a8 = self.focal_surf_param['a8']
+               self.k = self.focal_surf_param['k']
+               self.c = 1/self.curvature_R
 
           if 'WST' in self.project:
                self.donutR = self.focal_surf_param['donutDiam']/2
@@ -53,29 +58,44 @@ class FocalSurf():
           self.surfaces_polygon = {} # dictionnary to store the polygons of the focal plane surfaces (main vigR, GFA, donut hole, etc)
           self.surf_name = self.focal_surf_param['name']
           self.FoV = self.focal_surf_param['FoV']
-          self.focus_tolerance_width = self.focal_surf_param['focus_tolerance_width'] # [mm] width of the focus tolerance band
-
-
+          self.focus_tolerance_width = self.focal_surf_param['focus_tolerance_width'] # [mm] width of the focus tolerance band around the focal surface
 
      def set_surface_parameters(self):
 
           if self.project == 'MUST':
+               ## Last update of MUST focal plane parameters (update from: 2024-01-22)
                focal_surf_param = {
                                    'name': 'MUST',
-                                   'curvature_R': -11365, # [mm], curvature radius
-                                   'vigD': 1068, # [mm], vigneting diameter: last updated 2023-11-08 (previous value: 589.27 * 2)
-                                   'vigR': 1068/2, # [mm], vignetting radius
+                                   'curvature_R': -11918, # [mm], curvature radius
+                                   'vigD': 1184.7, # [mm], vignetting diameter
+                                   'vigR': 1184.7/2, # [mm], vignetting radius
                                    'asph_formula': True,
                                    'k': 0,
-                                   'a1': 0, 
-                                   'a2': -6e-12, 
-                                   'a3': 0,
-                                   'f-number': 3.699,
+                                   'a2': 0, 
+                                   'a4': -3.913848e-11, 
+                                   'a6': 5.905507e-17,
+                                   'a8': 0,
+                                   'f-number': 3.72059,
                                    'BFS': 10992.7, # [mm], radius of BFS # Value calculated with Joe's cal_BFS function with MUST data from 2023-09-06
                                    'FoV': None, # [deg]
                                    'focus_tolerance_width': 0.02 # [mm]
                                    }
-
+               ## Previous values for MUST focal plane parameters (update from: 2023-11-08)
+               # focal_surf_param = {
+               #                     'name': 'MUST',
+               #                     'curvature_R': -11365, # [mm], curvature radius
+               #                     'vigD': 1068, # [mm], vigneting diameter: last updated 2023-11-08 (previous value: 589.27 * 2)
+               #                     'vigR': 1068/2, # [mm], vignetting radius
+               #                     'asph_formula': True,
+               #                     'k': 0,
+               #                     'a1': 0, 
+               #                     'a2': -6e-12, 
+               #                     'a3': 0,
+               #                     'f-number': 3.699,
+               #                     'BFS': 10992.7, # [mm], radius of BFS # Value calculated with Joe's cal_BFS function with MUST data from 2023-09-06
+               #                     'FoV': None, # [deg]
+               #                     'focus_tolerance_width': 0.02 # [mm]
+               #                     }
           elif self.project == 'MegaMapper':
                focal_surf_param = {
                                    'name': 'MegaMapper',
@@ -158,13 +178,17 @@ class FocalSurf():
                filename = f"./Data_focal_planes/{self.project}.csv" # optics data from Zemax
                comment_character = "#"  # The character that indicates a commented line
                # Read CSV file and ignore commented lines
-               optics_data = pd.read_csv(filename, comment=comment_character, sep=';')
+               if self.project == 'MUST':
+                    sep = ';'
+               elif self.project == 'MegaMapper':
+                    sep = ','
+               optics_data = pd.read_csv(filename, comment=comment_character, sep=sep)
 
                # Set headers using the first non-comment line
                with open(filename, 'r') as file:
                     for line in file:
                          if not line.startswith(comment_character):
-                              headers = line.strip().split(';')
+                              headers = line.strip().split(sep)
                               break
                optics_data.columns = headers
 
@@ -173,41 +197,77 @@ class FocalSurf():
                print(f"{self.project} focal plane data successfully read from {filename}")
                return optics_data
      
-     def transfer_functions(self, optics_data):
+     def transfer_functions(self):
 
           """ 
           Input: 
                - optics_data: pandas dataframe containing the focal plane data from zmax csv file
+               - analytical: [bool] flag to use analytical solution of R2Z instead of data 
 
           Output:
                - R2Z: functions to convert radius to height on focal surface
                - R2CRD: function to get chief ray deviation interms of radial position on focal surface
           
           ATTENTION: Needs csv file to contain columns named: R, Z, CRD """
-          Z = optics_data['Z']
-          R = optics_data['R']
-          CRD = optics_data['CRD']
 
-          R2Z = interp1d(R,Z,kind='cubic', fill_value = "extrapolate") #leave 'cubic' interpolation for normal vectors calculations
-          R2CRD = interp1d(R,CRD,kind='cubic')
+          if not self.asph_formula:
+               logging.info('Transfer functions: using sampled data from csv file')
+               optics_data = self.read_focal_plane_data()
+               Z = optics_data['Z']
+               R = optics_data['R']
+               CRD = optics_data['CRD']
 
-          return R2Z, R2CRD
+               R2Z = interp1d(R,Z,kind='cubic', fill_value = "extrapolate") #leave 'cubic' interpolation for normal vectors calculations
+               R2CRD = interp1d(R,CRD,kind='cubic', fill_value = "extrapolate")
 
-     def asph_R2Z(self):
+          else:
+               logging.info('Transfer functions: using aspherical formula cofficients, no CRD data available')
+               R2Z = self.analytical_R2Z
+               R2CRD = None
+
+          r = np.linspace(0,self.vigR,2000)
+          z = R2Z(r) # Calculate focal plane curve from csv data
+          dr = np.diff(r)
+          dz = np.diff(z)
+          dzdr = dz/dr # Get derivative of focal plane curve at the sample points
+          normal_angles_focsurf = np.degrees(np.arctan(dzdr)) # Calculate normal angles at the sample points
+          R2NORM = interp1d(r[:-1],normal_angles_focsurf,kind='cubic', fill_value = "extrapolate")
+
+          ds = (1 + dzdr**2)**0.5 * dr
+          s = np.cumsum(ds)
+          s = np.insert(s, 0, 0.)  # first value of path length is 0
+          Z2R = interp1d(z, r)
+          R2S = interp1d(r, s)
+          S2R = interp1d(s, r, kind='cubic', fill_value = "extrapolate")
+          norm = np.degrees(np.arctan(dzdr))
+          R2NORM = interp1d(r[:-1], norm)
+          NORM2R = interp1d(norm, r[:-1])
+          if not self.asph_formula:
+               crd = R2CRD(r)
+          else:
+               crd = np.zeros_like(r)
+          nut = -(norm + crd[:-1])
+          R2NUT = interp1d(r[:-1], nut, kind='cubic', fill_value = "extrapolate")
+          NUT2R = interp1d(nut, r[:-1])
+
+          return R2Z, R2CRD, R2NORM, R2S, R2NUT, S2R
+
+     def analytical_R2Z(self, r: np.array):
           """ 
           Returns the aspherical focal plane curve from the aspherical coefficients
 
           Input:
-                    - r: radial position on focal plane
+                    - r: [np.array] radial positions on focal plane
           Output:   
-                    - z: height position on focal plane
+                    - z: [np.array] height positions on focal plane
           """
           if self.focal_surf_param['asph_formula']:
-               main_term = lambda r: self.c * np.power(r, 2) / (1 + np.sqrt(1 - (1 + self.k) * self.c**2 * np.power(r, 2)))
-               secondary_terms = lambda r: self.a2 * np.power(r, 4) + self.a3 * np.power(r, 6)
-               return lambda r: main_term(r) + secondary_terms(r)
+               main_term = self.c * np.power(r, 2) / (1 + np.sqrt(1 - (1 + self.k) * self.c**2 * np.power(r, 2)))
+               secondary_terms = self.a2 * np.power(r, 2) + self.a4 * np.power(r, 4) + self.a6 * np.power(r, 6) + self.a8 * np.power(r, 8)
+               return  main_term + secondary_terms
           else:
                return print('Aspherical coefficients not defined for this project \n Taking sampled data from csv file instead')
+          
      
      def calc_BFS(self, r, z):
 
@@ -219,7 +279,7 @@ class FocalSurf():
                errors = sphR_test - np.mean(sphR_test) 
                scalar_error = np.sum(np.power(errors, 2)) # metric for optimization 
                return scalar_error
-          typical_fov = 3.0  # deg
+          typical_fov = 3.7  # deg
           z_guess = np.sign(np.mean(z)) * np.max(r) / np.radians(typical_fov/2)
           result = optimize.least_squares(fun=calc_sphR_err, x0=z_guess)
           z_ctr = float(result.x) # signed BFS radius
@@ -378,17 +438,17 @@ class SavingResults:
           x = grid[:,0]
           y = grid[:,1]
           z = grid[:,2]
-          up_tri = grid[:,3]
+          if not direct_SW:
+               up_tri = grid[:,3]
           with open(self.results_dir_path + now.strftime("%Y-%m-%d-%H-%M-%S_") + f'{filename}.txt', 'w') as file:
-               if direct_SW: # removes orientation column to directly read cloup point in solidworks
+               if direct_SW: # removes orientation column to directly read cloud point in solidworks
                     file.write("x[mm] y[mm] z[mm]\n")
+                    for (dx,dy,dz) in zip(x,y,z):
+                         file.write(f"{dx:.3f} {dy:.3f} {dz:.3f}\n")
                else:
                     file.write("x[mm] y[mm] z[mm] upward_tri [bool]\n")
-               for (dx,dy,dz,up) in zip(x,y,z, up_tri):
-                    if direct_SW:
-                         file.write(f"{dx:.3f} {dy:.3f} {dz:.3f}\n")
-                    else:
-                         file.write(f"{dx:.3f} {dy:.3f} {dz:.3f} {int(up)}\n")
+                    for (dx,dy,dz,up) in zip(x,y,z, up_tri):
+                              file.write(f"{dx:.3f} {dy:.3f} {dz:.3f} {int(up)}\n")
           
           logging.info(f'{filename}.txt succesfully saved in {self.results_dir_path}')
 
@@ -421,7 +481,7 @@ class Module(SavingResults):
           self.y_inc = 5.369 # [mm] Vertical increment at each row
           self.test_pitch = norm(np.array([self.x_inc,self.y_inc]))
 
-          self.safety_distance = 0.3 # [mm] physical distance kept between shields and edge of beta arm
+          self.safety_distance = 0.2 # [mm] physical distance kept between shields and edge of beta arm
           self.offset_from_module_edges = self.safety_distance + self.beta2fibre
           self.start_offset_x = 6.2 # [mm]
           self.start_offset_y = 3.41 # [mm]
@@ -430,7 +490,7 @@ class Module(SavingResults):
 
           self.module_length = 590 # [mm] last dimension updae for length of module unit
 
-          # 1 row addition from one case to another 
+          # Add 1 row of positioners from one case to another
           if self.nb_robots == 42:
 
                self.module_width = 62.4 + self.width_increase # [mm] triangle side length
@@ -445,7 +505,8 @@ class Module(SavingResults):
 
           elif self.nb_robots == 63:
                
-               self.module_width = 73.8 + self.width_increase# [mm] triangle side length
+               self.module_width = 73.8 + self.width_increase # [mm] triangle side length
+               self.width_hole_in_frame = self.module_width + self.width_increase # [mm] ONGOING TEST: width of the module hole in the frame, represents the clearance between the module and the frame --> influences coverage
                self.nb_rows = 10 # number of rows of positioners
                self.key = 'n63'
 
@@ -467,7 +528,7 @@ class Module(SavingResults):
                self.key = 'n102'
 
           else:
-               raise Exception('Error: only 52, 63, 75, 88, 102 robots per module supported')
+               raise Exception('Error: only 42, 52, 63, 75, 88, 102 robots per module supported')
           
           self.module_collection, self.multi_wks_list, self.coverages = self.create_module()
           self.module = self.module_collection.geoms[0]
@@ -798,21 +859,25 @@ class GFA(SavingResults):
           today_filename = now.strftime("%Y-%m-%d-%H-%M-%S_") + "GFA.csv"
           self.gdf_gfa.to_csv(self.results_dir_path() + today_filename)
 
-# NOTE: Grid generation class
-class Grid:
+     # NOTE: Grid generation class
+class Grid(FocalSurf):
 
-     def __init__(self, module_width: float, inter_frame_thick: float, global_frame_thick: float, vigR: float, BFS: float, centered_on_triangle: bool  = False) -> None:
-
+     def __init__(self, project_surface: str, module_width: float, inter_frame_thick: float, global_frame_thick: float, centered_on_triangle: bool  = False) -> None:
+          
+          
           self.centered_on_triangle = centered_on_triangle
           self.module_width = module_width
           self.inter_frame_thick = inter_frame_thick
           self.global_frame_thick = global_frame_thick
           self.inter_frame_width = 2*self.module_width + 2*self.inter_frame_thick*np.cos(np.deg2rad(30)) + 2*self.global_frame_thick*np.cos(np.deg2rad(30))
-          self.vigR = vigR
-          self.BFS = BFS
           
+          super().__init__(project_surface)
+
           self.grid_df = {}
+          self.grid_flat_init = {}
+          self.grid_BFS = {'front':{}, 'back':{}}
           self.x_grid, self.y_grid, self.z_grid = self.create_flat_grid()
+          
           
      def create_flat_grid(self):
                     # Make global grid out of triangular grid method credited in updown_tri.py
@@ -855,38 +920,116 @@ class Grid:
           x_grid = np.array(x_grid)
           y_grid = np.array(y_grid)
           z_grid = -np.sqrt(self.BFS**2 - (self.vigR)**2)*np.ones(len(x_grid))
+          # z_grid = 0*np.ones(len(x_grid))
 
           self.grid_df['x_grid_flat'] = x_grid
           self.grid_df['y_grid_flat'] = y_grid
           self.grid_df['z_grid_flat'] = z_grid
-
-          self.grid_df['grid_flat'] = MultiPoint(to_polygon_format(x_grid, y_grid, z_grid))
-          
           self.grid_df['flip_global'] = np.array(flip_global)
+          self.grid_df['grid_flat'] = MultiPoint(to_polygon_format(x_grid, y_grid, z_grid))
+
+          self.grid_flat_init['x'] = x_grid
+          self.grid_flat_init['y'] = y_grid
+          self.grid_flat_init['z'] = z_grid
+          self.grid_flat_init['tri_orientation'] = np.array(flip_global)
+          self.grid_flat_init['geometry'] = MultiPoint(to_polygon_format(x_grid, y_grid, z_grid))
 
           return x_grid, y_grid, z_grid
+     
+     def trim_grid(self, final_grid: dict, trim_angle = 360):
 
-     def project_grid_on_sphere(self, grid_points, sphere_radius: float, proj_name: str):
+          """
+          Input:
 
-          """Input:
+          - final_grid: [dict] contains final grids of both modules and intermediate triangles center points
+               - final_grid['indiv']['xyz']: (N,3) [numpy array] contains x,y,z coordinates of each module center point
+               - final_grid['indiv']['upward_tri']: (N,1) [numpy array] contains 0 or 1 depending on the orientation of the module (0 = up, 1 = down)
+          - trim_angle: [float] angle of the pizza slice to trim the grid with (default = 360 --> no trimming, full grid taken)
+
+
+          Output:
+
+          - grid_points: (N,3) [numpy array] contains x,y,z coordinates of each module center point within the trimming angle
+          - module_up: (N,1) [numpy array] contains 0 or 1 depending on the orientation of the module (0 = up, 1 = down) within the trimming angle
+          """
+
+          if trim_angle == 360:
+               grid_points = np.asarray(final_grid['indiv']['xyz'])
+               module_up = np.asarray(final_grid['indiv']['upward_tri'])
+          else:
+               pizza_slice = FocalSurf.make_vigR_polygon(self, pizza_angle = trim_angle)
+               grid_points = []
+               module_up = []
+               for idx, point in enumerate(final_grid['indiv']['geometry']):
+                    if point.within(pizza_slice):
+                         grid_points.append(final_grid['indiv']['xyz'][idx])
+                         module_up.append(final_grid['indiv']['upward_tri'][idx])
+               grid_points = np.asarray(grid_points)
+               module_up = np.asarray(module_up)
+
+          return grid_points, module_up
+
+     def project_grid_on_sphere(self, grid_points: np.array, sphere_radius: float, module_length: float, module_up: np.array):
+
+          """
+               Input:
 
                - grid_points: (N,3) [numpy array]
                - sphere_radius: [float] radius of the sphere onto which the grid is projected
-               - proj_name: [string] name of the projection for later logging
+               - module_length: [float] length of the module (used to project the grid on the back of the sphere)
+               - module_up: (N,1) [numpy array] contains 0 or 1 depending on the orientation of the module (0 = up, 1 = down)
 
+               Doing:
+               1) Takes flat grid and projectes it on a sphere of given radius (use case: focal surface BFS radius)
+               2) Saves result in "projection" dictionnary in 3 different formats developped below for further manipulations
+
+               Output:
+
+               - front_proj: (N,4) [numpy array] projected grid on the front of the sphere
+               - back_proj: (N,4) [numpy array] projected grid on the back of the sphere (where the back of the modules is)
+               - proj: (2*N,4) [numpy array] contains both front and back projections
           """
-          # Normalize 3D flat grid so that every point lie on the unit sphere
+          projection = {}
+          ## Normalize 3D flat grid so that every point lie on the unit sphere
           norm_points = norm(grid_points, axis=1)
           normalized = grid_points/norm_points[:, np.newaxis]
-          # Scale the unit sphere to the desired sphere with radius R
-          projected = normalized * sphere_radius
+          ## Scale the unit sphere to the desired sphere with radius R
+          front_proj = normalized * sphere_radius
+          front_proj[:,2] = front_proj[:,2] + sphere_radius # brings back z coordinates to centered around 0 instead of BFS
+          back_proj = normalized * (sphere_radius + module_length)
+          back_proj[:,2] = back_proj[:,2] + sphere_radius # brings back z coordinates to centered around 0 instead of BFS
 
-          self.grid_df[f'x_grid_{proj_name}'] = projected[:,0]
-          self.grid_df[f'y_grid_{proj_name}'] = projected[:,1]
-          self.grid_df[f'z_grid_{proj_name}'] = projected[:,2]
-          self.grid_df[f'grid_{proj_name}'] = MultiPoint(to_polygon_format(projected[:,0], projected[:,1], projected[:,2]))
+          projection['front'] = np.hstack((front_proj, module_up.reshape(len(module_up),1)))
+          projection['back'] = np.hstack((back_proj, module_up.reshape(len(module_up),1)))
+          projection['proj'] = np.vstack((projection['front'], projection['back']))
 
-          return projected
+          for key in ['front', 'back']:
+               self.grid_BFS[key]['x'] = projection[key][:,0]
+               self.grid_BFS[key]['y'] = projection[key][:,1]
+               self.grid_BFS[key]['z'] = projection[key][:,2]
+
+          self.grid_BFS['geometry'] = MultiPoint(to_polygon_format(projection['front'][:,0], projection['front'][:,1], projection['front'][:,2]))
+
+          return projection
+     
+     def orientation_vector(self, phi, theta):
+
+          """
+          Input:
+
+          - phi: [float] azimuthal angle in spherical coordinates
+          - theta: [float] polar angle in spherical coordinates
+
+          Output:
+
+          - orientation_vector: [numpy array] contains the x,y,z coordinates of the orientation vector
+          """
+
+          x = np.sin(theta) * np.sin(phi)
+          y = - np.sin(theta) * np.cos(phi)
+          z = np.cos(theta)
+
+          return np.array([x,y,z]).T
 
 
      def plot_3D_grid(self):
@@ -905,7 +1048,7 @@ class Grid:
 
           fig = plt.figure('2D grid', figsize=(8,8))
           ax = fig.add_subplot()
-          ax.scatter(self.x_grid, self.y_grid, label=f'Projected', color='red')
+          ax.scatter(self.grid_flat_init['x'], self.grid_flat_init['y'], label=f'Projected', color='red')
           # ax.scatter(self.grid_df['x_grid_flat'], self.grid_df['y_grid_flat'], label=f'Flat', color='blue')
           ax.set_box_aspect(1)
           plt.legend()
