@@ -97,7 +97,7 @@ surf = param.FocalSurf(project=project_surface)
 curvature_R = abs(surf.curvature_R)
 vigR = surf.vigR
 BFS = surf.BFS
-trimming_angle = 360 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
+trimming_angle = 60 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
 
 pizza = surf.make_vigR_polygon(pizza_angle = trimming_angle)
 
@@ -429,9 +429,9 @@ grid_points, module_up = grid.trim_grid(final_grid, trim_angle)
 
 projected_on_BFS = grid.project_grid_on_sphere(grid_points, BFS, module_length, module_up)
 
-saving.save_grid_to_txt(projected_on_BFS['proj'], f'grid_indiv_{nb_robots}', direct_SW = True)
-saving.save_grid_to_txt(projected_on_BFS['front'], f'front_grid_indiv_{nb_robots}')
-saving.save_grid_to_txt(projected_on_BFS['back'], f'back_grid_indiv_{nb_robots}')
+# saving.save_grid_to_txt(projected_on_BFS['proj'], f'grid_indiv_{nb_robots}', direct_SW = True)
+# saving.save_grid_to_txt(projected_on_BFS['front'], f'front_grid_indiv_{nb_robots}')
+# saving.save_grid_to_txt(projected_on_BFS['back'], f'back_grid_indiv_{nb_robots}')
 
 # r, lat, lon = cartesian_to_spherical(front_proj[:,0], front_proj[:,1], front_proj[:,2],)
 # projected['theta'] = np.rad2deg(lat.value)
@@ -439,7 +439,7 @@ saving.save_grid_to_txt(projected_on_BFS['back'], f'back_grid_indiv_{nb_robots}'
 #%% 2)e) Project final flat grid on aspherical surface 
 
 # First calculate the r of each module
-grid_aspherical = {'back': {}}
+grid_aspherical = {}
 grid_aspherical['s'] = np.sqrt(np.array(final_grid['indiv']['x'])**2 + np.array(final_grid['indiv']['y'])**2)
 grid_aspherical['phi']= np.arctan2(np.array(final_grid['indiv']['y']), np.array(final_grid['indiv']['x']))
 
@@ -447,17 +447,19 @@ R2Z, R2CRD, R2NORM, R2S, R2NUT, S2R = surf.transfer_functions()
 r = S2R(grid_aspherical['s'])
 grid_aspherical['x'] = r * np.cos(grid_aspherical['phi'])
 grid_aspherical['y'] = r * np.sin(grid_aspherical['phi'])
-grid_aspherical['z'] = -R2Z(r)
+grid_aspherical['r'] = np.sqrt(grid_aspherical['x']**2 + grid_aspherical['y']**2)
+grid_aspherical['tri_spin'] = final_grid['indiv']['upward_tri']     
+grid_aspherical['z'] = -R2Z(grid_aspherical['r'])
+grid_aspherical['theta'] = R2NUT(r)
 
-grid_aspherical['xyz'] = np.vstack((grid_aspherical['x'], grid_aspherical['y'], grid_aspherical['z'])).T
-grid_aspherical['back']['x'] = module_length / norm(grid_aspherical['xyz']) * grid_aspherical['x']
-grid_aspherical['back']['y'] = module_length / norm(grid_aspherical['xyz']) * grid_aspherical['y']
-grid_aspherical['back']['z'] = module_length / norm(grid_aspherical['xyz']) * grid_aspherical['z']
+# grid_aspherical['orientation_vectors'] = grid.orientation_vector(grid_aspherical['phi'], -np.deg2rad(grid_aspherical['theta']))
+# grid_aspherical['xyz'] = np.vstack((grid_aspherical['x'], grid_aspherical['y'], grid_aspherical['z'])).T
+# grid_aspherical['back_xyz'] = grid_aspherical['xyz'] - module_length*grid_aspherical['orientation_vectors']
 
-grid_aspherical['back']['xyz'] = np.vstack((grid_aspherical['back']['x'], grid_aspherical['back']['y'], grid_aspherical['back']['z'])).T
 
-full_asph = np.vstack((grid_aspherical['xyz'], grid_aspherical['back']['xyz']))
-saving.save_grid_to_txt(full_asph, f'asph_grid_indiv_{nb_robots}', direct_SW = True)
+# full_asph = np.vstack((grid_aspherical['xyz'], grid_aspherical['back_xyz']))
+# saving.save_grid_to_txt(full_asph, f'asph_grid_indiv_{nb_robots}', direct_SW = True)
+pd.DataFrame.from_dict(grid_aspherical).to_csv(saving.results_dir_path + f'asph_grid_{nb_robots}.csv', sep = ";", decimal = ".")
 # %% Plot plot time 
 
 fig = plt.figure(figsize=(8,8))

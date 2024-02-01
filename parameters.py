@@ -211,6 +211,7 @@ class FocalSurf():
           ATTENTION: Needs csv file to contain columns named: R, Z, CRD """
 
           if not self.asph_formula:
+               logging.info('Transfer functions: using sampled data from csv file')
                optics_data = self.read_focal_plane_data()
                Z = optics_data['Z']
                R = optics_data['R']
@@ -220,10 +221,11 @@ class FocalSurf():
                R2CRD = interp1d(R,CRD,kind='cubic', fill_value = "extrapolate")
 
           else:
+               logging.info('Transfer functions: using aspherical formula cofficients, no CRD data available')
                R2Z = self.analytical_R2Z
                R2CRD = None
 
-          r = np.linspace(0,self.vigR,500)
+          r = np.linspace(0,self.vigR,2000)
           z = R2Z(r) # Calculate focal plane curve from csv data
           dr = np.diff(r)
           dz = np.diff(z)
@@ -245,7 +247,7 @@ class FocalSurf():
           else:
                crd = np.zeros_like(r)
           nut = -(norm + crd[:-1])
-          R2NUT = interp1d(r[:-1], nut)
+          R2NUT = interp1d(r[:-1], nut, kind='cubic', fill_value = "extrapolate")
           NUT2R = interp1d(nut, r[:-1])
 
           return R2Z, R2CRD, R2NORM, R2S, R2NUT, S2R
@@ -1009,6 +1011,25 @@ class Grid(FocalSurf):
           self.grid_BFS['geometry'] = MultiPoint(to_polygon_format(projection['front'][:,0], projection['front'][:,1], projection['front'][:,2]))
 
           return projection
+     
+     def orientation_vector(self, phi, theta):
+
+          """
+          Input:
+
+          - phi: [float] azimuthal angle in spherical coordinates
+          - theta: [float] polar angle in spherical coordinates
+
+          Output:
+
+          - orientation_vector: [numpy array] contains the x,y,z coordinates of the orientation vector
+          """
+
+          x = np.sin(theta) * np.sin(phi)
+          y = - np.sin(theta) * np.cos(phi)
+          z = np.cos(theta)
+
+          return np.array([x,y,z]).T
 
 
      def plot_3D_grid(self):
