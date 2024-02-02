@@ -122,28 +122,34 @@ namespace SolidworksAutomationTool
         /// <param name="extension">extension of the model, default to .SLDPRT</param>
         /// <returns>true if save was successful, false otherwise
         /// </returns>
-        public static bool SaveModel(ref ModelDoc2 partModelDoc, string modelName, string extension = ".SLDPRT")
-        {
-            int errorCode = 0;
-            int warningCode = 0;
-            string modelFullPath = modelName + extension;
-            bool saveModelSuccess = partModelDoc.Extension.SaveAs3(modelFullPath,
-                                                                    (int)swSaveAsVersion_e.swSaveAsCurrentVersion,
-                                                                    (int)swSaveAsOptions_e.swSaveAsOptions_Copy,
-                                                                    null,
-                                                                    null,
-                                                                    ref errorCode,
-                                                                    ref warningCode
-                                                                    );
-            if (!saveModelSuccess)
-            {
-                // In case of error, refer to the error documentation
-                // https://help.solidworks.com/2023/english/api/swconst/SOLIDWORKS.Interop.swconst~SOLIDWORKS.Interop.swconst.swFileSaveError_e.html?verRedirect=1
-                Console.WriteLine($"Error! Saving {modelFullPath} failed. \nError code: {errorCode}. Warning code: {warningCode}");
+        public static bool SaveModel(bool SavePart, ref ModelDoc2 partModelDoc, string modelName, string extension = ".SLDPRT")
+        {   
+            if (!SavePart)
+            {    
+                return true;
             }
-            return saveModelSuccess;
+            else
+            {
+                int errorCode = 0;
+                int warningCode = 0;
+                string modelFullPath = modelName + extension;
+                bool saveModelSuccess = partModelDoc.Extension.SaveAs3(modelFullPath,
+                                                                        (int)swSaveAsVersion_e.swSaveAsCurrentVersion,
+                                                                        (int)swSaveAsOptions_e.swSaveAsOptions_Copy,
+                                                                        null,
+                                                                        null,
+                                                                        ref errorCode,
+                                                                        ref warningCode
+                                                                        );
+                if (!saveModelSuccess)
+                {
+                    // In case of error, refer to the error documentation
+                    // https://help.solidworks.com/2023/english/api/swconst/SOLIDWORKS.Interop.swconst~SOLIDWORKS.Interop.swconst.swFileSaveError_e.html?verRedirect=1
+                    Console.WriteLine($"Error! Saving {modelFullPath} failed. \nError code: {errorCode}. Warning code: {warningCode}");
+                }
+                return saveModelSuccess;
+            }
         }
-
         /// <summary>
         /// Select the origin. ONLY WORKS IN THE ENGLISH VERSION OF SOLIDWORKS
         /// </summary>
@@ -611,7 +617,7 @@ namespace SolidworksAutomationTool
             // Using the culture neutral way of representing numbers: e.g. 123.456 instead of 123,456
             string parsedVariableValue = variableValue.ToString("0.000000", invariantCultureInfo);
             // Create the expression used to add global variables.The variable is added with meters as unit
-            string variableAssignmentExpression = $"\"{variableName}\" = {parsedVariableValue}m";
+            string variableAssignmentExpression = $"\"{variableName}\" = {parsedVariableValue}";
             // syntax is referenced from https://help.solidworks.com/2022/English/api/sldworksapi/Add_Equations_Example_CSharp.htm?verRedirect=1
             // by default adding the global variable to the end of the equation list
             int variableIndex = equationManager.Add2(-1, variableAssignmentExpression, true);
@@ -620,7 +626,8 @@ namespace SolidworksAutomationTool
             partModelDoc.FeatureManager.UpdateFeatureTree();
             if (variableIndex == -1)
             {
-                Console.WriteLine($"ERROR adding global variable : {variableName} with value {variableValue}");
+                Console.WriteLine($"ERROR adding global variable : {variableName} with value {parsedVariableValue}");
+                Console.WriteLine($"ERROR adding global variable with expression: {variableAssignmentExpression}");
             }
             return variableIndex;
         }
