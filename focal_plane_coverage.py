@@ -92,7 +92,7 @@ if inner_gap == global_gap and inner_gap != 0:
 """ Define focal surface """
 
 # Available projects: MUST, Megamapper, DESI, WST1, WST2, WST3, Spec-s5
-project_surface = 'MUST'
+project_surface = 'MegaMapper'
 surf = param.FocalSurf(project=project_surface)
 curvature_R = abs(surf.curvature_R)
 vigR = surf.vigR
@@ -112,7 +112,7 @@ save_plots = False # Save most useful plots
 save_all_plots = False  # Save all plots (including intermediate ones)
 save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
 save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
-save_txt = True # Save positions of modules along curved focal surface
+save_txt = False # Save positions of modules along curved focal surface
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
 saving = param.SavingResults(saving_df, project_surface)
 
@@ -438,28 +438,39 @@ projected_on_BFS = grid.project_grid_on_sphere(grid_points, BFS, module_length, 
 
 #%% 2)e) Project final flat grid on aspherical surface 
 
-# First calculate the r of each module
-grid_aspherical = {}
-grid_aspherical['s'] = np.sqrt(np.array(final_grid['indiv']['x'])**2 + np.array(final_grid['indiv']['y'])**2)
-grid_aspherical['phi']= np.arctan2(np.array(final_grid['indiv']['y']), np.array(final_grid['indiv']['x']))
-
+grid_aspherical = {'x':[], 'y':[], 'z':[], 'r':[], 's':[], 'phi':[], 'theta':[], 'tri_spin':[]}
+# Define transfer functions for aspherical surface i.e. Z position, theta angle and s position along the aspherical curve as function of radial position r
 R2Z, R2CRD, R2NORM, R2S, R2NUT, S2R = surf.transfer_functions()
+
+grid_aspherical['s'] = np.sqrt(np.array(final_grid['indiv']['x'])**2 + np.array(final_grid['indiv']['y'])**2)
+grid_aspherical['phi']= np.rad2deg(np.arctan2(np.array(final_grid['indiv']['y']), np.array(final_grid['indiv']['x'])))
 r = S2R(grid_aspherical['s'])
-grid_aspherical['x'] = r * np.cos(grid_aspherical['phi'])
-grid_aspherical['y'] = r * np.sin(grid_aspherical['phi'])
+
+grid_aspherical['x'] = r * np.cos(np.deg2rad(grid_aspherical['phi']))
+grid_aspherical['y'] = r * np.sin(np.deg2rad(grid_aspherical['phi']))
 grid_aspherical['r'] = np.sqrt(grid_aspherical['x']**2 + grid_aspherical['y']**2)
-grid_aspherical['tri_spin'] = final_grid['indiv']['upward_tri']     
+grid_aspherical['tri_spin'] = np.asarray(final_grid['indiv']['upward_tri'])    
 grid_aspherical['z'] = -R2Z(grid_aspherical['r'])
 grid_aspherical['theta'] = R2NUT(r)
 
-# grid_aspherical['orientation_vectors'] = grid.orientation_vector(grid_aspherical['phi'], -np.deg2rad(grid_aspherical['theta']))
-# grid_aspherical['xyz'] = np.vstack((grid_aspherical['x'], grid_aspherical['y'], grid_aspherical['z'])).T
-# grid_aspherical['back_xyz'] = grid_aspherical['xyz'] - module_length*grid_aspherical['orientation_vectors']
+orientation_vectors = grid.orientation_vector(np.deg2rad(grid_aspherical['phi']), np.deg2rad(grid_aspherical['theta']))
+grid_aspherical_xyz = np.vstack((grid_aspherical['x'], grid_aspherical['y'], grid_aspherical['z'])).T
+grid_aspherical_xyz_back = grid_aspherical_xyz - module_length*orientation_vectors
 
+full_asph = np.vstack((grid_aspherical_xyz, grid_aspherical_xyz_back))
+saving.save_grid_to_txt(np.hstack((grid_aspherical_xyz_back, grid_aspherical['tri_spin'].reshape((len(grid_aspherical['tri_spin']), 1)))), f'back_asph_grid_{nb_robots}')
+saving.save_grid_to_txt(np.hstack((grid_aspherical_xyz, grid_aspherical['tri_spin'].reshape((len(grid_aspherical['tri_spin']), 1)))), f'front_asph_grid_{nb_robots}')
+saving.save_grid_to_txt(full_asph, f'asph_grid_{nb_robots}', direct_SW = True)
 
-# full_asph = np.vstack((grid_aspherical['xyz'], grid_aspherical['back_xyz']))
-# saving.save_grid_to_txt(full_asph, f'asph_grid_indiv_{nb_robots}', direct_SW = True)
-pd.DataFrame.from_dict(grid_aspherical).to_csv(saving.results_dir_path + f'asph_grid_{nb_robots}.csv', sep = ";", decimal = ".")
+fig = plt.figure(figsize=(10,10))
+ax = fig.add_subplot(111, projection='3d')
+grid.plot_3D_grid(ax,full_asph[:,0], full_asph[:,1], full_asph[:,2])
+plt.show()
+
+grid_asph_pd = pd.DataFrame(grid_aspherical)  # Define the variable "grid_asph_pd"
+grid_asph_pd.sort_values(by=['theta'], inplace=True)
+
+grid_asph_pd.to_csv(saving.results_dir_path + f'asph_grid_{nb_robots}.csv', sep = ";", decimal = ".")
 # %% Plot plot time 
 
 fig = plt.figure(figsize=(8,8))
