@@ -745,12 +745,17 @@ namespace SolidworksAutomationTool
         public static (Sketch, SketchPoint, object[]) CreateACopyAndRotateReferenceSketch(ref ModelDoc2 partModelDoc, RefPlane plane, SelectData swSelectData, string referenceSketchName, bool isUprightTriangle)
         {
             // copy and paste the reference sketch
-            ((Feature)plane).Select2(true, -1);
-            SelectSketch(ref partModelDoc, referenceSketchName, true);
+            // ((Feature)plane).Select2(true, -1);
+            // SelectSketch(ref partModelDoc, referenceSketchName, true);
             
             // TODO: Check if derive will keep dimensions derived from global variables
-            partModelDoc.DeriveSketch();
-            ClearSelection(ref  partModelDoc);
+            // partModelDoc.DeriveSketch();
+            // ClearSelection(ref  partModelDoc);
+
+            SelectSketch(ref partModelDoc, referenceSketchName);
+            partModelDoc.EditCopy();
+            ((Feature)plane).Select2(true, -1);
+            partModelDoc.Paste();
 
             // manually update feature tree
             partModelDoc.FeatureManager.UpdateFeatureTree();

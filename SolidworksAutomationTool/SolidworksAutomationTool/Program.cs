@@ -22,7 +22,7 @@ const double interPinHoleDistance = 64e-3;          // in meters
 const double filletRadiusFullTriangle = 2.5e-3;     // in meters 
 
 // TODO: param: bestFitSphereRadius.
-const double bestFitSphereRadius = 11045.6e-3;      // in meters
+const double bestFitSphereRadius = 10992.7e-3;      // in meters
 // TODO: param: focal plane thickness
 const double outerRimHeight = 200e-3;                     // in meters
 // TODO: param: distance between the support surface to top surface definition
@@ -78,11 +78,11 @@ if ( frontGridPointCloud.point3Ds.Count != backGridPointCloud.point3Ds.Count )
 Console.WriteLine("Removing offsets in Z axis for all points ...");
 
 // Using the add operation because the z coordinates in the point clouds are negative. We want to offset them to close to zero
-foreach ((Point3D frontPoint, Point3D backPoint) in frontGridPointCloud.point3Ds.Zip(backGridPointCloud.point3Ds))
-{
-    frontPoint.z += bestFitSphereRadius;
-    backPoint.z += bestFitSphereRadius;
-}
+// foreach ((Point3D frontPoint, Point3D backPoint) in frontGridPointCloud.point3Ds.Zip(backGridPointCloud.point3Ds))
+// {
+//     frontPoint.z += bestFitSphereRadius;
+//     backPoint.z += bestFitSphereRadius;
+// }
 
 //  Please give the directory where the created models would be placed
 //  string modelOutputDirectory = Console.ReadLine();
