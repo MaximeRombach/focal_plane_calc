@@ -1025,19 +1025,16 @@ class Grid(FocalSurf):
           - orientation_vector: [numpy array] contains the x,y,z coordinates of the orientation vector
           """
 
-          x = np.sin(theta) * np.sin(phi)
-          y = - np.sin(theta) * np.cos(phi)
+          x = - np.sin(theta) * np.cos(phi)
+          y = - np.sin(theta) * np.sin(phi)
           z = np.cos(theta)
 
           return np.array([x,y,z]).T
 
 
-     def plot_3D_grid(self):
+     def plot_3D_grid(self,ax, x, y ,z,  color = 'red', label=None):
 
-          fig = plt.figure('3D grid', figsize=(8,8))
-          ax = fig.add_subplot(projection='3d')
-          ax.scatter(self.grid_df['x_grid_proj'], self.grid_df['y_grid_proj'], self.grid_df['z_grid_proj'] , label=f'Projected', color='red')
-          ax.scatter(self.grid_df['x_grid_flat'], self.grid_df['y_grid_flat'], self.grid_df['z_grid_flat'] , label=f'Flat', color='blue')
+          ax.scatter(x, y, z , label=label, color=color)
           ax.set_box_aspect((5,5,1))
           plt.legend()
           ax.set_xlabel('X')
