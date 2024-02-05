@@ -617,7 +617,7 @@ namespace SolidworksAutomationTool
             // Using the culture neutral way of representing numbers: e.g. 123.456 instead of 123,456
             string parsedVariableValue = variableValue.ToString("0.000000", invariantCultureInfo);
             // Create the expression used to add global variables.The variable is added with meters as unit
-            string variableAssignmentExpression = $"\"{variableName}\" = {parsedVariableValue}";
+            string variableAssignmentExpression = $"\"{variableName}\" = {parsedVariableValue}m";
             // syntax is referenced from https://help.solidworks.com/2022/English/api/sldworksapi/Add_Equations_Example_CSharp.htm?verRedirect=1
             // by default adding the global variable to the end of the equation list
             int variableIndex = equationManager.Add2(-1, variableAssignmentExpression, true);
@@ -701,8 +701,9 @@ namespace SolidworksAutomationTool
                                     false,  // true for single ended cut, false for double-ended cut
                                     false,  // True to remove material outside of the profile of the flip side to cut, false to not
                                     false,  // True for Direction 1 to be opposite of the default direction
-                                    (int)swEndConditions_e.swEndCondThroughAll,  // Termination type for the first end
-                                    (int)swEndConditions_e.swEndCondUpToVertex,    // Termination type for the second end 
+                                    // 05.02.2024: TERMINATION TYPE SWAPPED (DIR 1: UP TO VERTEX, DIR 2: THROUGH ALL) //
+                                    (int)swEndConditions_e.swEndCondUpToVertex,  // Termination type for the first end
+                                    (int)swEndConditions_e.swEndCondThroughAll,    // Termination type for the second end 
                                     0.01, 0.01,   // depth of extrusion for 1st and 2nd end in meters
                                     false, false, // True allows a draft angle in the first/second direction, false does not allow drafting in the first/second direction
                                     false, false, // True for the first/second draft angle to be inward, false to be outward; only valid when Dchk1/Dchk2 is true
@@ -730,8 +731,9 @@ namespace SolidworksAutomationTool
                                     false,  // true for single ended cut, false for double-ended cut
                                     false,  // True to remove material outside of the profile of the flip side to cut, false to not
                                     false,  // True for Direction 1 to be opposite of the default direction
-                                    (int)swEndConditions_e.swEndCondThroughAll,  // Termination type for the first end
-                                    (int)swEndConditions_e.swEndCondBlind,     // Termination type for the second end 
+                                    // 05.02.2024: TERMINATION TYPE SWAPPED (DIR 1: BLIND, DIR 2: THROUGH ALL) //
+                                    (int)swEndConditions_e.swEndCondBlind,  // Termination type for the first end
+                                    (int)swEndConditions_e.swEndCondThroughAll,     // Termination type for the second end 
                                     distanceD1ExtrudeTo, distanceD1ExtrudeTo,   // depth of extrusion for 1st and 2nd end in meters
                                     false, false, // True allows a draft angle in the first/second direction, false does not allow drafting in the first/second direction
                                     false, false, // True for the first/second draft angle to be inward, false to be outward; only valid when Dchk1/Dchk2 is true

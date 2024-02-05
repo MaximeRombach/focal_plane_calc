@@ -94,7 +94,7 @@ string desktopPath = System.Environment.GetFolderPath(System.Environment.Special
 string modelOutputDirectory = Path.Join(desktopPath, $"{project}_Models_{currentTime}");
 
 // create the directory to store models. Since we timestamp the output directory, there is almost chance to have another directory with the same name
-if (!Path.Exists(modelOutputDirectory))
+if (!Path.Exists(modelOutputDirectory) & SavePart)
 {
     DirectoryInfo _ = Directory.CreateDirectory(modelOutputDirectory);
 }
