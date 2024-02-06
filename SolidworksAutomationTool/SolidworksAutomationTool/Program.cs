@@ -55,7 +55,7 @@ Console.WriteLine("Welcome to the LASTRO Solidworks Automation Tool!");
 /* Uncomment the Console.ReadLine() to restore normal path input. Currently they are commented out for debug purpose */
 Console.WriteLine("Please enter the path of the FRONT grid point cloud txt file");
 // string frontGridPointCloudFilePath = Console.ReadLine();
-string frontGridPointCloudFilePath = Path.GetFullPath(@"..\..\Results_examples\2024-02-02-15-20-19_front_asph_grid_63.txt"); // For debug use.
+string frontGridPointCloudFilePath = Path.GetFullPath(@$"..\..\Results_examples\{project}\front.txt"); // For debug use.
 
 Console.WriteLine("Reading front grid point cloud file ...");
 PointCloud frontGridPointCloud = new();
@@ -64,7 +64,7 @@ Console.WriteLine("Completed reading point cloud file");
 
 Console.WriteLine("Please enter the path of the BACK grid point cloud txt file");
 // string backGridPointCloudFilePath = Console.ReadLine();
-string backGridPointCloudFilePath = Path.GetFullPath(@"..\..\Results_examples\2024-02-02-15-20-19_back_asph_grid_63.txt"); // For debug use
+string backGridPointCloudFilePath = Path.GetFullPath(@$"..\..\Results_examples\{project}\back.txt"); // For debug use
 
 Console.WriteLine("Reading back grid point cloud file ...");
 PointCloud backGridPointCloud = new();
