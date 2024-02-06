@@ -429,16 +429,14 @@ grid_points, module_up = grid.trim_grid(final_grid, trim_angle)
 
 projected_on_BFS = grid.project_grid_on_sphere(grid_points, BFS, module_length, module_up)
 
-# saving.save_grid_to_txt(projected_on_BFS['proj'], f'grid_indiv_{nb_robots}', direct_SW = True)
-# saving.save_grid_to_txt(projected_on_BFS['front'], f'front_grid_indiv_{nb_robots}')
-# saving.save_grid_to_txt(projected_on_BFS['back'], f'back_grid_indiv_{nb_robots}')
-
-# r, lat, lon = cartesian_to_spherical(front_proj[:,0], front_proj[:,1], front_proj[:,2],)
-# projected['theta'] = np.rad2deg(lat.value)
+saving.save_grid_to_txt(projected_on_BFS['proj'], f'grid_{nb_robots}', direct_SW = True)
+saving.save_grid_to_txt(projected_on_BFS['front'], f'front_grid_spherical_{nb_robots}')
+saving.save_grid_to_txt(projected_on_BFS['back'], f'back_grid_spherical_{nb_robots}')
 
 #%% 2)e) Project final flat grid on aspherical surface 
 
 grid_aspherical = {'x':[], 'y':[], 'z':[], 'r':[], 's':[], 'phi':[], 'theta':[], 'tri_spin':[]}
+grid_aspherical = pd.DataFrame.from_dict(grid_aspherical)  # Define the variable "grid_asph_pd"
 # Define transfer functions for aspherical surface i.e. Z position, theta angle and s position along the aspherical curve as function of radial position r
 R2Z, R2CRD, R2NORM, R2S, R2NUT, S2R = surf.transfer_functions()
 
@@ -452,25 +450,25 @@ grid_aspherical['r'] = np.sqrt(grid_aspherical['x']**2 + grid_aspherical['y']**2
 grid_aspherical['tri_spin'] = np.asarray(final_grid['indiv']['upward_tri'])    
 grid_aspherical['z'] = -R2Z(grid_aspherical['r'])
 grid_aspherical['theta'] = R2NUT(r)
+grid_aspherical.sort_values(by=['theta'], inplace=True)
 
+# Given the orientation vectors of each module, we can now make the back grid at the module length disance from the front grid
 orientation_vectors = grid.orientation_vector(np.deg2rad(grid_aspherical['phi']), np.deg2rad(grid_aspherical['theta']))
 grid_aspherical_xyz = np.vstack((grid_aspherical['x'], grid_aspherical['y'], grid_aspherical['z'])).T
 grid_aspherical_xyz_back = grid_aspherical_xyz - module_length*orientation_vectors
-
 full_asph = np.vstack((grid_aspherical_xyz, grid_aspherical_xyz_back))
-saving.save_grid_to_txt(np.hstack((grid_aspherical_xyz_back, grid_aspherical['tri_spin'].reshape((len(grid_aspherical['tri_spin']), 1)))), f'back_asph_grid_{nb_robots}')
-saving.save_grid_to_txt(np.hstack((grid_aspherical_xyz, grid_aspherical['tri_spin'].reshape((len(grid_aspherical['tri_spin']), 1)))), f'front_asph_grid_{nb_robots}')
+
+saving.save_grid_to_txt(np.hstack((grid_aspherical_xyz_back, np.asarray(grid_aspherical['tri_spin']).reshape((len(grid_aspherical['tri_spin']), 1)))), f'back_grid_aspherical_{nb_robots}')
+saving.save_grid_to_txt(np.hstack((grid_aspherical_xyz, np.asarray(grid_aspherical['tri_spin']).reshape((len(grid_aspherical['tri_spin']), 1)))), f'front_grid_aspherical_{nb_robots}')
 saving.save_grid_to_txt(full_asph, f'asph_grid_{nb_robots}', direct_SW = True)
 
 fig = plt.figure(figsize=(10,10))
 ax = fig.add_subplot(111, projection='3d')
-grid.plot_3D_grid(ax,full_asph[:,0], full_asph[:,1], full_asph[:,2])
-plt.show()
+grid.plot_3D_grid(ax,grid_aspherical_xyz[:,0], grid_aspherical_xyz[:,1], grid_aspherical_xyz[:,2], color='blue', label = 'Front grid')
+grid.plot_3D_grid(ax,grid_aspherical_xyz_back[:,0], grid_aspherical_xyz_back[:,1], grid_aspherical_xyz_back[:,2], color='red', label = 'Back grid')
+# plt.show()
 
-grid_asph_pd = pd.DataFrame(grid_aspherical)  # Define the variable "grid_asph_pd"
-grid_asph_pd.sort_values(by=['theta'], inplace=True)
-
-grid_asph_pd.to_csv(saving.results_dir_path + f'asph_grid_{nb_robots}.csv', sep = ";", decimal = ".")
+# grid_aspherical.to_csv(saving.results_dir_path + f'asph_grid_{nb_robots}.csv', sep = ";", decimal = ".")
 # %% Plot plot time 
 
 fig = plt.figure(figsize=(8,8))
