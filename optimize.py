@@ -11,7 +11,7 @@ import circle_fit as cf
 
 # Choose project
 # Available: MUST, Megamapper
-project = 'MegaMapper'
+project = 'MUST'
 surf = param.FocalSurf(project = project)
 logging.basicConfig(level=logging.INFO)
 logging.info('Project loaded: %s', project)
@@ -21,11 +21,9 @@ saving_df = {'save_txt': save_txt}
 saving = param.SavingResults(saving_df)
 
 draw = True
-
+r = np.linspace(0,surf.vigR,500) # Define radius vector for focal plane curve
 if surf.asph_formula:
-    R2Z_analytical = surf.asph_R2Z()
-    r = np.linspace(0,surf.vigR,500) # Define radius vector for focal plane curve
-    z_analytical = R2Z_analytical(r)
+    z_analytical = surf.analytical_R2Z(r)
     BFS_analytical = surf.calc_BFS(r,z_analytical)
 
 # elif not surf.asph_formula and project == 'Spec-s5':
@@ -37,7 +35,7 @@ optics_data = surf.read_focal_plane_data() # Read data from csv file
 
 R2Z, R2CRD, R2NORM, R2S = surf.transfer_functions(optics_data)
 
-r = np.linspace(0,surf.vigR,500) # Define radius vector for focal plane curve
+
 z = R2Z(r) # Calculate focal plane curve from csv data
 
 
@@ -80,6 +78,7 @@ z_tol_down = z - tol*np.ones(len(z))
 plt.figure()
 plt.title('Focal plane aspherical curve and Best Fit Sphere')
 plt.plot(r,z, label = 'Aspherical curve')
+plt.plot(r,z_analytical, label = 'Aspherical analytical curve')
 plt.xlabel('r [mm]')
 plt.ylabel('z [mm]')
 plt.plot(r,z_BFS, '--', label = f'BFS = {BFS :.1f} mm')
@@ -95,9 +94,6 @@ plt.xlabel('r [mm]')
 plt.ylabel('Error [mm]')
 plt.grid()
 plt.legend()
-
-plt.figure()
-plt.plot(r, R2NORM(r), label = 'Normals')
 
 if draw:
     plt.show()

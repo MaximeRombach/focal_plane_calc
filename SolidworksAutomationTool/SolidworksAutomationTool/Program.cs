@@ -8,29 +8,33 @@ using ShellProgressBar;
 using System.Diagnostics;
 
 /* Define some parameters here. These parameters should be configurable in the GUI */
-// TODO: param: specify the project. e.g. MUST
+// NOTE: Base parameters
+// param: Save Part flag in directory
+const bool SavePart = false;
+// param: specify the project. e.g. MUST
 const string project = "MUST";
-// TODO: param: chamfer length of a chamfered triangle
+// param: chamfer length of a chamfered triangle
 const double chamferLength = 10.5e-3;               // in meters
-// TODO: param: pin hole diameter
+// param: pin hole diameter
 const double pinHoleDiameter = 2.5e-3;              // in meters
-// TODO: param: pin hole depth
+// param: pin hole depth
 const double pinHoleDepth = 3.5e-3;                  // in meters
-// TODO: param: inter pin hole distance 
-const double interPinHoleDistance = 64e-3;          // in meters
-// TODO: param: fillet radius in full triangle
+// param: inter pin hole distance 
+const double interPinHoleDistance = 64.952e-3;          // in meters
+// param: fillet radius in full triangle
 const double filletRadiusFullTriangle = 2.5e-3;     // in meters 
-
-// TODO: param: bestFitSphereRadius.
+// param: bestFitSphereRadius.
 const double bestFitSphereRadius = 11045.6e-3;      // in meters
-// TODO: param: focal plane thickness
-const double outerRimHeight = 200e-3;                     // in meters
-// TODO: param: distance between the support surface to top surface definition
-const double supportToTopSurfaceDistance = 30e-3;         // in meters
-// TODO: create horizontal line (for flat bottom surface). Need a better name here
-const double bottomSurfaceRadius = 663.27e-3;
-// TODO: param: side length of the equilateral triangle (full triangle)
-const double equilateralTriangleSideLength = 74.5e-3;
+// param: focal plane thickness
+const double outerRimHeight = 150e-3;                     // in meters
+// param: distance between the bottom surface of the plate and support faces of modules
+const double bottom2SupportFacesDistance = 30e-3;       // in meters
+// param: distance between the support surface to top surface definition
+const double supportToTopSurfaceDistance = outerRimHeight - bottom2SupportFacesDistance;         // in meters
+// param: create horizontal line (for flat bottom surface). Need a better name here
+const double bottomSurfaceRadius = 680e-3;
+// param: side length of the equilateral triangle (full triangle)
+const double equilateralTriangleSideLength = 75.6e-3;
 
 // add variables to the solidworks global variable equation table. If later fine tuning of some parameters is needed, the user can do so in solidworks' GUI
 Dictionary<string, double> solidworksGlobalVariables = new()
@@ -43,6 +47,7 @@ Dictionary<string, double> solidworksGlobalVariables = new()
     { nameof(bestFitSphereRadius), bestFitSphereRadius },
     { nameof(outerRimHeight), outerRimHeight },
     { nameof(supportToTopSurfaceDistance), supportToTopSurfaceDistance },
+    { nameof(bottom2SupportFacesDistance), bottom2SupportFacesDistance },
     { nameof(bottomSurfaceRadius), bottomSurfaceRadius },
     { nameof(equilateralTriangleSideLength), equilateralTriangleSideLength },
 };
@@ -53,7 +58,7 @@ Console.WriteLine("Welcome to the LASTRO Solidworks Automation Tool!");
 /* Uncomment the Console.ReadLine() to restore normal path input. Currently they are commented out for debug purpose */
 Console.WriteLine("Please enter the path of the FRONT grid point cloud txt file");
 string frontGridPointCloudFilePath = Console.ReadLine();
-//string frontGridPointCloudFilePath = Path.GetFullPath(@"..\..\..\..\..\Results_examples\2023-10-20-11-39-57_front_grid_indiv_63.txt"); // For debug use.
+// string frontGridPointCloudFilePath = Path.GetFullPath(@$"..\..\Results_examples\Grid_examples\{project}\front.txt"); // For debug use.
 
 Console.WriteLine("Reading front grid point cloud file ...");
 PointCloud frontGridPointCloud = new();
@@ -62,7 +67,7 @@ Console.WriteLine("Completed reading point cloud file");
 
 Console.WriteLine("Please enter the path of the BACK grid point cloud txt file");
 string backGridPointCloudFilePath = Console.ReadLine();
-//string backGridPointCloudFilePath = Path.GetFullPath(@"..\..\..\..\..\Results_examples\2023-10-20-11-39-57_back_grid_indiv_63.txt"); // For debug use
+// string backGridPointCloudFilePath = Path.GetFullPath(@$"..\..\Results_examples\Grid_examples\{project}\back.txt"); // For debug use
 
 Console.WriteLine("Reading back grid point cloud file ...");
 PointCloud backGridPointCloud = new();
@@ -78,11 +83,11 @@ if ( frontGridPointCloud.point3Ds.Count != backGridPointCloud.point3Ds.Count )
 Console.WriteLine("Removing offsets in Z axis for all points ...");
 
 // Using the add operation because the z coordinates in the point clouds are negative. We want to offset them to close to zero
-foreach ((Point3D frontPoint, Point3D backPoint) in frontGridPointCloud.point3Ds.Zip(backGridPointCloud.point3Ds))
-{
-    frontPoint.z += bestFitSphereRadius;
-    backPoint.z += bestFitSphereRadius;
-}
+// foreach ((Point3D frontPoint, Point3D backPoint) in frontGridPointCloud.point3Ds.Zip(backGridPointCloud.point3Ds))
+// {
+//     frontPoint.z += bestFitSphereRadius;
+//     backPoint.z += bestFitSphereRadius;
+// }
 
 //  Please give the directory where the created models would be placed
 //  string modelOutputDirectory = Console.ReadLine();
@@ -92,7 +97,7 @@ string desktopPath = System.Environment.GetFolderPath(System.Environment.Special
 string modelOutputDirectory = Path.Join(desktopPath, $"{project}_Models_{currentTime}");
 
 // create the directory to store models. Since we timestamp the output directory, there is almost chance to have another directory with the same name
-if (!Path.Exists(modelOutputDirectory))
+if (!Path.Exists(modelOutputDirectory) & SavePart)
 {
     DirectoryInfo _ = Directory.CreateDirectory(modelOutputDirectory);
 }
@@ -275,7 +280,7 @@ ClearSelection(ref modulePart);
 ZoomToFit(ref modulePart);
 
 // SAVE model. In case of error, you will see error message in the console
-SaveModel(ref modulePart, Path.Join(modelOutputDirectory, "ExtrusionAxes"));
+SaveModel(SavePart, ref modulePart, Path.Join(modelOutputDirectory, "ExtrusionAxes"));
 
 modulePart.SketchManager.AddToDB = true;
 
@@ -421,6 +426,7 @@ EnableInputDimensionByUser(ref solidworksApp);
  * 4. extrude triangles                                                         - Done
  */
 Console.WriteLine("Extruding modules ...");
+// NOTE: Bottom plane creation
 // First define the bottom plane, by creating a parallel plane w.r.t the front plane
 double bottomToFrontPlaneDistance = ((SketchSegment)revolutionAxisVerticalLine).GetLength();
 
@@ -475,7 +481,7 @@ modulePart.Insert3DSketch();
 ClearSelection(ref modulePart);
 
 // SAVE model. In case of error, you will see error message in the console
-SaveModel(ref modulePart, Path.Join(modelOutputDirectory, "plainPizzaSlice"));
+SaveModel(SavePart, ref modulePart, Path.Join(modelOutputDirectory, "plainPizzaSlice"));
 
 /* First, create "reference sketches". These sketches will be copied and pasted to genereate all the modules
  * 1. Find the point on the bottom plane that is the closest to the origin. 
@@ -661,7 +667,7 @@ modulePart.SketchManager.DisplayWhenAdded = true;
 solidworksApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swFeatureManagerEnsureVisible, false);
 // try to gain speed by locking the user interface
 //modulePart.Lock();
-
+// NOTE: Start module extrusions
 using (ProgressBar extrudeModulesProgressBar = new(bottomSurfaceSketchPointList.Count, "Extruding modules", progressBarOptions))
 {
     for (int moduleIndex = 0; moduleIndex < bottomSurfaceSketchPointList.Count; moduleIndex++)
@@ -778,11 +784,12 @@ modulePart.SketchManager.AddToDB = false;
 EnableInputDimensionByUser(ref solidworksApp);
 
 // DEBUG: print the feature tree
-//PrintFeaturesInFeatureManagerDesignTree(ref modulePart);
+PrintFeaturesInFeatureManagerDesignTree(ref modulePart);
 
 Console.WriteLine("Module extrusions completed");
+SaveModel(SavePart, ref modulePart, Path.Join(modelOutputDirectory, $"{currentTime}_FocalPlate_{project}"));
 
 // wait for user input before closing
-//PromptAndWait("Press any key to close Solidworks");
+PromptAndWait("Press any key to close Solidworks");
 // close Solidworks that runs in the background
-//solidworksApp.ExitApp();
+solidworksApp.ExitApp();

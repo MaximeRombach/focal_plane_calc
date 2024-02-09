@@ -122,28 +122,34 @@ namespace SolidworksAutomationTool
         /// <param name="extension">extension of the model, default to .SLDPRT</param>
         /// <returns>true if save was successful, false otherwise
         /// </returns>
-        public static bool SaveModel(ref ModelDoc2 partModelDoc, string modelName, string extension = ".SLDPRT")
-        {
-            int errorCode = 0;
-            int warningCode = 0;
-            string modelFullPath = modelName + extension;
-            bool saveModelSuccess = partModelDoc.Extension.SaveAs3(modelFullPath,
-                                                                    (int)swSaveAsVersion_e.swSaveAsCurrentVersion,
-                                                                    (int)swSaveAsOptions_e.swSaveAsOptions_Copy,
-                                                                    null,
-                                                                    null,
-                                                                    ref errorCode,
-                                                                    ref warningCode
-                                                                    );
-            if (!saveModelSuccess)
-            {
-                // In case of error, refer to the error documentation
-                // https://help.solidworks.com/2023/english/api/swconst/SOLIDWORKS.Interop.swconst~SOLIDWORKS.Interop.swconst.swFileSaveError_e.html?verRedirect=1
-                Console.WriteLine($"Error! Saving {modelFullPath} failed. \nError code: {errorCode}. Warning code: {warningCode}");
+        public static bool SaveModel(bool SavePart, ref ModelDoc2 partModelDoc, string modelName, string extension = ".SLDPRT")
+        {   
+            if (!SavePart)
+            {    
+                return true;
             }
-            return saveModelSuccess;
+            else
+            {
+                int errorCode = 0;
+                int warningCode = 0;
+                string modelFullPath = modelName + extension;
+                bool saveModelSuccess = partModelDoc.Extension.SaveAs3(modelFullPath,
+                                                                        (int)swSaveAsVersion_e.swSaveAsCurrentVersion,
+                                                                        (int)swSaveAsOptions_e.swSaveAsOptions_Copy,
+                                                                        null,
+                                                                        null,
+                                                                        ref errorCode,
+                                                                        ref warningCode
+                                                                        );
+                if (!saveModelSuccess)
+                {
+                    // In case of error, refer to the error documentation
+                    // https://help.solidworks.com/2023/english/api/swconst/SOLIDWORKS.Interop.swconst~SOLIDWORKS.Interop.swconst.swFileSaveError_e.html?verRedirect=1
+                    Console.WriteLine($"Error! Saving {modelFullPath} failed. \nError code: {errorCode}. Warning code: {warningCode}");
+                }
+                return saveModelSuccess;
+            }
         }
-
         /// <summary>
         /// Select the origin. ONLY WORKS IN THE ENGLISH VERSION OF SOLIDWORKS
         /// </summary>
@@ -620,7 +626,8 @@ namespace SolidworksAutomationTool
             partModelDoc.FeatureManager.UpdateFeatureTree();
             if (variableIndex == -1)
             {
-                Console.WriteLine($"ERROR adding global variable : {variableName} with value {variableValue}");
+                Console.WriteLine($"ERROR adding global variable : {variableName} with value {parsedVariableValue}");
+                Console.WriteLine($"ERROR adding global variable with expression: {variableAssignmentExpression}");
             }
             return variableIndex;
         }
@@ -694,8 +701,9 @@ namespace SolidworksAutomationTool
                                     false,  // true for single ended cut, false for double-ended cut
                                     false,  // True to remove material outside of the profile of the flip side to cut, false to not
                                     false,  // True for Direction 1 to be opposite of the default direction
-                                    (int)swEndConditions_e.swEndCondThroughAll,  // Termination type for the first end
-                                    (int)swEndConditions_e.swEndCondUpToVertex,    // Termination type for the second end 
+                                    // 05.02.2024: TERMINATION TYPE SWAPPED (DIR 1: UP TO VERTEX, DIR 2: THROUGH ALL) //
+                                    (int)swEndConditions_e.swEndCondUpToVertex,  // Termination type for the first end
+                                    (int)swEndConditions_e.swEndCondThroughAll,    // Termination type for the second end 
                                     0.01, 0.01,   // depth of extrusion for 1st and 2nd end in meters
                                     false, false, // True allows a draft angle in the first/second direction, false does not allow drafting in the first/second direction
                                     false, false, // True for the first/second draft angle to be inward, false to be outward; only valid when Dchk1/Dchk2 is true
@@ -723,8 +731,9 @@ namespace SolidworksAutomationTool
                                     false,  // true for single ended cut, false for double-ended cut
                                     false,  // True to remove material outside of the profile of the flip side to cut, false to not
                                     false,  // True for Direction 1 to be opposite of the default direction
-                                    (int)swEndConditions_e.swEndCondThroughAll,  // Termination type for the first end
-                                    (int)swEndConditions_e.swEndCondBlind,     // Termination type for the second end 
+                                    // 05.02.2024: TERMINATION TYPE SWAPPED (DIR 1: BLIND, DIR 2: THROUGH ALL) //
+                                    (int)swEndConditions_e.swEndCondBlind,  // Termination type for the first end
+                                    (int)swEndConditions_e.swEndCondThroughAll,     // Termination type for the second end 
                                     distanceD1ExtrudeTo, distanceD1ExtrudeTo,   // depth of extrusion for 1st and 2nd end in meters
                                     false, false, // True allows a draft angle in the first/second direction, false does not allow drafting in the first/second direction
                                     false, false, // True for the first/second draft angle to be inward, false to be outward; only valid when Dchk1/Dchk2 is true
@@ -745,12 +754,17 @@ namespace SolidworksAutomationTool
         public static (Sketch, SketchPoint, object[]) CreateACopyAndRotateReferenceSketch(ref ModelDoc2 partModelDoc, RefPlane plane, SelectData swSelectData, string referenceSketchName, bool isUprightTriangle)
         {
             // copy and paste the reference sketch
-            ((Feature)plane).Select2(true, -1);
-            SelectSketch(ref partModelDoc, referenceSketchName, true);
+            // ((Feature)plane).Select2(true, -1);
+            // SelectSketch(ref partModelDoc, referenceSketchName, true);
             
             // TODO: Check if derive will keep dimensions derived from global variables
-            partModelDoc.DeriveSketch();
-            ClearSelection(ref  partModelDoc);
+            // partModelDoc.DeriveSketch();
+            // ClearSelection(ref  partModelDoc);
+
+            SelectSketch(ref partModelDoc, referenceSketchName);
+            partModelDoc.EditCopy();
+            ((Feature)plane).Select2(true, -1);
+            partModelDoc.Paste();
 
             // manually update feature tree
             partModelDoc.FeatureManager.UpdateFeatureTree();
