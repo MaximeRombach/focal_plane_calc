@@ -69,14 +69,14 @@ class FocalSurf():
                                    'curvature_R': -11918, # [mm], curvature radius
                                    'vigD': 1184.7, # [mm], vignetting diameter
                                    'vigR': 1184.7/2, # [mm], vignetting radius
-                                   'asph_formula': True,
+                                   'asph_formula': False,
                                    'k': 0,
                                    'a2': 0, 
                                    'a4': -3.913848e-11, 
                                    'a6': 5.905507e-17,
                                    'a8': 0,
                                    'f-number': 3.72059,
-                                   'BFS': 10992.7, # [mm], radius of BFS # Value calculated with Joe's cal_BFS function with MUST data from 2023-09-06
+                                   'BFS': 10477.594, # [mm], radius of BFS # Value calculated with Joe's cal_BFS function with MUST data from 2023-09-06
                                    'FoV': None, # [deg]
                                    'focus_tolerance_width': 0.02 # [mm]
                                    }

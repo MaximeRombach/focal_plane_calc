@@ -63,8 +63,7 @@ start_time = time.time()
 
 ## Study one case at a time
 nbots = [63]
-out_allowances = [0.8]
-
+out_allowances = [0.01]
 width_increase = 1 # [mm] How much we want to increase the base length of a module
 chanfer_length = 10.5 # [mm] Size of chanfers of module vertices (base value: 7.5); increase chanfer decreases coverage as it reduces the module size thus patrol area
 centered_on_triangle = False # move the center of the grid (red dot) on the centroid on a triangle instead of the edge
@@ -72,11 +71,11 @@ full_framed = False # flag to check wether we are in semi frameless or in full f
 
 """ Intermediate frame parameters """
 
-inner_gap = 1 # [mm] spacing between modules inside intermediate frame
+inner_gap = 1.5 # [mm] spacing between modules inside intermediate frame
 
 """ Global frame parameters """
 
-global_gap = 3 # [mm] spacing between modules in global arrangement
+global_gap = 3.5 # [mm] spacing between modules in global arrangement
 
 """ Protective shields on module """
 
@@ -92,7 +91,7 @@ if inner_gap == global_gap and inner_gap != 0:
 """ Define focal surface """
 
 # Available projects: MUST, Megamapper, DESI, WST1, WST2, WST3, Spec-s5
-project_surface = 'MegaMapper'
+project_surface = 'MUST'
 surf = param.FocalSurf(project=project_surface)
 curvature_R = abs(surf.curvature_R)
 vigR = surf.vigR
@@ -450,7 +449,8 @@ grid_aspherical['r'] = np.sqrt(grid_aspherical['x']**2 + grid_aspherical['y']**2
 grid_aspherical['tri_spin'] = np.asarray(final_grid['indiv']['upward_tri'])    
 grid_aspherical['z'] = -R2Z(grid_aspherical['r'])
 grid_aspherical['theta'] = R2NUT(r)
-grid_aspherical.sort_values(by=['theta'], inplace=True)
+# Sort grid by ascending theta and phi to improve readability
+grid_aspherical.sort_values(by=['theta', 'phi'], inplace=True)
 
 # Given the orientation vectors of each module, we can now make the back grid at the module length disance from the front grid
 orientation_vectors = grid.orientation_vector(np.deg2rad(grid_aspherical['phi']), np.deg2rad(grid_aspherical['theta']))
