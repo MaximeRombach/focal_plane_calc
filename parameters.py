@@ -130,7 +130,8 @@ class FocalSurf():
                                    'asph_formula': False,
                                    'BFS': 11067, # [mm], radius of BFS,
                                    'f-number': 3.699, # assumption based on previous telescope designs
-                                   'FoV': 1.8 # [deg]
+                                   'FoV': 1.8, # [deg]
+                                   'focus_tolerance_width': None # [mm]
                                    }
                
           elif self.project == 'WST2':
@@ -142,7 +143,8 @@ class FocalSurf():
                               'asph_formula': False,
                               'BFS': 11067, # [mm], radius of BFS,
                               'f-number': 3.7, # assumption based on previous telescope designs
-                              'FoV': 1.8 # [deg]
+                              'FoV': 1.8, # [deg]
+                              'focus_tolerance_width': None # [mm]
                               }
 
           elif self.project == 'WST3':
@@ -154,7 +156,8 @@ class FocalSurf():
                               'asph_formula': False,
                               'BFS': 11067, # [mm], radius of BFS,
                               'f-number': 3.7, # assumption based on previous telescope designs
-                              'FoV': 1.8 # [deg]
+                              'FoV': 1.8, # [deg]
+                              'focus_tolerance_width': None # [mm]
                               }
                
           elif self.project == 'Spec-s5':
@@ -165,7 +168,8 @@ class FocalSurf():
                     'asph_formula': False,
                     'BFS': -1.277364E+04, # [mm], radius of BFS,
                     'f-number': 3.64, # assumption based on previous telescope designs
-                    'FoV': None # [deg]
+                    'FoV': None, # [deg],
+                    'focus_tolerance_width': None # [mm]
                     }
           else: 
                logging.error(f'Setting focal surface parameters: {self.project} project is not defined')
@@ -179,8 +183,10 @@ class FocalSurf():
                comment_character = "#"  # The character that indicates a commented line
                # Read CSV file and ignore commented lines
                if self.project == 'MUST':
-                    sep = ';'
+                    sep = ',' # keeping distinction as delimiter might change from time to time
                elif self.project == 'MegaMapper':
+                    sep = ','
+               else :
                     sep = ','
                optics_data = pd.read_csv(filename, comment=comment_character, sep=sep)
 
@@ -195,6 +201,7 @@ class FocalSurf():
                #TODO: add SPEC-S5 data (read txt)
                
                print(f"{self.project} focal plane data successfully read from {filename}")
+               print(optics_data.head())
                return optics_data
      
      def transfer_functions(self):
@@ -211,11 +218,20 @@ class FocalSurf():
           ATTENTION: Needs csv file to contain columns named: R, Z, CRD """
 
           if not self.asph_formula:
-               logging.info('Transfer functions: using sampled data from csv file')
+               logging.info('Transfer functions made from sampled data in csv')
                optics_data = self.read_focal_plane_data()
+               print(optics_data)
                Z = optics_data['Z']
-               R = optics_data['R']
-               CRD = optics_data['CRD']
+               R = optics_data['R']             
+               if 'CRD' in optics_data.keys():
+                    CRD = optics_data['CRD']
+               else:
+                    CRD = np.zeros_like(R)
+                    logging.info('No CRD data available in samples')
+               
+               # DEBUG check: check for duplicate in R,Z,CRD that causes interp1d to fail
+               if R.duplicated().any() or Z.duplicated().any() or CRD.duplicated().any():
+                    raise Exception('Duplicate values in R, Z or CRD columns of the csv file will cause interp1d to fail.')    
 
                R2Z = interp1d(R,Z,kind='cubic', fill_value = "extrapolate") #leave 'cubic' interpolation for normal vectors calculations
                R2CRD = interp1d(R,CRD,kind='cubic', fill_value = "extrapolate")
