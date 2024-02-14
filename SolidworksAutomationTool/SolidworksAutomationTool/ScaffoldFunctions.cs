@@ -611,7 +611,7 @@ namespace SolidworksAutomationTool
          * If adding a global variable assignment that already exists, this method returns an error.
          * */
         public static int CreateGlobalVariableInAllConfigs(ref ModelDoc2 partModelDoc, string variableName, double variableValue)
-        {
+        {   
             EquationMgr equationManager = partModelDoc.GetEquationMgr();
             // Parse the numeric value of variable into a string. Default to preserve 6 digits after the decimal point
             // Using the culture neutral way of representing numbers: e.g. 123.456 instead of 123,456
