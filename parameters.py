@@ -197,8 +197,6 @@ class FocalSurf():
                               headers = line.strip().split(sep)
                               break
                optics_data.columns = headers
-
-               #TODO: add SPEC-S5 data (read txt)
                
                print(f"{self.project} focal plane data successfully read from {filename}")
                print(optics_data.head())
@@ -229,10 +227,10 @@ class FocalSurf():
                     CRD = np.zeros_like(R)
                     logging.info('No CRD data available in samples')
                
-               # DEBUG check: check for duplicate in R,Z,CRD that causes interp1d to fail
-               if R.duplicated().any() or Z.duplicated().any() or CRD.duplicated().any():
-                    raise Exception('Duplicate values in R, Z or CRD columns of the csv file will cause interp1d to fail.')    
-
+               # DEBUG check: check for duplicate in R that causes interp1d to fail, can't have similar x values
+               if R.duplicated().any():
+                    R_dup = np.sum(R.duplicated())
+                    raise Exception(f'Found duplicate in R: {R_dup} rows of csv file. Check csv file for duplicate entries and remove them.')    
                R2Z = interp1d(R,Z,kind='cubic', fill_value = "extrapolate") #leave 'cubic' interpolation for normal vectors calculations
                R2CRD = interp1d(R,CRD,kind='cubic', fill_value = "extrapolate")
 

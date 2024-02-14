@@ -91,7 +91,7 @@ if inner_gap == global_gap and inner_gap != 0:
 """ Define focal surface """
 
 # Available projects: MUST, MegaMapper, DESI, WST1, WST2, WST3, Spec-s5
-project_surface = 'Spec-s5' 
+project_surface = 'MUST' 
 surf = param.FocalSurf(project=project_surface)
 curvature_R = abs(surf.curvature_R)
 vigR = surf.vigR
