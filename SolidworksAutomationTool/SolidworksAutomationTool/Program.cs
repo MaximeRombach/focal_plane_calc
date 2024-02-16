@@ -10,9 +10,9 @@ using System.Diagnostics;
 /* Define some parameters here. These parameters should be configurable in the GUI */
 // NOTE: Base parameters
 // param: Save Part flag in directory
-const bool SavePart = false;
+const bool SavePart = true;
 // param: specify the project. e.g. MUST
-const string project = "MUST";
+const string project = "Spec-s5";
 // param: chamfer length of a chamfered triangle
 const double chamferLength = 10.5e-3;               // in meters
 // param: pin hole diameter
@@ -24,7 +24,7 @@ const double interPinHoleDistance = 64.952e-3;          // in meters
 // param: fillet radius in full triangle
 const double filletRadiusFullTriangle = 2.5e-3;     // in meters 
 // param: bestFitSphereRadius.
-const double bestFitSphereRadius = 11045.6e-3;      // in meters
+const double bestFitSphereRadius = 12657e-3;      // in meters
 // param: focal plane thickness
 const double outerRimHeight = 150e-3;                     // in meters
 // param: distance between the bottom surface of the plate and support faces of modules
@@ -32,9 +32,9 @@ const double bottom2SupportFacesDistance = 30e-3;       // in meters
 // param: distance between the support surface to top surface definition
 const double supportToTopSurfaceDistance = outerRimHeight - bottom2SupportFacesDistance;         // in meters
 // param: create horizontal line (for flat bottom surface). Need a better name here
-const double bottomSurfaceRadius = 680e-3;
+const double bottomSurfaceRadius = 480e-3;
 // param: side length of the equilateral triangle (full triangle)
-const double equilateralTriangleSideLength = 75.6e-3;
+const double equilateralTriangleSideLength = 76.4e-3;
 
 // add variables to the solidworks global variable equation table. If later fine tuning of some parameters is needed, the user can do so in solidworks' GUI
 Dictionary<string, double> solidworksGlobalVariables = new()
@@ -93,8 +93,10 @@ Console.WriteLine("Removing offsets in Z axis for all points ...");
 //  string modelOutputDirectory = Console.ReadLine();
 //  Otherwise models will be stored in a folder on Desktop
 string currentTime = DateTime.Now.ToString("dd-MM-yyyy_HH-mm");
-string desktopPath = System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop);
-string modelOutputDirectory = Path.Join(desktopPath, $"{project}_Models_{currentTime}");
+// string desktopPath = System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop);
+// string modelOutputDirectory = Path.Join(desktopPath, $"{project}_Models_{currentTime}");
+string modelOutputDirectory = Path.GetFullPath(@$"..\..\Results\{project}\Focal_plates");
+
 
 // create the directory to store models. Since we timestamp the output directory, there is almost chance to have another directory with the same name
 if (!Path.Exists(modelOutputDirectory) & SavePart)
@@ -280,7 +282,7 @@ ClearSelection(ref modulePart);
 ZoomToFit(ref modulePart);
 
 // SAVE model. In case of error, you will see error message in the console
-SaveModel(SavePart, ref modulePart, Path.Join(modelOutputDirectory, "ExtrusionAxes"));
+// SaveModel(SavePart, ref modulePart, Path.Join(modelOutputDirectory, "ExtrusionAxes"));
 
 modulePart.SketchManager.AddToDB = true;
 
@@ -481,7 +483,7 @@ modulePart.Insert3DSketch();
 ClearSelection(ref modulePart);
 
 // SAVE model. In case of error, you will see error message in the console
-SaveModel(SavePart, ref modulePart, Path.Join(modelOutputDirectory, "plainPizzaSlice"));
+SaveModel(SavePart, ref modulePart, Path.Join(modelOutputDirectory, $"{currentTime}_plainPizzaSlice"));
 
 /* First, create "reference sketches". These sketches will be copied and pasted to genereate all the modules
  * 1. Find the point on the bottom plane that is the closest to the origin. 
