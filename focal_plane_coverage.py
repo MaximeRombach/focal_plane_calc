@@ -63,8 +63,8 @@ start_time = time.time()
 
 ## Study one case at a time
 nbots = [63]
-out_allowances = [0.01]
-width_increase = 0 # [mm] How much we want to increase the base length of a module
+out_allowances = [0.9]
+width_increase = 2.6 # [mm] How much we want to increase the base length of a module (base value: 73.8mm)
 chanfer_length = 10.5 # [mm] Size of chanfers of module vertices (base value: 7.5); increase chanfer decreases coverage as it reduces the module size thus patrol area
 centered_on_triangle = False # move the center of the grid (red dot) on the centroid on a triangle instead of the edge
 full_framed = False # flag to check wether we are in semi frameless or in full framed case (turns True if inter_gap = global_gap = 0 mm)
@@ -91,9 +91,8 @@ if inner_gap == global_gap and inner_gap != 0:
 """ Define focal surface """
 
 # Available projects: MUST, MegaMapper, DESI, WST1, WST2, WST3, Spec-s5
-project_surface = 'MUST' 
+project_surface = 'Spec-s5' 
 surf = param.FocalSurf(project=project_surface)
-curvature_R = abs(surf.curvature_R)
 vigR = surf.vigR
 BFS = surf.BFS
 trimming_angle = 60 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
@@ -111,7 +110,7 @@ save_plots = False # Save most useful plots
 save_all_plots = False  # Save all plots (including intermediate ones)
 save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
 save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
-save_txt = False # Save positions of modules along curved focal surface
+save_txt = True # Save positions of modules along curved focal surface
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
 saving = param.SavingResults(saving_df, project_surface)
 

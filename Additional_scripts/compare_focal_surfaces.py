@@ -10,6 +10,9 @@ from parameters import FocalSurf
 from parameters import SavingResults
 
 projects = ['MUST', 'MegaMapper', 'Spec-s5']
+save_plots = False
+saving_df = {'save_plots': save_plots}
+save = SavingResults(saving_df)
 
 for proj in projects:
     surf = FocalSurf(project = proj)
@@ -22,14 +25,17 @@ plt.ylabel('Z [mm]')
 plt.legend()
 plt.title('Focal plane comparison')
 plt.grid()
+save.save_figures_to_dir('focal_plane_comparison', 'png')
 
 
 plt.figure()
-project = "MUST"
+project = "Spec-s5"
 surf = FocalSurf(project = project)
 optics_data = surf.read_focal_plane_data() # Read data from csv file
-plt.plot(optics_data['R'],optics_data['Slope Delta'])
+plt.plot(optics_data['R'],-np.rad2deg(optics_data['Slope']), label = "Asph")
+plt.plot(optics_data['R'],-np.rad2deg(optics_data['BFS_Slope']), label = "BFS")
+plt.grid()
 plt.xlabel('R [mm]')
-plt.ylabel('Slope Delta [rad]')
+plt.ylabel('Slope [rad]')
 
 plt.show()

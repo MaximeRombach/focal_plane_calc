@@ -160,14 +160,27 @@ class FocalSurf():
                               'focus_tolerance_width': None # [mm]
                               }
                
-          elif self.project == 'Spec-s5':
+          elif self.project == 'Spec-s5-old':
                focal_surf_param = {
                     'name': r'$\bf{Spec-s5}$',
                     'curvature_R': -13000, # [mm], main radius of curvature (roughly 13m from Claire's info 20.10.2023)
                     'vigR': 4.084421E+02,# [mm], vignetting radius
                     'asph_formula': False,
-                    'BFS': -1.277364E+04, # [mm], radius of BFS,
+                    'BFS': 1.277364E+04, # [mm], radius of BFS,
                     'f-number': 3.64, # assumption based on previous telescope designs
+                    'FoV': None, # [deg],
+                    'focus_tolerance_width': None # [mm]
+                    }
+               
+          elif self.project == 'Spec-s5':
+               #2024.02.16 update: New focal surface parameters for Spec-s5 (Pat Jelinsky new design - SPHERICAL focal surface youpi)
+               focal_surf_param = {
+                    'name': r'$\bf{Spec-s5}$',
+                    'curvature_R': None, # [mm], main radius of curvature (roughly 13m from Claire's info 20.10.2023)
+                    'vigR': 409.4, # [mm], vignetting radius
+                    'asph_formula': False,
+                    'BFS': 12657, # [mm], radius of BFS,
+                    'f-number': 3.62002, # assumption based on previous telescope designs
                     'FoV': None, # [deg],
                     'focus_tolerance_width': None # [mm]
                     }
@@ -218,21 +231,26 @@ class FocalSurf():
           if not self.asph_formula:
                logging.info('Transfer functions made from sampled data in csv')
                optics_data = self.read_focal_plane_data()
-               print(optics_data)
-               Z = optics_data['Z']
-               R = optics_data['R']             
-               if 'CRD' in optics_data.keys():
-                    CRD = optics_data['CRD']
-               else:
-                    CRD = np.zeros_like(R)
-                    logging.info('No CRD data available in samples')
-               
+               R = optics_data['R']
                # DEBUG check: check for duplicate in R that causes interp1d to fail, can't have similar x values
                if R.duplicated().any():
                     R_dup = np.sum(R.duplicated())
-                    raise Exception(f'Found duplicate in R: {R_dup} rows of csv file. Check csv file for duplicate entries and remove them.')    
-               R2Z = interp1d(R,Z,kind='cubic', fill_value = "extrapolate") #leave 'cubic' interpolation for normal vectors calculations
-               R2CRD = interp1d(R,CRD,kind='cubic', fill_value = "extrapolate")
+                    raise Exception(f'Found duplicate in R: {R_dup} rows of csv file. Check csv file for duplicate entries and remove them.')
+               
+               if 'Z' in optics_data.keys():
+                    Z = optics_data['Z']
+                    R2Z = interp1d(R,Z,kind='cubic', fill_value = "extrapolate") #leave 'cubic' interpolation for normal vectors calculations
+               else:
+                    R2Z = lambda r: -self.BFS + np.sqrt(self.BFS**2 - r**2) # Spherical focal surface
+                    logging.warning('No Z data available in samples - assuming SHERICAL surface')
+
+               if 'CRD' in optics_data.keys():
+                    CRD = optics_data['CRD']
+                    R2CRD = interp1d(R,CRD,kind='cubic', fill_value = "extrapolate")
+               else:
+                    CRD = np.zeros_like(R)
+                    R2CRD = interp1d(R,CRD,kind='cubic', fill_value = "extrapolate")
+                    logging.warning('No CRD data available - CRD = 0 everywhere on focal plane')
 
           else:
                logging.info('Transfer functions: using aspherical formula cofficients, no CRD data available')
@@ -430,18 +448,18 @@ class SavingResults:
 
           doc.saveas(self.results_dir_path + f"{name_frame}.dxf")
 
-     def save_figures_to_dir(self, suffix_name: str, save_eps: bool = False, dpi: int = 400):
+     def save_figures_to_dir(self, image_name: str, file_format: str = 'png', save_eps: bool = False, dpi: int = 400):
 
           if not self.save_plots:
                return
 
           now = datetime.now()
-          today_filename = now.strftime("%Y-%m-%d-%H-%M-%S_") + suffix_name + ".png"
-          plt.savefig(self.results_dir_path + today_filename, bbox_inches = 'tight', format='png', dpi = dpi)
+          today_filename = now.strftime("%Y-%m-%d-%H-%M-%S_") + image_name + f'.{file_format}'
+          plt.savefig(self.results_dir_path + today_filename, bbox_inches = 'tight', format=file_format, dpi = dpi)
           if save_eps:
                plt.savefig(self.results_dir_path + today_filename, bbox_inches = 'tight', format='eps')
 
-          logging.info(f'{suffix_name}.png successfully saved in in {self.results_dir_path}')
+          logging.info(f'{image_name}.png successfully saved in in {self.results_dir_path}')
 
      def save_grid_to_txt(self, grid, filename, direct_SW = False):
 
