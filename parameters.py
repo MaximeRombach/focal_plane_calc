@@ -216,6 +216,7 @@ class FocalSurf():
                return optics_data
      
      def transfer_functions(self):
+          # Those transfer functions and there implementation later are inspired from the work of Joseph Silber in the generate_raft_layout.py code in https://github.com/joesilber/raft-design 
 
           """ 
           Input: 
@@ -242,7 +243,7 @@ class FocalSurf():
                     R2Z = interp1d(R,Z,kind='cubic', fill_value = "extrapolate") #leave 'cubic' interpolation for normal vectors calculations
                else:
                     R2Z = lambda r: -self.BFS + np.sqrt(self.BFS**2 - r**2) # Spherical focal surface
-                    logging.warning('No Z data available in samples - assuming SHERICAL surface')
+                    logging.warning('No Z data available in samples - assuming SPHERICAL focal surface')
 
                if 'CRD' in optics_data.keys():
                     CRD = optics_data['CRD']
@@ -840,6 +841,9 @@ class GFA(SavingResults):
      def make_GFA_array(self):
 
           gfa_df = {'gfa_index':[], 'center': [], 'orientation': [], 'geometry':[], 'color':[], 'label':[]}
+          if self.nb_gfa == 0:
+               logging.info('No GFA placed')
+               return gpd.GeoDataFrame(gfa_df)
           # gfa_pos_on_vigR = make_vigR_polygon(n_vigR = self.nb_gfa + 1).exterior.coords.xy
           Dangle = 360/self.nb_gfa
           angles = np.linspace(Dangle,Dangle * self.nb_gfa, self.nb_gfa)

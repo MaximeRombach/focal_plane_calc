@@ -63,15 +63,15 @@ start_time = time.time()
 
 ## Study one case at a time
 nbots = [63]
-out_allowances = [0.9]
-width_increase = 2.6 # [mm] How much we want to increase the base length of a module (base value: 73.8mm)
+out_allowances = [0.8]
+width_increase = 0 # [mm] How much we want to increase the base length of a module (base value: 73.8mm)
 chanfer_length = 10.5 # [mm] Size of chanfers of module vertices (base value: 7.5); increase chanfer decreases coverage as it reduces the module size thus patrol area
 centered_on_triangle = False # move the center of the grid (red dot) on the centroid on a triangle instead of the edge
 full_framed = False # flag to check wether we are in semi frameless or in full framed case (turns True if inter_gap = global_gap = 0 mm)
 
 """ Intermediate frame parameters """
 
-inner_gap = 1 # [mm] spacing between modules inside intermediate frame
+inner_gap = 3 # [mm] spacing between modules inside intermediate frame
 
 """ Global frame parameters """
 
@@ -95,7 +95,7 @@ project_surface = 'Spec-s5'
 surf = param.FocalSurf(project=project_surface)
 vigR = surf.vigR
 BFS = surf.BFS
-trimming_angle = 60 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
+trimming_angle = 360 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
 
 pizza = surf.make_vigR_polygon(pizza_angle = trimming_angle)
 
@@ -107,17 +107,17 @@ plot_time = 20 # [s] plotting time
 ignore_robots_positions = False
 
 save_plots = False # Save most useful plots 
-save_all_plots = False  # Save all plots (including intermediate ones)
+save_all_plots = True  # Save all plots (including intermediate ones)
 save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
 save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
-save_txt = True # Save positions of modules along curved focal surface
+save_txt = False # Save positions of modules along curved focal surface
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
 saving = param.SavingResults(saving_df, project_surface)
 
 """GFA stuff"""
 gfa_tune = 1
 nb_gfa = 6
-gfa = param.GFA(length = 33.3*gfa_tune, width = 61*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
+gfa = param.GFA(length = 15*gfa_tune, width = 25*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
 # gfa = param.GFA(length = 60*gfa_tune, width = 60*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
 gdf_gfa = gfa.gdf_gfa
 polygon_gfa = MultiPolygon(list(gdf_gfa['geometry']))
