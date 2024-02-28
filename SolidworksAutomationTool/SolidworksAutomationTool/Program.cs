@@ -682,7 +682,7 @@ using (ProgressBar extrudeModulesProgressBar = new(bottomSurfaceSketchPointList.
 
         // save the orientation flag.
         bool isUpright = frontGridPointCloud.moduleOrientations[moduleIndex];
-
+        // TODO: write a function to automatically shutdown solidworks if ctrl+c is pressed or program crashes
         // Create another test plane near the bottom and insert a sketch on it
         RefPlane aRefPlane = CreateRefPlaneFromPointAndNormal(bottomSurfaceSketchPointList[moduleIndex], extrusionAxisList[moduleIndex],
                                                                 $"ModulePlane_{moduleIndex}", swSelectData, modulePart.FeatureManager);
