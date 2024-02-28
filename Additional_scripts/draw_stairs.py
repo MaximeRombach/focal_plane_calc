@@ -35,15 +35,16 @@ tolerance_envelop_width = surf.focus_tolerance_width # [mm] tolerance in positio
 start_offset = module_width/2
 
 optics_data = surf.read_focal_plane_data() # Read data from csv file
-optics_data['Z'] = -optics_data['Z'] 
-R2Z, R2CRD, R2NORM, R2S = surf.transfer_functions(optics_data)
+# optics_data['Z'] = -optics_data['Z'] 
+R2Z, R2CRD, R2NORM, R2S, R2NUT, S2R = surf.transfer_functions()
 # t = Table.read(f'Data_focal_planes/{project}.csv', comment='#', delimiter=';')
-Z_data = optics_data['Z']
-CRD_data = optics_data['CRD']
-R_data = optics_data['R']
+# Z_data = optics_data['Z']
+# CRD_data = optics_data['CRD']
+# R_data = optics_data['R']
 
 r = np.linspace(0,surf.vigR,500) # Define radius vector for focal plane curve
 z = R2Z(r) # Calculate focal plane curve from csv data
+
 
 BFS = surf.calc_BFS(r, z)
 R2Z_BFS = lambda r: -np.sqrt(BFS**2-np.square(r)) + BFS
@@ -401,7 +402,7 @@ plt.legend(shadow=True, loc='best')
 plt.title('Project: $\\bf{'+f'{project}''}$' + f' - {nb_robots} robots/module'+f'\nAngle difference btw normal of module {module_number+1} \n & chief ray along focal surface')
 save.save_figures_to_dir(f'Angle_diff_module_{module_number+1}')
 
-draw_R2CRD(r,R_data,CRD_data,R2CRD, draw=False)
+# draw_R2CRD(r,R_data,CRD_data,R2CRD, draw=False)
 save.save_figures_to_dir(f'R2CRD')
 
 if is_timer:
