@@ -615,9 +615,10 @@ namespace SolidworksAutomationTool
             EquationMgr equationManager = partModelDoc.GetEquationMgr();
             // Parse the numeric value of variable into a string. Default to preserve 6 digits after the decimal point
             // Using the culture neutral way of representing numbers: e.g. 123.456 instead of 123,456
-            string parsedVariableValue = variableValue.ToString("0.000000", invariantCultureInfo);
+            variableValue = variableValue*1000;
+            string parsedVariableValue = variableValue.ToString("0.000", invariantCultureInfo);
             // Create the expression used to add global variables.The variable is added with meters as unit
-            string variableAssignmentExpression = $"\"{variableName}\" = {parsedVariableValue}m";
+            string variableAssignmentExpression = $"\"{variableName}\" = {parsedVariableValue}mm";
             // syntax is referenced from https://help.solidworks.com/2022/English/api/sldworksapi/Add_Equations_Example_CSharp.htm?verRedirect=1
             // by default adding the global variable to the end of the equation list
             int variableIndex = equationManager.Add2(-1, variableAssignmentExpression, true);
