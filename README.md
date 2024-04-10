@@ -1,6 +1,6 @@
 # Focal Plane Calculations
 
-The current repo aims to be a design tool for multiplex modular telescopes.
+The current repo aims to be a design tool for multiplex modular telescopes. It was inspired by the late work of Joe Silber from LBNL in [raft-design!](https://github.com/joesilber/raft-design).
 It produces 2 main information:
 
 1. Coverage: fraction of the vignetting area covered by the summed up workspaces of all the robots
