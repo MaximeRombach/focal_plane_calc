@@ -65,7 +65,7 @@ start_time = time.time()
 
 ## Study one case at a time
 nbots = [63]
-out_allowances = [0.8]
+out_allowances = [0.0]
 width_increase = 0 # [mm] How much we want to increase the base length of a module (base value: 73.8mm)
 chanfer_length = 10.5 # [mm] Size of chanfers of module vertices (base value: 7.5); increase chanfer decreases coverage as it reduces the module size thus patrol area
 centered_on_triangle = False # move the center of the grid (red dot) on the centroid on a triangle instead of the edge
@@ -73,7 +73,7 @@ full_framed = False # flag to check wether we are in semi frameless or in full f
 
 """ Intermediate frame parameters """
 
-inner_gap = 0.5 # [mm] spacing between modules inside intermediate frame
+inner_gap = 1 # [mm] spacing between modules inside intermediate frame
 
 """ Global frame parameters """
 
@@ -93,7 +93,7 @@ if inner_gap == global_gap and inner_gap != 0:
 """ Define focal surface """
 
 # Available projects: MUST, MegaMapper, DESI, WST1, WST2, WST3, Spec-s5
-project_surface = 'Spec-s5' 
+project_surface = 'MUST' 
 surf = param.FocalSurf(project=project_surface)
 vigR = surf.vigR
 BFS = surf.BFS
@@ -107,10 +107,9 @@ is_timer = False # Display time of final plots before automatic closing; stays o
 
 plot_time = 20 # [s] plotting time
 ignore_robots_positions = False
-
 save_plots = False # Save most useful plots 
 save_all_plots = False  # Save all plots (including intermediate ones)
-save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
+save_frame_as_dxf = False # (DEPRECATED): Save the outline of the frame for Solidworks integration 
 save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
 save_txt = False # Save positions of modules along curved focal surface
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
@@ -440,20 +439,29 @@ saving.save_grid_to_txt(projected_on_BFS['back'], f'back_grid_spherical_{nb_robo
 grid_aspherical = {'x':[], 'y':[], 'z':[], 'r':[], 's':[], 'phi':[], 'theta':[], 'tri_spin':[]}
 grid_aspherical = pd.DataFrame.from_dict(grid_aspherical)  # Define the variable "grid_asph_pd"
 # Define transfer functions for aspherical surface i.e. Z position, theta angle and s position along the aspherical curve as function of radial position r
-R2Z, R2CRD, R2NORM, R2S, R2NUT, S2R = surf.transfer_functions()
 
 grid_aspherical['s'] = np.sqrt(np.array(final_grid['indiv']['x'])**2 + np.array(final_grid['indiv']['y'])**2)
 grid_aspherical['phi']= np.rad2deg(np.arctan2(np.array(final_grid['indiv']['y']), np.array(final_grid['indiv']['x'])))
-r = S2R(grid_aspherical['s'])
+r = surf.S2R(grid_aspherical['s'])
 
 grid_aspherical['x'] = r * np.cos(np.deg2rad(grid_aspherical['phi']))
 grid_aspherical['y'] = r * np.sin(np.deg2rad(grid_aspherical['phi']))
 grid_aspherical['r'] = np.sqrt(grid_aspherical['x']**2 + grid_aspherical['y']**2)
 grid_aspherical['tri_spin'] = np.asarray(final_grid['indiv']['upward_tri'])    
-grid_aspherical['z'] = -R2Z(grid_aspherical['r'])
-grid_aspherical['theta'] = R2NUT(r)
+grid_aspherical['z'] = -surf.R2Z(grid_aspherical['r'])
+grid_aspherical['theta'] = surf.R2NUT(r)
+
 # Sort grid by ascending theta and phi to improve readability
 grid_aspherical.sort_values(by=['theta', 'phi'], inplace=True)
+
+# Trim the grid to the desired angle
+def is_point_within_polygon(point, polygon):
+    return polygon.contains(point)
+trimming_polygon = surf.make_vigR_polygon(pizza_angle = trim_angle) # define the pizza slice (most of the time 60°)
+grid_aspherical['point'] = grid_aspherical.apply(lambda row: Point(row['x'], row['y']), axis=1) # create a column of bool for all the points in the grid: True = within the trimming polygon, False = outside
+grid_aspherical = grid_aspherical[grid_aspherical['point'].apply(lambda point: is_point_within_polygon(point, trimming_polygon))] # crop the grid using the column of bool
+grid_aspherical.drop(columns=['point'], inplace=True) # drop the now useless boolean column
+print(grid_aspherical)
 
 # Given the orientation vectors of each module, we can now make the back grid at the module length disance from the front grid
 orientation_vectors = grid.orientation_vector(np.deg2rad(grid_aspherical['phi']), np.deg2rad(grid_aspherical['theta']))

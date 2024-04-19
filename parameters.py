@@ -53,6 +53,8 @@ class FocalSurf():
                self.a8 = self.focal_surf_param['a8']
                self.k = self.focal_surf_param['k']
                self.c = 1/self.curvature_R
+          else:
+               self.read_focal_plane_data()
 
           if 'WST' in self.project:
                self.donutR = self.focal_surf_param['donutDiam']/2
@@ -62,10 +64,13 @@ class FocalSurf():
           self.FoV = self.focal_surf_param['FoV']
           self.focus_tolerance_width = self.focal_surf_param['focus_tolerance_width'] # [mm] width of the focus tolerance band around the focal surface
 
+          # Transfer functions
+          self.R2Z, self.R2CRD, self.R2NORM, self.R2S, self.R2NUT, self.S2R = self.transfer_functions()
+
      def set_surface_parameters(self):
 
           if self.project == 'MUST':
-               ## Last update of MUST focal plane parameters (update from: 2024-01-22)
+               ## Last update of MUST focal plane parameters (update from: 2024-01-29)
                focal_surf_param = {
                                    'name': 'MUST',
                                    'curvature_R': -11918, # [mm], curvature radius
@@ -215,10 +220,10 @@ class FocalSurf():
                
                print(f"{self.project} focal plane data successfully read from {filename}")
                print(optics_data.head())
-               return optics_data
+               self.optics_data = optics_data
      
      def transfer_functions(self):
-          # Those transfer functions and there implementation later are inspired from the work of Joseph Silber in the generate_raft_layout.py code in https://github.com/joesilber/raft-design 
+          # Those transfer functions and there implementation later are inspired from the work of Joseph Silber (LBNL) in the generate_raft_layout.py code in https://github.com/joesilber/raft-design 
 
           """ 
           Input: 
@@ -230,61 +235,68 @@ class FocalSurf():
                - R2CRD: function to get chief ray deviation interms of radial position on focal surface
           
           ATTENTION: Needs csv file to contain columns named: R, Z, CRD """
-
+          r = np.linspace(0,self.vigR,2000) # [mm] radial positions on focal plane
           if not self.asph_formula:
                logging.info('Transfer functions made from sampled data in csv')
-               optics_data = self.read_focal_plane_data()
-               R = optics_data['R']
+               R = self.optics_data['R']
                # DEBUG check: check for duplicate in R that causes interp1d to fail, can't have similar x values
                if R.duplicated().any():
                     R_dup = np.sum(R.duplicated())
                     raise Exception(f'Found duplicate in R: {R_dup} rows of csv file. Check csv file for duplicate entries and remove them.')
                
-               if 'Z' in optics_data.keys():
-                    Z = optics_data['Z']
+               # R2Z maps the radial position on the focal plane to the height of the focal plane
+               if 'Z' in self.optics_data.keys():
+                    Z = self.optics_data['Z']
                     R2Z = interp1d(R,Z,kind='cubic', fill_value = "extrapolate") #leave 'cubic' interpolation for normal vectors calculations
                else:
                     R2Z = lambda r: -self.BFS + np.sqrt(self.BFS**2 - r**2) # Spherical focal surface
                     logging.warning('No Z data available in samples - assuming SPHERICAL focal surface')
 
-               if 'CRD' in optics_data.keys():
-                    CRD = optics_data['CRD']
+               # R2CRD maps the radial position on the focal plane to the chief ray deviation (CRD) on the focal plane
+               if 'CRD' in self.optics_data.keys():
+                    CRD = self.optics_data['CRD']
                     R2CRD = interp1d(R,CRD,kind='cubic', fill_value = "extrapolate")
+                    
+                    logging.info('CRD data available in samples - using it for CRD transfer function')
                else:
                     CRD = np.zeros_like(R)
                     R2CRD = interp1d(R,CRD,kind='cubic', fill_value = "extrapolate")
                     logging.warning('No CRD data available - CRD = 0 everywhere on focal plane')
-
+               crd = R2CRD(r)
           else:
                logging.info('Transfer functions: using aspherical formula cofficients, no CRD data available')
                R2Z = self.analytical_R2Z
                R2CRD = None
+               crd = np.zeros_like(r)
 
-          r = np.linspace(0,self.vigR,2000)
           z = R2Z(r) # Calculate focal plane curve from csv data
           dr = np.diff(r)
           dz = np.diff(z)
           dzdr = dz/dr # Get derivative of focal plane curve at the sample points
-          normal_angles_focsurf = np.degrees(np.arctan(dzdr)) # Calculate normal angles at the sample points
-          R2NORM = interp1d(r[:-1],normal_angles_focsurf,kind='cubic', fill_value = "extrapolate")
 
+          # Assert in slope data is available in csv file
+          if 'Slope' in self.optics_data.keys():
+               norm = self.optics_data['Slope'] # Calculate normal angles at the sample points
+               R2NORM = interp1d(R, norm,kind='cubic', fill_value = "extrapolate")
+               logging.info('Slope data available in samples - using it for R2NORM transfer function')
+          else:
+               norm = np.degrees(np.arctan(dzdr))# Calculate normal angles at the sample points
+               R2NORM = interp1d(r[:-1], norm,kind='cubic', fill_value = "extrapolate")
+               NORM2R = interp1d(norm, r[:-1])
+               logging.info('No slope data available in samples - deriving normal angles from focal plane curve')
+
+          nut = -(R2NORM(r) + crd) # Joe: -(R2NORM(r) + crd)
+          R2NUT = interp1d(r, nut, kind='cubic', fill_value = "extrapolate")
+          NUT2R = interp1d(nut, r)
+
+          # Parametric path length along the focal surface
           ds = (1 + dzdr**2)**0.5 * dr
           s = np.cumsum(ds)
           s = np.insert(s, 0, 0.)  # first value of path length is 0
           Z2R = interp1d(z, r)
           R2S = interp1d(r, s)
           S2R = interp1d(s, r, kind='cubic', fill_value = "extrapolate")
-          norm = np.degrees(np.arctan(dzdr))
-          R2NORM = interp1d(r[:-1], norm)
-          NORM2R = interp1d(norm, r[:-1])
-          if not self.asph_formula:
-               crd = R2CRD(r)
-          else:
-               crd = np.zeros_like(r)
-          nut = -(norm + crd[:-1])
-          R2NUT = interp1d(r[:-1], nut, kind='cubic', fill_value = "extrapolate")
-          NUT2R = interp1d(nut, r[:-1])
-
+     
           return R2Z, R2CRD, R2NORM, R2S, R2NUT, S2R
 
      def analytical_R2Z(self, r: np.array):
@@ -325,10 +337,15 @@ class FocalSurf():
 
           return sphR
      
-     def make_vigR_polygon(self, pizza_angle = 360,  n_vigR = 500):
+     def make_vigR_polygon(self, pizza_angle = 360, n_vigR = 500, changed_vigR = None):
           
-          vigR_lim_x = self.vigR * np.cos(np.deg2rad(np.linspace(0,pizza_angle,n_vigR)))
-          vigR_lim_y = self.vigR * np.sin(np.deg2rad(np.linspace(0,pizza_angle,n_vigR)))
+          if changed_vigR is not None:
+               vigR = changed_vigR # [mm] allows to change the vignetting radius for specific cases
+          else:
+               vigR = self.vigR # [mm] vignetting radius, nominal case declared for each project
+
+          vigR_lim_x = vigR * np.cos(np.deg2rad(np.linspace(0,pizza_angle,n_vigR)))
+          vigR_lim_y = vigR * np.sin(np.deg2rad(np.linspace(0,pizza_angle,n_vigR)))
           if pizza_angle == 360:
                end_point = [vigR_lim_x[0], vigR_lim_y[0]]
           else:
@@ -339,7 +356,7 @@ class FocalSurf():
 
           if self.project == 'WST' or self.project == 'WST1' or self.project == 'WST2' or self.project == 'WST3':
                # WST has a donut hole in the center of the focal plane for big fiber bundle
-               donut = Polygon(to_polygon_format(vigR_lim_x*self.arcmin2mm(self.donutR)/self.vigR, vigR_lim_y*self.arcmin2mm(self.donutR)/self.vigR))
+               donut = Polygon(to_polygon_format(vigR_lim_x*self.arcmin2mm(self.donutR)/vigR, vigR_lim_y*self.arcmin2mm(self.donutR)/vigR))
                pizza = pizza.difference(donut)
                self.surfaces_polygon['donut'] = donut
                
@@ -993,7 +1010,7 @@ class Grid(FocalSurf):
 
           return x_grid, y_grid, z_grid
      
-     def trim_grid(self, final_grid: dict, trim_angle = 360):
+     def trim_grid(self, final_grid: dict , trim_angle = 360):
 
           """
           Input:
@@ -1014,7 +1031,8 @@ class Grid(FocalSurf):
                grid_points = np.asarray(final_grid['indiv']['xyz'])
                module_up = np.asarray(final_grid['indiv']['upward_tri'])
           else:
-               pizza_slice = FocalSurf.make_vigR_polygon(self, pizza_angle = trim_angle)
+               extra_vigR = 20 # [mm] extra radius to include modules whose centroid are outside vigR but fulfills the out_allowance condition
+               pizza_slice = FocalSurf.make_vigR_polygon(self, pizza_angle = trim_angle, changed_vigR = self.vigR + extra_vigR)
                grid_points = []
                module_up = []
                for idx, point in enumerate(final_grid['indiv']['geometry']):
@@ -1087,7 +1105,6 @@ class Grid(FocalSurf):
           z = np.cos(theta)
 
           return np.array([x,y,z]).T
-
 
      def plot_3D_grid(self,ax, x, y ,z,  color = 'red', label=None):
 
