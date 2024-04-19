@@ -17,7 +17,11 @@ save = SavingResults(saving_df)
 for proj in projects:
     surf = FocalSurf(project = proj)
     optics_data = surf.read_focal_plane_data() # Read data from csv file
-    plt.plot(optics_data['R'],-optics_data['Z'], label = f"{proj} - BFS = {surf.BFS:.0f} mm")
+    if 'Z' in optics_data.columns:
+        plt.plot(optics_data['R'],-optics_data['Z'], label = f"{proj} - BFS = {surf.BFS:.0f} mm")
+    else:
+        r = np.linspace(0, surf.vigR, 500)
+        plt.plot(r,-surf.R2Z(r), label = f"{proj} - BFS = {surf.BFS:.0f} mm")
 
 plt.xlim(xmin=0)
 plt.xlabel('R [mm]')
@@ -28,14 +32,41 @@ plt.grid()
 save.save_figures_to_dir('focal_plane_comparison', 'png')
 
 
+# plt.figure()
+# project = "Spec-s5"
+# surf = FocalSurf(project = project)
+# optics_data = surf.read_focal_plane_data() # Read data from csv file
+# plt.plot(optics_data['R'],-np.rad2deg(optics_data['Slope']), label = "Asph")
+# plt.plot(optics_data['R'],-np.rad2deg(optics_data['BFS_Slope']), label = "BFS")
+# plt.grid()
+# plt.xlabel('R [mm]')
+# plt.ylabel('Slope [rad]')
+
 plt.figure()
-project = "Spec-s5"
+project = "MUST"
 surf = FocalSurf(project = project)
+r = np.linspace(0, surf.vigR, 500)
 optics_data = surf.read_focal_plane_data() # Read data from csv file
-plt.plot(optics_data['R'],-np.rad2deg(optics_data['Slope']), label = "Asph")
-plt.plot(optics_data['R'],-np.rad2deg(optics_data['BFS_Slope']), label = "BFS")
+plt.plot(optics_data['R'],-optics_data['Z'], color='orange', label = "Asph")
+plt.plot(optics_data['R'],-optics_data['BFS_Sag'], 'g--', label = "BFS")
+plt.legend(shadow=True)
 plt.grid()
 plt.xlabel('R [mm]')
-plt.ylabel('Slope [rad]')
+plt.ylabel('Z [mm]')
+
+plt.figure()
+plt.plot(optics_data['R'],np.rad2deg(optics_data['Slope']), color='orange', label = "Raw slope")
+plt.plot(r,surf.R2NORM(r), 'g--', label = "Derived slope")
+plt.legend(shadow=True)
+plt.grid()
+plt.xlabel('R [mm]')
+plt.ylabel('Slope [deg]')
+
+# plt.figure()
+# plt.plot(optics_data['R'],np.rad2deg(optics_data['Slope'])-surf.R2NORM(r), color='orange', label = "Delta slopes")
+# plt.legend(shadow=True)
+# plt.grid()
+# plt.xlabel('R [mm]')
+# plt.ylabel('Slope [deg]')
 
 plt.show()

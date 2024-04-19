@@ -12,7 +12,7 @@ using System.Diagnostics;
 // param: Save Part flag in directory
 const bool SavePart = true;
 // param: specify the project. e.g. MUST
-const string project = "Spec-s5";
+const string project = "MUST";
 // param: chamfer length of a chamfered triangle
 const double chamferLength = 10.5e-3;               // in meters
 // param: pin hole diameter
@@ -24,15 +24,15 @@ const double interPinHoleDistance = 64.952e-3;          // in meters
 // param: fillet radius in full triangle
 const double filletRadiusFullTriangle = 2.5e-3;     // in meters 
 // param: bestFitSphereRadius.
-const double bestFitSphereRadius = 12657e-3;      // in meters
+const double bestFitSphereRadius = 10477.594e-3;      // in meters
 // param: focal plane thickness
-const double outerRimHeight = 150e-3;                     // in meters
+const double frameThickness = 100e-3;                     // in meters
 // param: distance between the bottom surface of the plate and support faces of modules
 const double bottom2SupportFacesDistance = 30e-3;       // in meters
 // param: distance between the support surface to top surface definition
-const double supportToTopSurfaceDistance = outerRimHeight - bottom2SupportFacesDistance;         // in meters
+const double supportToTopSurfaceDistance = frameThickness - bottom2SupportFacesDistance;         // in meters
 // param: create horizontal line (for flat bottom surface). Need a better name here
-const double bottomSurfaceRadius = 480e-3;
+const double bottomSurfaceRadius = 650e-3;
 // param: side length of the equilateral triangle (full triangle)
 const double equilateralTriangleSideLength = 76.4e-3;
 
@@ -45,7 +45,7 @@ Dictionary<string, double> solidworksGlobalVariables = new()
     { nameof(interPinHoleDistance), interPinHoleDistance },
     { nameof(filletRadiusFullTriangle), filletRadiusFullTriangle },
     { nameof(bestFitSphereRadius), bestFitSphereRadius },
-    { nameof(outerRimHeight), outerRimHeight },
+    { nameof(frameThickness), frameThickness },
     { nameof(supportToTopSurfaceDistance), supportToTopSurfaceDistance },
     { nameof(bottom2SupportFacesDistance), bottom2SupportFacesDistance },
     { nameof(bottomSurfaceRadius), bottomSurfaceRadius },
@@ -364,7 +364,7 @@ ClearSelection(ref modulePart);
 SketchPoint bottomSurfaceTopRightPoint = (SketchPoint)horizontalLine.GetEndPoint2();
 
 SketchLine revolutionAxisVerticalLineToArc = (SketchLine)modulePart.SketchManager.CreateLine(bottomSurfaceTopRightPoint.X, bottomSurfaceTopRightPoint.Y, bottomSurfaceTopRightPoint.Z, 
-                                                                                bottomSurfaceTopRightPoint.X, -outerRimHeight, 0);
+                                                                                bottomSurfaceTopRightPoint.X, -frameThickness, 0);
 MakeSelectedLineVertical(ref modulePart);
 ClearSelection(ref modulePart);
 
@@ -379,11 +379,11 @@ ClearSelection(ref modulePart);
 ((SketchSegment)revolutionAxisVerticalLineToArc).Select4(true, swSelectData);
 
 AddDimensionToSelectedWithGlobalVariable(   ref modulePart, 
-                                            nameof(outerRimHeight), 
+                                            nameof(frameThickness), 
                                             bottomSurfaceTopRightPoint.X, 
                                             bottomSurfaceTopRightPoint.Y, 
                                             bottomSurfaceTopRightPoint.Z);
-//AddDimensionToSelected(ref modulePart, outerRimHeight, bottomSurfaceTopRightPoint);
+//AddDimensionToSelected(ref modulePart, frameThickness, bottomSurfaceTopRightPoint);
 ClearSelection(ref modulePart);
 
 modulePart.SketchManager.AddToDB = false;
