@@ -1,4 +1,6 @@
 # %% For further information contact Maxime Rombach (EPFL - LASTRO) at maxime.rombach@epfl.ch
+# This code is a tool for calculating the coverage performed for different focal plane arrangements.
+# It is inspired from the work of Joe Silber (LBLN): https://github.com/joesilber/raft-design 
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import numpy as np
@@ -71,7 +73,7 @@ full_framed = False # flag to check wether we are in semi frameless or in full f
 
 """ Intermediate frame parameters """
 
-inner_gap = 3 # [mm] spacing between modules inside intermediate frame
+inner_gap = 0.5 # [mm] spacing between modules inside intermediate frame
 
 """ Global frame parameters """
 
@@ -95,7 +97,7 @@ project_surface = 'Spec-s5'
 surf = param.FocalSurf(project=project_surface)
 vigR = surf.vigR
 BFS = surf.BFS
-trimming_angle = 360 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
+trimming_angle = 60 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
 
 pizza = surf.make_vigR_polygon(pizza_angle = trimming_angle)
 
@@ -107,7 +109,7 @@ plot_time = 20 # [s] plotting time
 ignore_robots_positions = False
 
 save_plots = False # Save most useful plots 
-save_all_plots = True  # Save all plots (including intermediate ones)
+save_all_plots = False  # Save all plots (including intermediate ones)
 save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
 save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
 save_txt = False # Save positions of modules along curved focal surface
@@ -415,7 +417,9 @@ for nb_robots in nbots: # iterate over number of robots/module cases
           global_dict[key]['useless_robots_list'].append(useless_robots)
           global_dict[key]['useful_robots_list'].append(total_robots-useless_robots)
           global_dict[key]['efficiency_list'].append((total_robots - useless_robots)/total_robots)
-          print(f"Out allowance: {out_allowance} \n", f"Total # modules: {total_modules} \n", f"Total # robots: {total_robots} \n", f"Coverage: {global_coverage} %")
+          print(f"Out allowance: {out_allowance} \n", f"Total # modules: {total_modules} \n",
+               f"Total # robots: {total_robots} \n", f"Useful robots: {total_robots-useless_robots} \n",
+               f"Coverage: {global_coverage} %")
 
 #%% 2)d) Project grid on focal surface (BFS as a first try, aspherical will come later)
 # NOTE : Project on BFS and save modules in txt file for Solidworks integration

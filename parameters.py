@@ -10,6 +10,7 @@ from shapely import affinity, MultiPolygon, MultiPoint, GeometryCollection
 import matplotlib.pyplot as plt
 from shapely.geometry import Polygon, box
 from shapely.ops import unary_union
+from shapely.validation import make_valid
 from scipy import optimize
 from scipy.interpolate import interp1d
 from shapely.plotting import plot_polygon, plot_points
@@ -26,6 +27,7 @@ import pandas as pd
 
 logging.basicConfig(level=logging.INFO)
 tan30 = np.tan(np.deg2rad(30))
+sqr3 = np.sqrt(3)
 
 ## Parameters ##
 # NOTE: FocalSurf class
@@ -340,21 +342,7 @@ class FocalSurf():
                donut = Polygon(to_polygon_format(vigR_lim_x*self.arcmin2mm(self.donutR)/self.vigR, vigR_lim_y*self.arcmin2mm(self.donutR)/self.vigR))
                pizza = pizza.difference(donut)
                self.surfaces_polygon['donut'] = donut
-
-          # elif self.project == 'MUST':
-          #      # 2023.11.08 update: MUST has a blind spot at the center for wavefront sensor --> need sensor's footprint
-          #      # donut = Polygon(to_polygon_format(vigR_lim_x*30/self.vigR, vigR_lim_y*30/self.vigR))
-          #      # pizza = pizza.difference(donut)
-          #      # self.surfaces_polygon['donut'] = donut
-          #      length, width = 60, 60
-          #      minx = -length/2
-          #      miny = -width/2
-          #      maxx = length/2
-          #      maxy = width/2
-          #      donut = Polygon([(minx, miny), (maxx, miny), (maxx, maxy), (minx, maxy), (minx, miny)])
-          #      pizza = pizza.difference(donut)
-          #      self.surfaces_polygon['donut'] = donut
-
+               
           self.surfaces_polygon['pizza'] = pizza
 
           return pizza
@@ -490,7 +478,7 @@ class SavingResults:
 # NOTE: Individual Module class
 class Module(SavingResults):
 
-     def __init__(self, nb_robots, saving_df, is_wall: bool = True, width_increase = 0, chanfer_length = 7.5):
+     def __init__(self, nb_robots, saving_df, BFS: float, is_wall: bool = True, width_increase = 0, chanfer_length = 7.5):
 
           """Robot parameters""" 
 
@@ -501,6 +489,12 @@ class Module(SavingResults):
           self.alpha = np.linspace(-180,180,180) # [deg] rotational range of alpha arm
           self.beta = np.linspace(-180,180,180) # [deg] rotational range of beta arm (holding the fiber)
           self.beta2fibre = 1 # [mm] distance fiber center to edge of beta arm
+          
+          @property
+          def robots_module_table(self):
+               """ Table of robots centroids within the module
+               Output: [nb_robots x 3] array with columns: x, y, z """
+               return self._robots_module_table
 
           """Module parameters"""
 
@@ -522,6 +516,15 @@ class Module(SavingResults):
           self.is_wall = is_wall # flag for protective shields or not on modules
 
           self.module_length = 590 # [mm] last dimension updae for length of module unit
+          self.BFS = BFS # [mm] radius of BFS
+
+          @property
+          def module_centroid(self):
+               return self._module.centroid
+          
+          @property
+          def base_z(self):
+               return self.BFS
 
           # Add 1 row of positioners from one case to another
           if self.nb_robots == 42:
@@ -611,11 +614,11 @@ class Module(SavingResults):
 
           chanfers = [chanfer_triangle]
           angles = [120, 240]
-          module_centroid = module_triangle.centroid
+          self.module_centroid = module_triangle.centroid
           
           for angle in angles:
                # Move the 2 remaining triangles to their corresponding location at the triangle's edges
-               rot_chanfer_triangle = rotate_and_translate(chanfer_triangle, angle, 0, 0, origin = module_centroid)
+               rot_chanfer_triangle = rotate_and_translate(chanfer_triangle, angle, 0, 0, origin = self.module_centroid)
                chanfers.append(rot_chanfer_triangle)
                chanfered_base = module_triangle.difference(rot_chanfer_triangle)
                
@@ -623,6 +626,23 @@ class Module(SavingResults):
           multi_chanfers = MultiPolygon(chanfers)
           # Apply cut on triangular base
           chanfered_base = module_triangle.difference(multi_chanfers)
+
+          # TODO: finish proper implementation of chanfered base
+          # chanfered_vertices = np.zeros((7,3))
+          # chanfered_vertices[0] = [-self.chanfer_length/2, sqr3 * (self.module_width/3 - self.chanfer_length/2), 0]
+          # chanfered_vertices[:] = chanfered_vertices[0] #start and end point must be the same for polygon creation
+          # chanfered_vertices[1] = [-chanfered_vertices[0][0], chanfered_vertices[0][1], 0]
+
+          # for idx, ang in enumerate([240, 120]):
+          #      idx = idx + 1
+          #      chanfered_vertices[2*idx] = rotation3D(chanfered_vertices[0].T, 0, np.deg2rad(ang))
+          #      chanfered_vertices[2*idx + 1] = rotation3D(chanfered_vertices[1].T, 0, np.deg2rad(ang))
+
+          # print(chanfered_vertices)
+          # figure = plt.figure(figsize=(8,8))
+          # chanfered_base2 = Polygon(to_polygon_format(chanfered_vertices[:,0], chanfered_vertices[:,1]))
+          # plot_polygon(chanfered_base2)
+          # plt.show()
           
           return chanfered_base
      
@@ -648,6 +668,7 @@ class Module(SavingResults):
           # Their norm corresponds to the pitch defined in parameters
           xx1 = np.ones(self.nb_rows + 1)
           yy1 = np.ones(self.nb_rows + 1)
+          zz1 = self.BFS * np.ones(self.nb_rows + 1)
 
           for idx in range(self.nb_rows): # Create the grid of positioner's center points
           
@@ -1048,7 +1069,7 @@ class Grid(FocalSurf):
 
           return projection
      
-     def orientation_vector(self, phi, theta):
+     def orientation_vector(self, phi: float, theta: float):
 
           """
           Input:
@@ -1058,7 +1079,7 @@ class Grid(FocalSurf):
 
           Output:
 
-          - orientation_vector: [numpy array] contains the x,y,z coordinates of the orientation vector
+          - orientation_vector: [3x1 numpy array] contains the x,y,z coordinates of the orientation vector
           """
 
           x = - np.sin(theta) * np.cos(phi)
@@ -1111,24 +1132,45 @@ def rotate_and_translate(geom, angle, dx, dy, dz = None, origin = 'centroid'):
 
      return transformed_geom
 
+def rotation3D(vector, phi, theta, rotation_axis='z'):
+     """
+     Rotate a 3D vector around a given axis by an angle theta.
+
+     Parameters:
+     - vector: numpy array of shape (3,) representing the 3D vector to be rotated
+     - phi: azimuthal angle in spherical coordinates
+     - theta: polar angle in spherical coordinates
+     - rotation_axis: axis of rotation, can be 'x', 'y', or 'z' (default is 'z')
+
+     Returns:
+     - rotated_vector: numpy array of shape (3,) representing the rotated 3D vector
+     """
+
+     # Define the rotation matrix based on the rotation axis
+     if rotation_axis == 'x':
+          rotation_matrix = np.array([[1, 0, 0],
+                                             [0, np.cos(theta), -np.sin(theta)],
+                                             [0, np.sin(theta), np.cos(theta)]])
+     elif rotation_axis == 'y':
+          rotation_matrix = np.array([[np.cos(theta), 0, np.sin(theta)],
+                                             [0, 1, 0],
+                                             [-np.sin(theta), 0, np.cos(theta)]])
+     elif rotation_axis == 'z':
+          rotation_matrix = np.array([[np.cos(theta), -np.sin(theta), 0],
+                                             [np.sin(theta), np.cos(theta), 0],
+                                             [0, 0, 1]])
+     else:
+          raise ValueError("Invalid rotation axis. Please choose 'x', 'y', or 'z'.")
+
+     # Perform the rotation
+     rotated_vector = np.dot(rotation_matrix, vector)
+
+     return rotated_vector
+
+
+
 def norm2d(p,q):
      return math.sqrt((p[0]-q[0])**2 + (p[1]-q[1])**2)
-
-def save_figures_to_dir(save, suffix_name, only_frame = False):
-
-     if not save:
-           return
-     
-     script_dir = os.path.dirname(__file__)
-     results_dir = os.path.join(script_dir, 'Results/')
-
-     now = datetime.now()
-     today_filename = now.strftime("%Y-%m-%d-%H-%M-%S_") + suffix_name + ".png"
-
-     if not os.path.isdir(results_dir):
-          os.makedirs(results_dir)
-
-     plt.savefig(results_dir + today_filename, bbox_inches = 'tight', format='png', dpi = 800)
 
 def plot_module(module_collection, label_coverage, label_robots, ignore_points):
      for jdx, geo in enumerate(module_collection.geoms):
@@ -1204,14 +1246,3 @@ def sort_points_for_polygon_format(x: list, y: list, centroid):
 
 focal_surf_MUST = {'R': -11088.4, 'k': 0, 'a2': -2.18895e-12, 'a3': 6.11195e-18, }
 focal_surf_MegaMapper = {}
-
-#%%
-
-f_number = 3.5
-
-blur2loss = Polynomial([0, -0.000141553, 0.000373672, -1.76888E-06, -8.23219E-08, 8.72644E-10])
-defocus2blur = lambda dz_mm: (dz_mm*1000) / 2 / f_number / 3
-
-dz = np.linspace(-27e-3, 27e-3,100)
-# plt.plot(dz, blur2loss(defocus2blur(dz)))
-# # plt.show()

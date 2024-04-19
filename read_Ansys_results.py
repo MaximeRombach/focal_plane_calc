@@ -25,12 +25,13 @@ Output:
 # Fileneame = path to log file from Ansys analyses
 # filename = r"C:\Users\rombach\Documents\Astrobots\Spec-s5_workshop\FEA\spec-s5_files\user_files/DesignPointLog.csv"
 # filename = "./Results/turbo_table_data6.csv"
-filename = r"C:\Users\rombach\Documents\Astrobots\Spec-s5_workshop\FEA\Turbo_table.csv"
+material = "stainless_steel"
+filename = f"C:/Users/rombach/Documents/Astrobots/Spec-s5_workshop/FEA/Turbo_table_{material}.csv"
 
 comment_prefix = "#"  # Set this to the comment prefix used in your file
 separator = ","
 
-save_plots = True
+save_plots = False
 num_lines_to_skip = 0 # log file logs since beginning of analyses, skip first rows that are now irrelevant
 
 saving_df = {"save_plots": save_plots}

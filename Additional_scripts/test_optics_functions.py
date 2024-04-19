@@ -7,7 +7,7 @@ tilt2loss = Polynomial.fit(x=[0.0, 0.025, 0.075, 0.125, 0.175, 0.225, 0.275, 0.3
                                     y=1-np.array([1.0, 0.99995, 0.99975, 0.99945, 0.999, 0.99845, 0.99775, 0.9969, 0.99595, 0.9949, 0.99365, 0.99225, 0.9907, 0.98895, 0.98705, 0.985, 0.98275, 0.9803, 0.9776, 0.97465, 0.9715]),
                                     deg=6,
                                     ),  # input units deg, I am fitting here since the polynomial coefficients provided by Excel chart in Fiber Tilt tab are poor
-f_number = 3.57
+f_number = 3.6
 defocus2blur = lambda dz_mm: (dz_mm*1000) / 2 / f_number / 3
 dz = np.linspace(-0.5, 0.5, 1000)
 d_deg = np.linspace(-1, 1, 1000)
@@ -17,13 +17,13 @@ plt.figure()
 plt.title('Defocus2loss')
 plt.plot(dz, loss_defocus)
 plt.xlabel('Defocus (mm)')
-plt.ylabel('Loss (dB)')
+plt.ylabel('Losses (%)')
 plt.grid()
 
 plt.figure()
 plt.title('Tilt2loss')
 plt.plot(d_deg, tilt2loss[0](d_deg))
 plt.xlabel('dAngle (°)')
-plt.ylabel('Loss (dB)')
+plt.ylabel('Losses (%)')
 plt.grid()
 plt.show()
