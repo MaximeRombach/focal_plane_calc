@@ -56,19 +56,20 @@ def points_up(a, b, c, origin = 'vertex'):
     else:
         raise Exception('Origin can either be "vertex" or "triangle"')
 
-def tri_corners(a, b, c):
+def tri_corners(a, b, c, edge_length):
     """Returns the three corners of a given triangle in cartesian co-ordinates"""
+    """Note by @Maxime Rombach: I added the missing "edge_length" parameter"""
     if points_up(a, b, c):
         return [
-            tri_center(1 + a, b, c),
-            tri_center(a, b, 1 + c),
-            tri_center(a, 1 + b, c),
+            tri_center(1 + a, b, c, edge_length),
+            tri_center(a, b, 1 + c, edge_length),
+            tri_center(a, 1 + b, c, edge_length),
         ]
     else:
         return [
-            tri_center(-1 + a, b, c),
-            tri_center(a, b, -1 + c),
-            tri_center(a, -1 + b, c),
+            tri_center(-1 + a, b, c, edge_length),
+            tri_center(a, b, -1 + c, edge_length),
+            tri_center(a, -1 + b, c, edge_length),
         ]
 
 def pick_tri(x, y, edge_length):
