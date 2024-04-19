@@ -66,7 +66,7 @@ start_time = time.time()
 ## Study one case at a time
 nbots = [63]
 out_allowances = [0.8]
-width_increase = 0 # [mm] How much we want to increase the base length of a module (base value: 73.8mm)
+width_increase = 0 # [mm] How much we want to increase the base length of a module (base value for 63 robots: 73.8mm)
 chanfer_length = 10.5 # [mm] Size of chanfers of module vertices (base value: 7.5); increase chanfer decreases coverage as it reduces the module size thus patrol area
 centered_on_triangle = False # move the center of the grid (red dot) on the centroid on a triangle instead of the edge
 full_framed = False # flag to check wether we are in semi frameless or in full framed case (turns True if inter_gap = global_gap = 0 mm)
@@ -145,7 +145,11 @@ to_dxf_dict = {}
 
 for nb_robots in nbots: # iterate over number of robots/module cases
 
-     mod_param = param.Module(nb_robots, saving_df, is_wall, width_increase, chanfer_length)
+     print("width increase1: ", width_increase)
+     print("is_wall1: ", is_wall)
+     mod_param = param.Module(nb_robots, saving_df, BFS, is_wall, width_increase, chanfer_length)
+     print("width increase2: ", mod_param.width_increase)
+     print("is_wall2: ", mod_param.is_wall)
      module_length = mod_param.module_length
      key = mod_param.key
      keys.append(key)
@@ -187,7 +191,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
 
      # Generate initial flat grid of modules center points
      grid = param.Grid(project_surface, module_width, inner_gap, global_gap, centered_on_triangle = centered_on_triangle)
-
+     print(grid.fiducials)
      # grid.plot_2D_grid()
 
      #%% 2)c) Place the intermediate triangles accordingly on the grid
@@ -530,6 +534,8 @@ plt.ylabel('y position [mm]')
 plt.legend(shadow = True)
 if save_all_plots:
      saving.save_figures_to_dir(filename)
+
+plt.show()
 
 if global_gap > 0:
      
