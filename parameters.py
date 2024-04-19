@@ -507,6 +507,14 @@ class Module(SavingResults):
           self.beta = np.linspace(-180,180,180) # [deg] rotational range of beta arm (holding the fiber)
           self.beta2fibre = 1 # [mm] distance fiber center to edge of beta arm
           
+          
+          @property
+          def robots_module_table(self):
+               """ Table of robots centroids within the module
+               Output: [nb_robots x 3] array with columns: x, y, z """
+               return self._robots_module_table
+
+
           @property
           def robots_module_table(self):
                """ Table of robots centroids within the module
@@ -557,7 +565,6 @@ class Module(SavingResults):
                self.key = 'n52'
 
           elif self.nb_robots == 63:
-               
                self.module_width = 73.8 + self.width_increase # [mm] triangle side length
                self.width_hole_in_frame = self.module_width + self.width_increase # [mm] ONGOING TEST: width of the module hole in the frame, represents the clearance between the module and the frame --> influences coverage
                self.nb_rows = 10 # number of rows of positioners
@@ -631,11 +638,11 @@ class Module(SavingResults):
 
           chanfers = [chanfer_triangle]
           angles = [120, 240]
-          self.module_centroid = module_triangle.centroid
+          module_centroid = module_triangle.centroid
           
           for angle in angles:
                # Move the 2 remaining triangles to their corresponding location at the triangle's edges
-               rot_chanfer_triangle = rotate_and_translate(chanfer_triangle, angle, 0, 0, origin = self.module_centroid)
+               rot_chanfer_triangle = rotate_and_translate(chanfer_triangle, angle, 0, 0, origin = module_centroid)
                chanfers.append(rot_chanfer_triangle)
                chanfered_base = module_triangle.difference(rot_chanfer_triangle)
                
@@ -947,6 +954,7 @@ class Grid(FocalSurf):
           self.grid_df = {}
           self.grid_flat_init = {}
           self.grid_BFS = {'front':{}, 'back':{}}
+          self.fiducials = np.array([[0,0]])
           self.x_grid, self.y_grid, self.z_grid = self.create_flat_grid()
           
           
@@ -978,11 +986,13 @@ class Grid(FocalSurf):
                          sum_abc = a + b + c
                          # if valid == 1 or valid == 2: 
                          if valid.count(sum_abc): # check if sum abc corresponds to a valid triangle depending on the centering case
-                              x,y = tri.tri_center(a,b,c,self.inter_frame_width) 
+                              x,y = tri.tri_center(a,b,c,self.inter_frame_width)
+                              fiducial = tri.tri_corners(a,b,c, self.inter_frame_width/2)
                               if np.sqrt(x**2 + y**2) < self.vigR + vigR_tresh: # allow centroid of inter modules to go out of vigR for further filling purpose
                                    center_coords.append((a,b,c))
                                    x_grid.append(x)
                                    y_grid.append(y)
+                                   self.fiducials = np.vstack((self.fiducials, np.asarray(fiducial)))
                                    if tri.points_up(a,b,c, origin = origin): # flip the modules depending on there position on the grid
                                         flip_global.append(0)
                                    else: 
@@ -1186,6 +1196,36 @@ def rotation3D(vector, phi, theta, rotation_axis='z'):
 def norm2d(p,q):
      return math.sqrt((p[0]-q[0])**2 + (p[1]-q[1])**2)
 
+
+def plot_module(module_collection, label_coverage, label_robots, ignore_points):
+     for jdx, geo in enumerate(module_collection.geoms):
+          # plot_polygon(geometry[jdx], add_points=False, facecolor='None' , edgecolor='black')
+          if (isinstance (module_collection.geoms[jdx], Polygon)) and jdx == 0:
+               plot_polygon(module_collection.geoms[jdx], add_points=False, facecolor='None' , edgecolor='black')
+          elif (isinstance (module_collection.geoms[jdx], Polygon)) and jdx == 1:
+               plot_polygon(module_collection.geoms[jdx], add_points=False, facecolor='None', linestyle = '--')
+          elif (isinstance (module_collection.geoms[jdx], Polygon)) and jdx == 2:
+               plot_polygon(module_collection.geoms[jdx], add_points=False, alpha=0.2, edgecolor='black', label = label_coverage)
+          elif (isinstance (module_collection.geoms[jdx], MultiPoint) and not ignore_points):
+               plot_points(module_collection.geoms[jdx], marker='.', color='k', label = label_robots)
+
+def plot_intermediate(intermediate_collection, nb_robots, ignore_points, intermediate_coverage=None, available_intermediate_area=None, draw_legend = False):
+     for idx, mod_collection in enumerate(intermediate_collection.geoms):
+          if idx == 0 and draw_legend:
+               label_coverage = 'Coverage: {} %'.format(intermediate_coverage)
+               # label_coverage = 'Coverage: {} %'.format(area_to_cover)
+               label_robots = "{} robots".format(nb_robots)
+          else: 
+               label_coverage = None
+               label_robots = None
+          if (isinstance (mod_collection, Polygon)):
+               plot_polygon(mod_collection, add_points=False, facecolor='None', linestyle = '-.', color = 'green')
+
+               # plot_polygon(mod_collection, add_points=False, facecolor='None', linestyle = '-.', color = 'green', label = 'Available area: {} mm$^2$'.format(available_intermediate_area))
+               continue
+          plot_module(mod_collection, label_coverage, label_robots, ignore_points)
+               
+               
 def plot_module(module_collection, label_coverage, label_robots, ignore_points):
      for jdx, geo in enumerate(module_collection.geoms):
           # plot_polygon(geometry[jdx], add_points=False, facecolor='None' , edgecolor='black')
@@ -1257,6 +1297,3 @@ def sort_points_for_polygon_format(x: list, y: list, centroid):
      d = np.hstack((vec, angles.reshape(len(angles),1))) # put everything in one array
      d = d[d[:, 2].argsort()] # sort the points by ascending order array
      return to_polygon_format(d[:,0] + centroid[0,0], d[:,1]+ centroid[0,1])
-
-focal_surf_MUST = {'R': -11088.4, 'k': 0, 'a2': -2.18895e-12, 'a3': 6.11195e-18, }
-focal_surf_MegaMapper = {}

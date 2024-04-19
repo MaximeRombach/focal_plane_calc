@@ -97,7 +97,7 @@ project_surface = 'MUST'
 surf = param.FocalSurf(project=project_surface)
 vigR = surf.vigR
 BFS = surf.BFS
-trimming_angle = 60 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
+trimming_angle = 360 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
 
 pizza = surf.make_vigR_polygon(pizza_angle = trimming_angle)
 
@@ -108,10 +108,10 @@ is_timer = False # Display time of final plots before automatic closing; stays o
 plot_time = 20 # [s] plotting time
 ignore_robots_positions = False
 save_plots = False # Save most useful plots 
-save_all_plots = True  # Save all plots (including intermediate ones)
+save_all_plots = False  # Save all plots (including intermediate ones)
 save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
 save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
-save_txt = True # Save positions of modules along curved focal surface
+save_txt = False # Save positions of modules along curved focal surface
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
 saving = param.SavingResults(saving_df, project_surface)
 
@@ -535,8 +535,6 @@ plt.legend(shadow = True)
 if save_all_plots:
      saving.save_figures_to_dir(filename)
 
-plt.show()
-
 if global_gap > 0:
      
      key_frame = keys[-1]
@@ -585,6 +583,7 @@ f.suptitle(figtitle)
 gdf_modules.plot(ax=ax,facecolor='None',edgecolor=gdf_modules['color'])
 gdf_bound.plot(ax=ax,facecolor='None', edgecolor=gdf_bound['color'])
 gdf_coverage.plot(column='label',ax=ax, alpha=0.2, legend=True, legend_kwds={'loc': 'upper right'})
+plt.plot(grid.fiducials[:,0], grid.fiducials[:,1], 'ro', label = 'Fiducials')
 
 if "WST" in project_surface:
      def custom_formatter(x, pos):
