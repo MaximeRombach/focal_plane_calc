@@ -8,7 +8,7 @@ from astropy.table import Table, vstack
 import logging
 from shapely import affinity, MultiPolygon, MultiPoint, GeometryCollection
 import matplotlib.pyplot as plt
-from shapely.geometry import Polygon, box
+from shapely.geometry import Polygon, Point, box
 from shapely.ops import unary_union
 from shapely.validation import make_valid
 from scipy import optimize
@@ -951,10 +951,9 @@ class Grid(FocalSurf):
           
           super().__init__(project_surface)
 
-          self.grid_df = {}
-          self.grid_flat_init = {}
+          self.grid_flat_init = {'geometry': []}
           self.grid_BFS = {'front':{}, 'back':{}}
-          self.fiducials = np.array([[0,0]])
+          self.fiducials = {'xyz': np.array([[0,0]])}
           self.x_grid, self.y_grid, self.z_grid = self.create_flat_grid()
           
           
@@ -987,12 +986,13 @@ class Grid(FocalSurf):
                          # if valid == 1 or valid == 2: 
                          if valid.count(sum_abc): # check if sum abc corresponds to a valid triangle depending on the centering case
                               x,y = tri.tri_center(a,b,c,self.inter_frame_width)
-                              fiducial = tri.tri_corners(a,b,c, self.inter_frame_width/2)
+                              fiducial = tri.tri_corners(a,b,c, self.inter_frame_width)
                               if np.sqrt(x**2 + y**2) < self.vigR + vigR_tresh: # allow centroid of inter modules to go out of vigR for further filling purpose
                                    center_coords.append((a,b,c))
                                    x_grid.append(x)
                                    y_grid.append(y)
-                                   self.fiducials = np.vstack((self.fiducials, np.asarray(fiducial)))
+                                   self.fiducials['xyz'] = np.vstack((self.fiducials['xyz'], np.asarray(fiducial)))
+                                   self.grid_flat_init['geometry'].append(Point(x,y))
                                    if tri.points_up(a,b,c, origin = origin): # flip the modules depending on there position on the grid
                                         flip_global.append(0)
                                    else: 
@@ -1003,17 +1003,14 @@ class Grid(FocalSurf):
           z_grid = -np.sqrt(self.BFS**2 - (self.vigR)**2)*np.ones(len(x_grid))
           # z_grid = 0*np.ones(len(x_grid))
 
-          self.grid_df['x_grid_flat'] = x_grid
-          self.grid_df['y_grid_flat'] = y_grid
-          self.grid_df['z_grid_flat'] = z_grid
-          self.grid_df['flip_global'] = np.array(flip_global)
-          self.grid_df['grid_flat'] = MultiPoint(to_polygon_format(x_grid, y_grid, z_grid))
+          #TODO: make use of the built-in strucutre there instead of returning just arrays
+          # might be more clean and easier to manipulate
 
           self.grid_flat_init['x'] = x_grid
           self.grid_flat_init['y'] = y_grid
           self.grid_flat_init['z'] = z_grid
           self.grid_flat_init['tri_orientation'] = np.array(flip_global)
-          self.grid_flat_init['geometry'] = MultiPoint(to_polygon_format(x_grid, y_grid, z_grid))
+          # self.grid_flat_init['geometry'] = MultiPoint(to_polygon_format(x_grid, y_grid, z_grid))
 
           return x_grid, y_grid, z_grid
      
