@@ -473,8 +473,7 @@ grid_aspherical = grid_aspherical[grid_aspherical['point'].apply(lambda point: i
 grid_aspherical.drop(columns=['point'], inplace=True) # drop the now useless boolean column
 
 # Given the orientation vectors of each module, we can now make the back grid at the module length disance from the front grid
-grid_aspherical_back = {'x':[], 'y':[], 'z':[], 'tri_spin':[], 'type':[], 'grid_pos':[]}
-grid_aspherical_back = pd.DataFrame.from_dict(grid_aspherical_back)  # Define the variable "grid_asph_pd"
+grid_aspherical_back = pd.DataFrame().reindex_like(grid_aspherical) # create an empty copy of the front grid DF to store the back grid
 orientation_vectors = grid.orientation_vector(np.deg2rad(grid_aspherical['phi']), np.deg2rad(grid_aspherical['theta']))
 grid_aspherical_xyz = np.vstack((grid_aspherical['x'], grid_aspherical['y'], grid_aspherical['z'])).T
 grid_aspherical_xyz_back = grid_aspherical_xyz - module_length*orientation_vectors
@@ -485,13 +484,9 @@ grid_aspherical = grid_aspherical.append(grid_aspherical_back, ignore_index=True
 full_asph = np.vstack((grid_aspherical_xyz, grid_aspherical_xyz_back))
 
 # Save the grid to txt file for Solidworks integration
-# saving.save_grid_to_txt(np.hstack((grid_aspherical_xyz_back, np.asarray(grid_aspherical['tri_spin']).reshape((len(grid_aspherical['tri_spin']), 1)))), f'back_grid_aspherical_{nb_robots}')
-# saving.save_grid_to_txt(np.hstack((grid_aspherical_xyz, np.asarray(grid_aspherical['tri_spin']).reshape((len(grid_aspherical['tri_spin']), 1)))), f'front_grid_aspherical_{nb_robots}')
 saving.save_grid_to_txt2(grid_aspherical[grid_aspherical['grid_pos']=='back'], f'back_grid_aspherical_{nb_robots}', columns = ['x', 'y', 'z', 'tri_spin'])
 saving.save_grid_to_txt2(grid_aspherical[grid_aspherical['grid_pos']=='front'], f'front_grid_aspherical_{nb_robots}', columns = ['x', 'y', 'z', 'tri_spin'])
 saving.save_grid_to_txt2(grid_aspherical, f'grid_aspherical_{nb_robots}', index = True)
-# saving.save_grid_to_txt(full_asph, f'asph_grid_{nb_robots}', direct_SW = True)
-# saving.save_grid_to_txt(np.hstack((np.asarray(grid.fiducials['x']).reshape((len(grid.fiducials['x']), 1)), np.asarray(grid.fiducials['y']).reshape((len(grid.fiducials['x']), 1)), np.asarray(grid.fiducials['z']).reshape((len(grid.fiducials['x']), 1)))), f'fiducials_{nb_robots}', direct_SW = True)
 
 fig = plt.figure(figsize=(10,10))
 ax = fig.add_subplot(111, projection='3d')
