@@ -4,7 +4,7 @@ import numpy as np
 from numpy.linalg import norm
 from numpy.polynomial import Polynomial
 from astropy.table import Table, vstack
-
+import json
 import logging
 from shapely import affinity, MultiPolygon, MultiPoint, GeometryCollection
 import matplotlib.pyplot as plt
@@ -18,6 +18,7 @@ from types import SimpleNamespace  # Python 3.3+ only.
 import os
 from datetime import datetime
 import geopandas as gpd
+import pandas as pd
 import math
 from shapely.geometry import mapping
 import ezdxf
@@ -473,6 +474,7 @@ class SavingResults:
                return
           now = datetime.now()
           # grid MUST be a (N,4) numpy array
+          #TODO: modify that function to accept any number of columns and take headers as input for column names
           x = grid[:,0]
           y = grid[:,1]
           z = grid[:,2]
@@ -488,6 +490,20 @@ class SavingResults:
                     for (dx,dy,dz,up) in zip(x,y,z, up_tri):
                               file.write(f"{dx:.3f} {dy:.3f} {dz:.3f} {int(up)}\n")
           
+          logging.info(f'{filename}.txt succesfully saved in {self.results_dir_path}')
+
+     def save_grid_to_txt2(self, grid: pd, filename: str, **kwargs):
+
+          columns = kwargs.get('columns', None)
+          index = kwargs.get('index', False)
+          if not self.save_txt:
+               return
+          now = datetime.now()
+          text_representation = grid.to_string(header= True, columns=columns, index=index)
+          # Write string to file
+          with open(self.results_dir_path + now.strftime("%Y-%m-%d-%H-%M-%S_") + f'{filename}.txt', 'w') as file:
+               file.write(text_representation)
+
           logging.info(f'{filename}.txt succesfully saved in {self.results_dir_path}')
 
 """ Module parameters """ 
@@ -953,7 +969,7 @@ class Grid(FocalSurf):
 
           self.grid_flat_init = {'geometry': []}
           self.grid_BFS = {'front':{}, 'back':{}}
-          self.fiducials = {'xyz': np.array([[0,0]])}
+          self.fiducials = {'x': [], 'y': [], 'z': [], 'geometry': []}
           self.x_grid, self.y_grid, self.z_grid = self.create_flat_grid()
           
           
@@ -987,16 +1003,24 @@ class Grid(FocalSurf):
                          if valid.count(sum_abc): # check if sum abc corresponds to a valid triangle depending on the centering case
                               x,y = tri.tri_center(a,b,c,self.inter_frame_width)
                               fiducial = tri.tri_corners(a,b,c, self.inter_frame_width)
+                              # Intermediate triangles placement
                               if np.sqrt(x**2 + y**2) < self.vigR + vigR_tresh: # allow centroid of inter modules to go out of vigR for further filling purpose
                                    center_coords.append((a,b,c))
                                    x_grid.append(x)
                                    y_grid.append(y)
-                                   self.fiducials['xyz'] = np.vstack((self.fiducials['xyz'], np.asarray(fiducial)))
                                    self.grid_flat_init['geometry'].append(Point(x,y))
                                    if tri.points_up(a,b,c, origin = origin): # flip the modules depending on there position on the grid
                                         flip_global.append(0)
                                    else: 
                                         flip_global.append(1)
+                              # Fiducials placement
+                              if any(np.sqrt(fid[0]**2 + fid[1]**2) < self.vigR for fid in fiducial): # limit fiducials outside vigR to inter modules with center inside vigR
+                                   
+                                   self.fiducials['x'].append(fiducial[0][0])
+                                   self.fiducials['y'].append(fiducial[0][1])
+                                   self.fiducials['z'].append(0) # TODO: temporary zero fopr test purpose, change to z value of the grid later
+                                   self.fiducials['geometry'].append(Point(fiducial[0]))
+                                   # self.fiducials['xyz'] = np.vstack((self.fiducials['xyz'], np.asarray(fiducial)))
           
           x_grid = np.array(x_grid)
           y_grid = np.array(y_grid)

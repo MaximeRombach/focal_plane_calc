@@ -65,7 +65,7 @@ start_time = time.time()
 
 ## Study one case at a time
 nbots = [63]
-out_allowances = [0.8]
+out_allowances = [0.5]
 width_increase = 0 # [mm] How much we want to increase the base length of a module (base value for 63 robots: 73.8mm)
 chanfer_length = 10.5 # [mm] Size of chanfers of module vertices (base value: 7.5); increase chanfer decreases coverage as it reduces the module size thus patrol area
 centered_on_triangle = False # move the center of the grid (red dot) on the centroid on a triangle instead of the edge
@@ -93,7 +93,7 @@ if inner_gap == global_gap and inner_gap != 0:
 """ Define focal surface """
 
 # Available projects: MUST, MegaMapper, DESI, WST1, WST2, WST3, Spec-s5
-project_surface = 'MUST' 
+project_surface = 'Spec-s5' 
 surf = param.FocalSurf(project=project_surface)
 vigR = surf.vigR
 BFS = surf.BFS
@@ -111,7 +111,7 @@ save_plots = False # Save most useful plots
 save_all_plots = False  # Save all plots (including intermediate ones)
 save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
 save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
-save_txt = False # Save positions of modules along curved focal surface
+save_txt = True # Save positions of modules along curved focal surface
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
 saving = param.SavingResults(saving_df, project_surface)
 
@@ -191,7 +191,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
 
      # Generate initial flat grid of modules center points
      grid = param.Grid(project_surface, module_width, inner_gap, global_gap, centered_on_triangle = centered_on_triangle)
-     print(grid.fiducials)
+
      # grid.plot_2D_grid()
 
      #%% 2)c) Place the intermediate triangles accordingly on the grid
@@ -402,6 +402,9 @@ for nb_robots in nbots: # iterate over number of robots/module cases
           
           gdf_final_grid_indiv = gpd.GeoDataFrame(final_grid['indiv'])
 
+          gdf_fiducials = gpd.GeoDataFrame(grid.fiducials)
+          gdf_fiducials['color'] = 'red'
+
           global_dict[key]['boundaries_df'] = boundaries_df
 
           global_dict[key]['modules_df'] = modules_df
@@ -440,9 +443,10 @@ saving.save_grid_to_txt(projected_on_BFS['back'], f'back_grid_spherical_{nb_robo
 
 #%% 2)e) Project final flat grid on aspherical surface 
 
-grid_aspherical = {'x':[], 'y':[], 'z':[], 'r':[], 's':[], 'phi':[], 'theta':[], 'tri_spin':[]}
+grid_aspherical = {'x':[], 'y':[], 'z':[], 'r':[], 's':[], 'phi':[], 'theta':[], 'tri_spin':[], 'type':[], 'grid_pos':[]}
 grid_aspherical = pd.DataFrame.from_dict(grid_aspherical)  # Define the variable "grid_asph_pd"
 # Define transfer functions for aspherical surface i.e. Z position, theta angle and s position along the aspherical curve as function of radial position r
+
 
 grid_aspherical['s'] = np.sqrt(np.array(final_grid['indiv']['x'])**2 + np.array(final_grid['indiv']['y'])**2)
 grid_aspherical['phi']= np.rad2deg(np.arctan2(np.array(final_grid['indiv']['y']), np.array(final_grid['indiv']['x'])))
@@ -454,6 +458,8 @@ grid_aspherical['r'] = np.sqrt(grid_aspherical['x']**2 + grid_aspherical['y']**2
 grid_aspherical['tri_spin'] = np.asarray(final_grid['indiv']['upward_tri'])    
 grid_aspherical['z'] = -surf.R2Z(grid_aspherical['r'])
 grid_aspherical['theta'] = surf.R2NUT(r)
+grid_aspherical['type'] = 'module' # add a column to specify the type of point (module or fiducial)
+grid_aspherical['grid_pos'] = 'front'
 
 # Sort grid by ascending theta and phi to improve readability
 grid_aspherical.sort_values(by=['theta', 'phi'], inplace=True)
@@ -465,17 +471,27 @@ trimming_polygon = surf.make_vigR_polygon(pizza_angle = trim_angle) # define the
 grid_aspherical['point'] = grid_aspherical.apply(lambda row: Point(row['x'], row['y']), axis=1) # create a column of bool for all the points in the grid: True = within the trimming polygon, False = outside
 grid_aspherical = grid_aspherical[grid_aspherical['point'].apply(lambda point: is_point_within_polygon(point, trimming_polygon))] # crop the grid using the column of bool
 grid_aspherical.drop(columns=['point'], inplace=True) # drop the now useless boolean column
-print(grid_aspherical)
 
 # Given the orientation vectors of each module, we can now make the back grid at the module length disance from the front grid
+grid_aspherical_back = {'x':[], 'y':[], 'z':[], 'tri_spin':[], 'type':[], 'grid_pos':[]}
+grid_aspherical_back = pd.DataFrame.from_dict(grid_aspherical_back)  # Define the variable "grid_asph_pd"
 orientation_vectors = grid.orientation_vector(np.deg2rad(grid_aspherical['phi']), np.deg2rad(grid_aspherical['theta']))
 grid_aspherical_xyz = np.vstack((grid_aspherical['x'], grid_aspherical['y'], grid_aspherical['z'])).T
 grid_aspherical_xyz_back = grid_aspherical_xyz - module_length*orientation_vectors
+grid_aspherical_back['x'], grid_aspherical_back['y'], grid_aspherical_back['z'], grid_aspherical_back['tri_spin'] = grid_aspherical_xyz_back[:,0], grid_aspherical_xyz_back[:,1], grid_aspherical_xyz_back[:,2], list(grid_aspherical['tri_spin'])
+grid_aspherical_back['type'], grid_aspherical_back['grid_pos']= 'module', 'back'
+grid_aspherical = grid_aspherical.append(grid_aspherical_back, ignore_index=True)
+
 full_asph = np.vstack((grid_aspherical_xyz, grid_aspherical_xyz_back))
 
-saving.save_grid_to_txt(np.hstack((grid_aspherical_xyz_back, np.asarray(grid_aspherical['tri_spin']).reshape((len(grid_aspherical['tri_spin']), 1)))), f'back_grid_aspherical_{nb_robots}')
-saving.save_grid_to_txt(np.hstack((grid_aspherical_xyz, np.asarray(grid_aspherical['tri_spin']).reshape((len(grid_aspherical['tri_spin']), 1)))), f'front_grid_aspherical_{nb_robots}')
-saving.save_grid_to_txt(full_asph, f'asph_grid_{nb_robots}', direct_SW = True)
+# Save the grid to txt file for Solidworks integration
+# saving.save_grid_to_txt(np.hstack((grid_aspherical_xyz_back, np.asarray(grid_aspherical['tri_spin']).reshape((len(grid_aspherical['tri_spin']), 1)))), f'back_grid_aspherical_{nb_robots}')
+# saving.save_grid_to_txt(np.hstack((grid_aspherical_xyz, np.asarray(grid_aspherical['tri_spin']).reshape((len(grid_aspherical['tri_spin']), 1)))), f'front_grid_aspherical_{nb_robots}')
+saving.save_grid_to_txt2(grid_aspherical[grid_aspherical['grid_pos']=='back'], f'back_grid_aspherical_{nb_robots}', columns = ['x', 'y', 'z', 'tri_spin'])
+saving.save_grid_to_txt2(grid_aspherical[grid_aspherical['grid_pos']=='front'], f'front_grid_aspherical_{nb_robots}', columns = ['x', 'y', 'z', 'tri_spin'])
+saving.save_grid_to_txt2(grid_aspherical, f'grid_aspherical_{nb_robots}', index = True)
+# saving.save_grid_to_txt(full_asph, f'asph_grid_{nb_robots}', direct_SW = True)
+# saving.save_grid_to_txt(np.hstack((np.asarray(grid.fiducials['x']).reshape((len(grid.fiducials['x']), 1)), np.asarray(grid.fiducials['y']).reshape((len(grid.fiducials['x']), 1)), np.asarray(grid.fiducials['z']).reshape((len(grid.fiducials['x']), 1)))), f'fiducials_{nb_robots}', direct_SW = True)
 
 fig = plt.figure(figsize=(10,10))
 ax = fig.add_subplot(111, projection='3d')
@@ -582,8 +598,9 @@ f, ax= plt.subplots(figsize=(12, 12), sharex = True, sharey=True)
 f.suptitle(figtitle)
 gdf_modules.plot(ax=ax,facecolor='None',edgecolor=gdf_modules['color'])
 gdf_bound.plot(ax=ax,facecolor='None', edgecolor=gdf_bound['color'])
-gdf_coverage.plot(column='label',ax=ax, alpha=0.2, legend=True, legend_kwds={'loc': 'upper right'})
-plt.plot(grid.fiducials[:,0], grid.fiducials[:,1], 'ro', label = 'Fiducials')
+gdf_fiducials.plot(ax=ax,facecolor='None', edgecolor=gdf_fiducials['color'])
+gdf_coverage.plot(column='label',ax=ax, alpha=0.2, legend=False, legend_kwds={'loc': 'upper right'})
+
 
 if "WST" in project_surface:
      def custom_formatter(x, pos):
@@ -600,6 +617,13 @@ ax.set_xlabel('x position [mm]')
 
 if not ignore_robots_positions:
      gdf_robots.plot(ax = ax, markersize = 0.05)
+
+ax.scatter(0,0,s=7,color='red')
+plot_polygon(pizza, ax=ax, add_points=False, edgecolor='black', facecolor='None', linestyle='--')
+
+gdf_gfa.plot(ax=ax,facecolor = 'None', edgecolor=gdf_gfa['color'], linestyle='--')
+
+saving.save_figures_to_dir(filename)
 
 if save_csv:
      indiv_pos_df = {'x [mm]':[], 'y [mm]' :[], 'geometry_mm' : [], 'x [arcsec]':[], 'y [arcsec]' :[], 'geometry_arcsec' : []}
@@ -624,12 +648,7 @@ if save_csv:
      # TBI: robot pos accounting for focal plane curvature
      logging.info(f'Robots positions saved to .csv file')
 
-ax.scatter(0,0,s=7,color='red')
-plot_polygon(pizza, ax=ax, add_points=False, edgecolor='black', facecolor='None', linestyle='--')
 
-gdf_gfa.plot(ax=ax,facecolor = 'None', edgecolor=gdf_gfa['color'], linestyle='--')
-
-saving.save_figures_to_dir(filename)
 
 if len(nbots)>1: # Useless to do multiple plots for only one case
      figtitle = param.final_title(surf.surf_name , vigR, nb_robots, total_modules, total_robots, inner_gap, global_gap, allow_small_out, out_allowance, disp_robots_info=False, )
