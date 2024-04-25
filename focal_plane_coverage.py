@@ -97,9 +97,9 @@ project_surface = 'Spec-s5'
 surf = param.FocalSurf(project=project_surface)
 vigR = surf.vigR
 BFS = surf.BFS
-trimming_angle = 360 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
+trimming_angle = 60 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
 
-pizza = surf.make_vigR_polygon(pizza_angle = trimming_angle)
+pizza = surf.make_vigR_polygon(trimming_angle = trimming_angle)
 
 """ Drawing parameters """
 draw = True
@@ -190,7 +190,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
      inter_centroid = inter_frame_width*np.sqrt(3)/3*np.array([np.cos(np.deg2rad(30)), np.sin(np.deg2rad(30))])
 
      # Generate initial flat grid of modules center points
-     grid = param.Grid(project_surface, module_width, inner_gap, global_gap, centered_on_triangle = centered_on_triangle)
+     grid = param.Grid(project_surface, module_width, inner_gap, global_gap, trimming_angle=trimming_angle, centered_on_triangle = centered_on_triangle)
 
      # grid.plot_2D_grid()
 
@@ -432,14 +432,14 @@ for nb_robots in nbots: # iterate over number of robots/module cases
 projection = {'front': {'x': [], 'y': [], 'z': [], 'xyz': [], 'theta': [], 'phi': []},
               'back': {'x': [], 'y': [], 'z': [], 'xyz': [], 'theta': [], 'phi': []}}
 
-trim_angle = 60 # [deg], put 360° for full grid
-grid_points, module_up = grid.trim_grid(final_grid, trim_angle)
+grid_points, module_up = grid.trim_grid(final_grid, trimming_angle)
 
 projected_on_BFS = grid.project_grid_on_sphere(grid_points, BFS, module_length, module_up)
 
-saving.save_grid_to_txt(projected_on_BFS['proj'], f'grid_{nb_robots}', direct_SW = True)
-saving.save_grid_to_txt(projected_on_BFS['front'], f'front_grid_spherical_{nb_robots}')
-saving.save_grid_to_txt(projected_on_BFS['back'], f'back_grid_spherical_{nb_robots}')
+#TODO: switch to version 2 of save_grid_to_txt
+# saving.save_grid_to_txt(projected_on_BFS['proj'], f'grid_{nb_robots}', direct_SW = True)
+# saving.save_grid_to_txt(projected_on_BFS['front'], f'front_grid_spherical_{nb_robots}')
+# saving.save_grid_to_txt(projected_on_BFS['back'], f'back_grid_spherical_{nb_robots}')
 
 #%% 2)e) Project final flat grid on aspherical surface 
 
@@ -461,33 +461,66 @@ grid_aspherical['theta'] = surf.R2NUT(r)
 grid_aspherical['type'] = 'module' # add a column to specify the type of point (module or fiducial)
 grid_aspherical['grid_pos'] = 'front'
 
+# fiducials_df = pd.DataFrame().reindex_like(grid_aspherical)
+fiducials_df = pd.DataFrame(data=None, columns=grid_aspherical.columns)
+# print(fiducials_df, fiducials_df2)
+fiducials_df['s'] = np.sqrt(np.array(grid.fiducials['x'])**2 + np.array(grid.fiducials['y'])**2)
+fiducials_df['phi']= np.rad2deg(np.arctan2(np.array(grid.fiducials['y']), np.array(grid.fiducials['x'])))
+r_fid = surf.S2R(fiducials_df['s'])
+
+fiducials_df['x'] = r_fid * np.cos(np.deg2rad(fiducials_df['phi']))
+fiducials_df['y'] = r_fid * np.sin(np.deg2rad(fiducials_df['phi']))
+fiducials_df['r'] = np.sqrt(fiducials_df['x']**2 + fiducials_df['y']**2)  
+fiducials_df['z'] = -surf.R2Z(fiducials_df['r'])
+fiducials_df['theta'] = surf.R2NUT(r_fid)
+fiducials_df['type'] = 'fiducial' # add a column to specify the type of point (module or fiducial)
+fiducials_df['grid_pos'] = 'front'
+fiducials_df.drop_duplicates(inplace=True)
+# grid_aspherical = grid_aspherical.append(fiducials_df, ignore_index=True)
 # Sort grid by ascending theta and phi to improve readability
 grid_aspherical.sort_values(by=['theta', 'phi'], inplace=True)
+fiducials_df.sort_values(by=['theta', 'phi'], inplace=True)
 
 # Trim the grid to the desired angle
 def is_point_within_polygon(point, polygon):
     return polygon.contains(point)
-trimming_polygon = surf.make_vigR_polygon(pizza_angle = trim_angle) # define the pizza slice (most of the time 60°)
+trimming_polygon = surf.make_vigR_polygon(trimming_angle = trimming_angle) # define the pizza slice (most of the time 60°)
 grid_aspherical['point'] = grid_aspherical.apply(lambda row: Point(row['x'], row['y']), axis=1) # create a column of bool for all the points in the grid: True = within the trimming polygon, False = outside
 grid_aspherical = grid_aspherical[grid_aspherical['point'].apply(lambda point: is_point_within_polygon(point, trimming_polygon))] # crop the grid using the column of bool
 grid_aspherical.drop(columns=['point'], inplace=True) # drop the now useless boolean column
 
 # Given the orientation vectors of each module, we can now make the back grid at the module length disance from the front grid
-grid_aspherical_back = pd.DataFrame().reindex_like(grid_aspherical) # create an empty copy of the front grid DF to store the back grid
-orientation_vectors = grid.orientation_vector(np.deg2rad(grid_aspherical['phi']), np.deg2rad(grid_aspherical['theta']))
-grid_aspherical_xyz = np.vstack((grid_aspherical['x'], grid_aspherical['y'], grid_aspherical['z'])).T
-grid_aspherical_xyz_back = grid_aspherical_xyz - module_length*orientation_vectors
+grid_aspherical_back = pd.DataFrame(data=None, columns=grid_aspherical.columns) # create an empty copy of the front grid DF to store the back grid
+orientation_vectors = grid.orientation_vector(np.deg2rad(grid_aspherical['phi']), np.deg2rad(grid_aspherical['theta'])) # get the orientation vectors of each module to project back grid in the right direction
+grid_aspherical_xyz = np.vstack((grid_aspherical['x'], grid_aspherical['y'], grid_aspherical['z'])).T # build numpy matrix for easier calculations
+grid_aspherical_xyz_back = grid_aspherical_xyz - module_length*orientation_vectors # calculate the back grid position projecting the front grid in the previously calculated orientation vectors
+# Store results
 grid_aspherical_back['x'], grid_aspherical_back['y'], grid_aspherical_back['z'], grid_aspherical_back['tri_spin'] = grid_aspherical_xyz_back[:,0], grid_aspherical_xyz_back[:,1], grid_aspherical_xyz_back[:,2], list(grid_aspherical['tri_spin'])
 grid_aspherical_back['type'], grid_aspherical_back['grid_pos']= 'module', 'back'
 grid_aspherical = grid_aspherical.append(grid_aspherical_back, ignore_index=True)
 
-full_asph = np.vstack((grid_aspherical_xyz, grid_aspherical_xyz_back))
+# Same for back fiducials
+
+fiducials_df_back = pd.DataFrame(data=None, columns=grid_aspherical.columns)
+orientation_vectors = grid.orientation_vector(np.deg2rad(fiducials_df['phi']), np.deg2rad(fiducials_df['theta'])) # get the orientation vectors of each module to project back grid in the right direction
+fiducials_df_xyz = np.vstack((fiducials_df['x'], fiducials_df['y'], fiducials_df['z'])).T # build numpy matrix for easier calculations
+fiducials_df_xyz_back = fiducials_df_xyz - module_length*orientation_vectors # calculate the back grid position projecting the front grid in the previously calculated orientation vectors
+# Store results
+fiducials_df_back['x'], fiducials_df_back['y'], fiducials_df_back['z'] = fiducials_df_xyz_back[:,0], fiducials_df_xyz_back[:,1], fiducials_df_xyz_back[:,2]
+fiducials_df_back['type'], fiducials_df_back['grid_pos']= 'fiducial', 'back'
+fiducials_df = fiducials_df.append(fiducials_df_back, ignore_index=True)
+grid_aspherical = grid_aspherical.append(fiducials_df, ignore_index=True)
 
 # Save the grid to txt file for Solidworks integration
-saving.save_grid_to_txt2(grid_aspherical[grid_aspherical['grid_pos']=='back'], f'back_grid_aspherical_{nb_robots}', columns = ['x', 'y', 'z', 'tri_spin'])
-saving.save_grid_to_txt2(grid_aspherical[grid_aspherical['grid_pos']=='front'], f'front_grid_aspherical_{nb_robots}', columns = ['x', 'y', 'z', 'tri_spin'])
+saving.save_grid_to_txt2(grid_aspherical[(grid_aspherical['grid_pos']=='back') & (grid_aspherical['type']=='module')], f'back_grid_modules_{nb_robots}', columns = ['x', 'y', 'z', 'tri_spin'])
+saving.save_grid_to_txt2(grid_aspherical[(grid_aspherical['grid_pos']=='front') & (grid_aspherical['type']=='module')], f'front_grid_modules_{nb_robots}', columns = ['x', 'y', 'z', 'tri_spin'])
+
+saving.save_grid_to_txt2(grid_aspherical[(grid_aspherical['grid_pos']=='back') & (grid_aspherical['type']=='fiducial')], f'back_grid_fiducials_{nb_robots}', columns = ['x', 'y', 'z'])
+saving.save_grid_to_txt2(grid_aspherical[(grid_aspherical['grid_pos']=='front') & (grid_aspherical['type']=='fiducial')], f'front_grid_fiducials_{nb_robots}', columns = ['x', 'y', 'z'])
+
 saving.save_grid_to_txt2(grid_aspherical, f'grid_aspherical_{nb_robots}', index = True)
 
+# Plot 3D grid for visualization/deguugging
 fig = plt.figure(figsize=(10,10))
 ax = fig.add_subplot(111, projection='3d')
 grid.plot_3D_grid(ax,grid_aspherical_xyz[:,0], grid_aspherical_xyz[:,1], grid_aspherical_xyz[:,2], color='blue', label = 'Front grid')

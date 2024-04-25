@@ -338,16 +338,16 @@ class FocalSurf():
 
           return sphR
      
-     def make_vigR_polygon(self, pizza_angle = 360, n_vigR = 500, changed_vigR = None):
+     def make_vigR_polygon(self, trimming_angle = 360, n_vigR = 500, changed_vigR = None):
           
           if changed_vigR is not None:
                vigR = changed_vigR # [mm] allows to change the vignetting radius for specific cases
           else:
                vigR = self.vigR # [mm] vignetting radius, nominal case declared for each project
 
-          vigR_lim_x = vigR * np.cos(np.deg2rad(np.linspace(0,pizza_angle,n_vigR)))
-          vigR_lim_y = vigR * np.sin(np.deg2rad(np.linspace(0,pizza_angle,n_vigR)))
-          if pizza_angle == 360:
+          vigR_lim_x = vigR * np.cos(np.deg2rad(np.linspace(0,trimming_angle,n_vigR)))
+          vigR_lim_y = vigR * np.sin(np.deg2rad(np.linspace(0,trimming_angle,n_vigR)))
+          if trimming_angle == 360:
                end_point = [vigR_lim_x[0], vigR_lim_y[0]]
           else:
                end_point = [0, 0]
@@ -956,7 +956,7 @@ class GFA(SavingResults):
      # NOTE: Grid generation class
 class Grid(FocalSurf):
 
-     def __init__(self, project_surface: str, module_width: float, inter_frame_thick: float, global_frame_thick: float, centered_on_triangle: bool  = False) -> None:
+     def __init__(self, project_surface: str, module_width: float, inter_frame_thick: float, global_frame_thick: float, trimming_angle: float = 360, centered_on_triangle: bool  = False) -> None:
           
           
           self.centered_on_triangle = centered_on_triangle
@@ -966,6 +966,7 @@ class Grid(FocalSurf):
           self.inter_frame_width = 2*self.module_width + 2*self.inter_frame_thick*np.cos(np.deg2rad(30)) + 2*self.global_frame_thick*np.cos(np.deg2rad(30))
           
           super().__init__(project_surface)
+          self.pizza = FocalSurf.make_vigR_polygon(self, trimming_angle = trimming_angle)
 
           self.grid_flat_init = {'geometry': []}
           self.grid_BFS = {'front':{}, 'back':{}}
@@ -1002,9 +1003,10 @@ class Grid(FocalSurf):
                          # if valid == 1 or valid == 2: 
                          if valid.count(sum_abc): # check if sum abc corresponds to a valid triangle depending on the centering case
                               x,y = tri.tri_center(a,b,c,self.inter_frame_width)
+                              #TODO: make smaller grid of fiducials to fill up more spaces
                               fiducial = tri.tri_corners(a,b,c, self.inter_frame_width)
                               # Intermediate triangles placement
-                              if np.sqrt(x**2 + y**2) < self.vigR + vigR_tresh: # allow centroid of inter modules to go out of vigR for further filling purpose
+                              if Point(x,y).within(self.pizza.buffer(vigR_tresh)): # allow centroid of inter modules to go out of vigR for further filling purpose
                                    center_coords.append((a,b,c))
                                    x_grid.append(x)
                                    y_grid.append(y)
@@ -1014,12 +1016,13 @@ class Grid(FocalSurf):
                                    else: 
                                         flip_global.append(1)
                               # Fiducials placement
-                              if any(np.sqrt(fid[0]**2 + fid[1]**2) < self.vigR for fid in fiducial): # limit fiducials outside vigR to inter modules with center inside vigR
+                              for fid in fiducial:
+                                   if Point(fid[0],fid[1]).within(self.pizza.buffer(10)): # limit fiducials outside vigR to inter modules with center inside vigR
                                    
-                                   self.fiducials['x'].append(fiducial[0][0])
-                                   self.fiducials['y'].append(fiducial[0][1])
-                                   self.fiducials['z'].append(0) # TODO: temporary zero fopr test purpose, change to z value of the grid later
-                                   self.fiducials['geometry'].append(Point(fiducial[0]))
+                                        self.fiducials['x'].append(fid[0])
+                                        self.fiducials['y'].append(fid[1])
+                                        self.fiducials['z'].append(0)
+                                        self.fiducials['geometry'].append(Point(fid))
                                    # self.fiducials['xyz'] = np.vstack((self.fiducials['xyz'], np.asarray(fiducial)))
           
           x_grid = np.array(x_grid)
@@ -1038,7 +1041,7 @@ class Grid(FocalSurf):
 
           return x_grid, y_grid, z_grid
      
-     def trim_grid(self, final_grid: dict , trim_angle = 360):
+     def trim_grid(self, final_grid: dict , trimming_angle = 360):
 
           """
           Input:
@@ -1055,12 +1058,12 @@ class Grid(FocalSurf):
           - module_up: (N,1) [numpy array] contains 0 or 1 depending on the orientation of the module (0 = up, 1 = down) within the trimming angle
           """
 
-          if trim_angle == 360:
+          if trimming_angle == 360:
                grid_points = np.asarray(final_grid['indiv']['xyz'])
                module_up = np.asarray(final_grid['indiv']['upward_tri'])
           else:
                extra_vigR = 20 # [mm] extra radius to include modules whose centroid are outside vigR but fulfills the out_allowance condition
-               pizza_slice = FocalSurf.make_vigR_polygon(self, pizza_angle = trim_angle, changed_vigR = self.vigR + extra_vigR)
+               pizza_slice = FocalSurf.make_vigR_polygon(self, trimming_angle = trimming_angle, changed_vigR = self.vigR + extra_vigR)
                grid_points = []
                module_up = []
                for idx, point in enumerate(final_grid['indiv']['geometry']):
