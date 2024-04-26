@@ -1003,8 +1003,6 @@ class Grid(FocalSurf):
                          # if valid == 1 or valid == 2: 
                          if valid.count(sum_abc): # check if sum abc corresponds to a valid triangle depending on the centering case
                               x,y = tri.tri_center(a,b,c,self.inter_frame_width)
-                              #TODO: make smaller grid of fiducials to fill up more spaces
-                              fiducial = tri.tri_corners(a,b,c, self.inter_frame_width)
                               # Intermediate triangles placement
                               if Point(x,y).within(self.pizza.buffer(vigR_tresh)): # allow centroid of inter modules to go out of vigR for further filling purpose
                                    center_coords.append((a,b,c))
@@ -1015,6 +1013,8 @@ class Grid(FocalSurf):
                                         flip_global.append(0)
                                    else: 
                                         flip_global.append(1)
+                              #TODO: make smaller grid of fiducials to fill up more spaces
+                              fiducial = tri.tri_corners(a,b,c, self.inter_frame_width/2)
                               # Fiducials placement
                               for fid in fiducial:
                                    if Point(fid[0],fid[1]).within(self.pizza.buffer(10)): # limit fiducials outside vigR to inter modules with center inside vigR
