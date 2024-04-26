@@ -7,6 +7,8 @@ import numpy as np
 from numpy.linalg import norm
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+import matplotlib.patches as mpatches
+import matplotlib.lines as mlines
 import geopandas as gpd
 import pandas as pd
 import array as array
@@ -73,11 +75,11 @@ full_framed = False # flag to check wether we are in semi frameless or in full f
 
 """ Intermediate frame parameters """
 
-inner_gap = 1 # [mm] spacing between modules inside intermediate frame
+inner_gap = 0.5 # [mm] spacing between modules inside intermediate frame
 
 """ Global frame parameters """
 
-global_gap = 3 # [mm] spacing between modules in global arrangement
+global_gap = 4 # [mm] spacing between modules in global arrangement
 
 """ Protective shields on module """
 
@@ -97,7 +99,7 @@ project_surface = 'Spec-s5'
 surf = param.FocalSurf(project=project_surface)
 vigR = surf.vigR
 BFS = surf.BFS
-trimming_angle = 60 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
+trimming_angle = 360 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
 
 pizza = surf.make_vigR_polygon(trimming_angle = trimming_angle)
 
@@ -111,7 +113,7 @@ save_plots = False # Save most useful plots
 save_all_plots = False  # Save all plots (including intermediate ones)
 save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
 save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
-save_txt = True # Save positions of modules along curved focal surface
+save_txt = False # Save positions of modules along curved focal surface
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
 saving = param.SavingResults(saving_df, project_surface)
 
@@ -119,6 +121,7 @@ saving = param.SavingResults(saving_df, project_surface)
 gfa_tune = 1
 nb_gfa = 6
 gfa = param.GFA(length = 33.3*gfa_tune, width = 61*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
+gfa = param.GFA(length = 10*gfa_tune, width = 10*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
 # gfa = param.GFA(length = 60*gfa_tune, width = 60*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
 gdf_gfa = gfa.gdf_gfa
 polygon_gfa = MultiPolygon(list(gdf_gfa['geometry']))
@@ -392,7 +395,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
           gdf_bound = gpd.GeoDataFrame(boundaries_df)
           gdf_modules = gpd.GeoDataFrame(modules_df)
           gdf_coverage = gpd.GeoDataFrame(coverage_df)
-          gdf_coverage['label'] = f'Coverage vigR: {global_coverage} %'
+          gdf_coverage['label'] = f'Coverage: {global_coverage} %'
           robots_df['geometry'] = [unary_union(robots_df['geometry'])]
           gdf_robots = gpd.GeoDataFrame(robots_df)
           gdf_robots['markersize'] = 0.05
@@ -404,6 +407,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
 
           gdf_fiducials = gpd.GeoDataFrame(grid.fiducials)
           gdf_fiducials['color'] = 'red'
+          gdf_fiducials['label'] = f'{len(gdf_fiducials)} fiducials'
 
           global_dict[key]['boundaries_df'] = boundaries_df
 
@@ -461,7 +465,8 @@ grid_aspherical['theta'] = surf.R2NUT(r)
 grid_aspherical['type'] = 'module' # add a column to specify the type of point (module or fiducial)
 grid_aspherical['grid_pos'] = 'front'
 
-# fiducials_df = pd.DataFrame().reindex_like(grid_aspherical)
+# Fiducials placement on the 3D grid
+# I know it's not the most optimal way to do it (copy/paste previous code) but it works for now, cleanup for later
 fiducials_df = pd.DataFrame(data=None, columns=grid_aspherical.columns)
 # print(fiducials_df, fiducials_df2)
 fiducials_df['s'] = np.sqrt(np.array(grid.fiducials['x'])**2 + np.array(grid.fiducials['y'])**2)
@@ -476,7 +481,6 @@ fiducials_df['theta'] = surf.R2NUT(r_fid)
 fiducials_df['type'] = 'fiducial' # add a column to specify the type of point (module or fiducial)
 fiducials_df['grid_pos'] = 'front'
 fiducials_df.drop_duplicates(inplace=True)
-# grid_aspherical = grid_aspherical.append(fiducials_df, ignore_index=True)
 # Sort grid by ascending theta and phi to improve readability
 grid_aspherical.sort_values(by=['theta', 'phi'], inplace=True)
 fiducials_df.sort_values(by=['theta', 'phi'], inplace=True)
@@ -626,9 +630,8 @@ f, ax= plt.subplots(figsize=(12, 12), sharex = True, sharey=True)
 f.suptitle(figtitle)
 gdf_modules.plot(ax=ax,facecolor='None',edgecolor=gdf_modules['color'])
 gdf_bound.plot(ax=ax,facecolor='None', edgecolor=gdf_bound['color'])
-gdf_fiducials.plot(ax=ax,facecolor='None', edgecolor=gdf_fiducials['color'])
-gdf_coverage.plot(column='label',ax=ax, alpha=0.2, legend=False, legend_kwds={'loc': 'upper right'})
-
+gdf_fiducials.plot(ax=ax, color = 'red', markersize = 15, marker = '.')
+gdf_coverage.plot(ax=ax, alpha=0.2)
 
 if "WST" in project_surface:
      def custom_formatter(x, pos):
@@ -646,10 +649,16 @@ ax.set_xlabel('x position [mm]')
 if not ignore_robots_positions:
      gdf_robots.plot(ax = ax, markersize = 0.05)
 
-ax.scatter(0,0,s=7,color='red')
+gdf_gfa.plot(ax=ax, column='label',facecolor = 'None', edgecolor=gdf_gfa['color'], linestyle='--')
+# ax.scatter(0,0,s=2,color='black')
 plot_polygon(pizza, ax=ax, add_points=False, edgecolor='black', facecolor='None', linestyle='--')
 
-gdf_gfa.plot(ax=ax,facecolor = 'None', edgecolor=gdf_gfa['color'], linestyle='--')
+# OK for some reason 'label' option for several gdf on the same figure DOES NOT work, had to manually add the legend
+coverage = gdf_coverage['label'][0]
+coverage_patch= mpatches.Patch(color='C0', alpha = 0.2, label= f'{coverage}')
+fiducial_patch = mlines.Line2D([], [], color='red', marker='.', markersize=7, linestyle='None', label=f'Fiducials: {len(gdf_fiducials)}')
+gfa_handler = mpatches.Patch(facecolor='None', edgecolor='brown', linestyle='--', label=f'GFA: {len(gdf_gfa)}')
+plt.legend(handles=[fiducial_patch,coverage_patch, gfa_handler], shadow = True)
 
 saving.save_figures_to_dir(filename)
 
