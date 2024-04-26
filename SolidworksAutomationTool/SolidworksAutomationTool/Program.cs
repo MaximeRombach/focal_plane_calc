@@ -32,7 +32,7 @@ const double bottom2SupportFacesDistance = 30e-3;       // in meters
 // param: distance between the support surface to top surface definition
 const double supportToTopSurfaceDistance = frameThickness - bottom2SupportFacesDistance;         // in meters
 // param: create horizontal line (for flat bottom surface). Need a better name here
-const double bottomSurfaceRadius = 650e-3;
+const double bottomSurfaceRadius = 450e-3;
 // param: side length of the equilateral triangle (full triangle)
 const double equilateralTriangleSideLength = 76.4e-3;
 
@@ -63,6 +63,7 @@ string frontGridPointCloudFilePath = Console.ReadLine();
 Console.WriteLine("Reading front grid point cloud file ...");
 PointCloud frontGridPointCloud = new();
 frontGridPointCloud.ReadPointCloudFromTxt(frontGridPointCloudFilePath, Units.Millimeter);
+// frontGridPointCloud.PrintPoint3Ds();
 Console.WriteLine("Completed reading point cloud file");
 
 Console.WriteLine("Please enter the path of the BACK MODULES grid point cloud txt file");
@@ -83,7 +84,7 @@ PointCloud frontFiducialsGridPointCloud = new();
 frontFiducialsGridPointCloud.ReadPointCloudFromTxt(frontFiducialsGridPointCloudFilePath, Units.Millimeter);
 Console.WriteLine("Completed reading point cloud file");
 
-Console.WriteLine("Please enter the path of the FRONT FIDUCIALS grid point cloud txt file");
+Console.WriteLine("Please enter the path of the BACK FIDUCIALS grid point cloud txt file");
 string backFiducialsGridPointCloudFilePath = Console.ReadLine();
 // string backFiducialsGridPointCloudFilePath = Path.GetFullPath(@$"..\..\Results_examples\Grid_examples\{project}\back.txt"); // For debug use
 
@@ -158,6 +159,7 @@ if (solidworksApp == null)
 solidworksApp.Visible = true;
 Console.WriteLine("Please wait a bit. SolidWorks should appear. If not, there is an error starting solidworks");
 
+// NOTE: Creating module axes
 /* Start modeling the robot holder in the focal plane */
 //PromptAndWait("Press any key to create the robot-holder from the point clouds");
 Console.WriteLine("Creating extrusion axes from point clouds ...");
@@ -225,7 +227,58 @@ using ( ProgressBar createExtrusionAxesProgressBar = new(frontGridPointCloud.poi
     }
 }
 
-Console.WriteLine("Extrusion axes placement completed");
+Console.WriteLine("Modules axes placement completed");
+
+// NOTE: Creating fiducials axes
+modulePart.SketchManager.Insert3DSketch(true);
+
+// magic clear selection method
+ClearSelection(ref modulePart);
+
+// create another 3D sketch so that the extrusion axes are untouched
+modulePart.SketchManager.Insert3DSketch(true);
+ClearSelection(ref modulePart);
+
+// set the view to isometric. The empty string tells solidworks to use the view indicated by the swStandardViews_e enum.
+modulePart.ShowNamedView2("", (int)swStandardViews_e.swIsometricView);
+
+// disable user input box when adding dimensions
+DisableInputDimensionByUser(ref solidworksApp);
+
+// disable view refreshing until points are created
+modelView =(ModelView)modulePart.GetFirstModelView();
+modelView.EnableGraphicsUpdate = false;
+modulePart.SketchManager.AddToDB = true;
+
+// try disabling feature tree updates to gain performance
+modulePart.FeatureManager.EnableFeatureTree = false;
+// EnableGraphicsUpdate affects whether to refresh the model view during a selection, such as IEntity::Select4 or IFeature::Select2.
+
+// try to allocate space for front sketchpoints and back sketchpoints
+List<SketchPoint> frontFiducialsSketchPointList = new(frontFiducialsGridPointCloud.point3Ds.Count);
+List<SketchPoint> backFiducialsSketchPointList = new(backFiducialsGridPointCloud.point3Ds.Count);
+List<SketchSegment> fiducialsAxisList = new(frontFiducialsSketchPointList.Count);
+
+using ( ProgressBar createExtrusionAxesProgressBar = new(frontFiducialsGridPointCloud.point3Ds.Count, "Creating fiducials axes", progressBarOptions))
+{
+    // Try iterating through two point clouds at the same time
+    foreach ((Point3D frontPoint, Point3D backPoint) in frontFiducialsGridPointCloud.point3Ds.Zip(backFiducialsGridPointCloud.point3Ds))
+    {
+        // create top and bottom points
+        frontFiducialsSketchPointList.Add(modulePart.SketchManager.CreatePoint(frontPoint.x, frontPoint.y, frontPoint.z));
+        backFiducialsSketchPointList.Add(modulePart.SketchManager.CreatePoint(backPoint.x, backPoint.y, backPoint.z));
+
+        // create axis of extrusion as construction lines
+        fiducialsAxisList.Add(modulePart.SketchManager.CreateLine(frontPoint.x, frontPoint.y, frontPoint.z, backPoint.x, backPoint.y, backPoint.z));
+        // using fancy but convenient index-from-end operator (^), which is available in C# 8.0 and later, to get the last element in a list.
+        fiducialsAxisList[^1].ConstructionGeometry = true;
+
+        // update the progress bar
+        createExtrusionAxesProgressBar.Tick();
+    }
+}
+
+Console.WriteLine("Fiducials axes placement completed");
 
 // EnableGraphicsUpdate affects whether to refresh the model view during a selection, such as IEntity::Select4 or IFeature::Select2.
 modelView.EnableGraphicsUpdate = true;
