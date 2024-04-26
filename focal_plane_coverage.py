@@ -12,7 +12,6 @@ import matplotlib.lines as mlines
 import geopandas as gpd
 import pandas as pd
 import array as array
-import updown_tri as tri
 import time
 from tqdm import tqdm
 from shapely.geometry import Polygon, Point
@@ -25,9 +24,6 @@ from shapely.errors import ShapelyDeprecationWarning
 warnings.filterwarnings("ignore", category=ShapelyDeprecationWarning) 
 import parameters as param
 from datetime import datetime
-
-from astropy.coordinates import cartesian_to_spherical
-
 
 logging.basicConfig(level=logging.INFO)
 
@@ -99,7 +95,7 @@ project_surface = 'Spec-s5'
 surf = param.FocalSurf(project=project_surface)
 vigR = surf.vigR
 BFS = surf.BFS
-trimming_angle = 360 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
+trimming_angle = 60 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
 
 pizza = surf.make_vigR_polygon(trimming_angle = trimming_angle)
 
@@ -113,7 +109,7 @@ save_plots = False # Save most useful plots
 save_all_plots = False  # Save all plots (including intermediate ones)
 save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
 save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
-save_txt = False # Save positions of modules along curved focal surface
+save_txt = True # Save positions of modules along curved focal surface
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
 saving = param.SavingResults(saving_df, project_surface)
 
@@ -408,6 +404,8 @@ for nb_robots in nbots: # iterate over number of robots/module cases
           gdf_fiducials = gpd.GeoDataFrame(grid.fiducials)
           gdf_fiducials['color'] = 'red'
           gdf_fiducials['label'] = f'{len(gdf_fiducials)} fiducials'
+          gdf_fiducials.drop_duplicates(inplace=True)
+          print(gdf_fiducials)
 
           global_dict[key]['boundaries_df'] = boundaries_df
 
@@ -481,6 +479,7 @@ fiducials_df['theta'] = surf.R2NUT(r_fid)
 fiducials_df['type'] = 'fiducial' # add a column to specify the type of point (module or fiducial)
 fiducials_df['grid_pos'] = 'front'
 fiducials_df.drop_duplicates(inplace=True)
+fiducials_number = len(fiducials_df['x'])
 # Sort grid by ascending theta and phi to improve readability
 grid_aspherical.sort_values(by=['theta', 'phi'], inplace=True)
 fiducials_df.sort_values(by=['theta', 'phi'], inplace=True)
@@ -656,7 +655,7 @@ plot_polygon(pizza, ax=ax, add_points=False, edgecolor='black', facecolor='None'
 # OK for some reason 'label' option for several gdf on the same figure DOES NOT work, had to manually add the legend
 coverage = gdf_coverage['label'][0]
 coverage_patch= mpatches.Patch(color='C0', alpha = 0.2, label= f'{coverage}')
-fiducial_patch = mlines.Line2D([], [], color='red', marker='.', markersize=7, linestyle='None', label=f'Fiducials: {len(gdf_fiducials)}')
+fiducial_patch = mlines.Line2D([], [], color='red', marker='.', markersize=7, linestyle='None', label=f'Fiducials: {fiducials_number}')
 gfa_handler = mpatches.Patch(facecolor='None', edgecolor='brown', linestyle='--', label=f'GFA: {len(gdf_gfa)}')
 plt.legend(handles=[fiducial_patch,coverage_patch, gfa_handler], shadow = True)
 
