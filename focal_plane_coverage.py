@@ -95,7 +95,7 @@ project_surface = 'Spec-s5'
 surf = param.FocalSurf(project=project_surface)
 vigR = surf.vigR
 BFS = surf.BFS
-trimming_angle = 60 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
+trimming_angle = 360 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
 
 pizza = surf.make_vigR_polygon(trimming_angle = trimming_angle)
 
@@ -105,20 +105,20 @@ is_timer = False # Display time of final plots before automatic closing; stays o
 
 plot_time = 20 # [s] plotting time
 ignore_robots_positions = False
-save_plots = False # Save most useful plots 
+save_plots = True # Save most useful plots 
 save_all_plots = False  # Save all plots (including intermediate ones)
-save_frame_as_dxf = False # Save the outline of the frame for Solidworks integration
+save_frame_as_dxf = False # DEPRECATED: Save the outline of the frame for Solidworks integration
 save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
-save_txt = True # Save positions of modules along curved focal surface
+save_txt = False # Save positions of modules along curved focal surface
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
 saving = param.SavingResults(saving_df, project_surface)
 
 """GFA stuff"""
 gfa_tune = 1
 nb_gfa = 6
-gfa = param.GFA(length = 33.3*gfa_tune, width = 61*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
+# gfa = param.GFA(length = 33.3*gfa_tune, width = 61*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
 gfa = param.GFA(length = 10*gfa_tune, width = 10*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
-# gfa = param.GFA(length = 60*gfa_tune, width = 60*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
+# gfa = param.GFA(length = 50*gfa_tune, width = 60*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
 gdf_gfa = gfa.gdf_gfa
 polygon_gfa = MultiPolygon(list(gdf_gfa['geometry']))
 
@@ -403,9 +403,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
 
           gdf_fiducials = gpd.GeoDataFrame(grid.fiducials)
           gdf_fiducials['color'] = 'red'
-          gdf_fiducials['label'] = f'{len(gdf_fiducials)} fiducials'
           gdf_fiducials.drop_duplicates(inplace=True)
-          print(gdf_fiducials)
 
           global_dict[key]['boundaries_df'] = boundaries_df
 
@@ -462,6 +460,7 @@ grid_aspherical['z'] = -surf.R2Z(grid_aspherical['r'])
 grid_aspherical['theta'] = surf.R2NUT(r)
 grid_aspherical['type'] = 'module' # add a column to specify the type of point (module or fiducial)
 grid_aspherical['grid_pos'] = 'front'
+grid_aspherical['geometry'] = [Point(x, y, z) for x, y, z in zip(grid_aspherical['x'], grid_aspherical['y'], grid_aspherical['z'])]
 
 # Fiducials placement on the 3D grid
 # I know it's not the most optimal way to do it (copy/paste previous code) but it works for now, cleanup for later
@@ -510,7 +509,7 @@ fiducials_df_xyz = np.vstack((fiducials_df['x'], fiducials_df['y'], fiducials_df
 fiducials_df_xyz_back = fiducials_df_xyz - module_length*orientation_vectors # calculate the back grid position projecting the front grid in the previously calculated orientation vectors
 # Store results
 fiducials_df_back['x'], fiducials_df_back['y'], fiducials_df_back['z'] = fiducials_df_xyz_back[:,0], fiducials_df_xyz_back[:,1], fiducials_df_xyz_back[:,2]
-fiducials_df_back['type'], fiducials_df_back['grid_pos']= 'fiducial', 'back'
+fiducials_df_back['type'], fiducials_df_back['grid_pos'] = 'fiducial', 'back'
 fiducials_df = fiducials_df.append(fiducials_df_back, ignore_index=True)
 grid_aspherical = grid_aspherical.append(fiducials_df, ignore_index=True)
 
