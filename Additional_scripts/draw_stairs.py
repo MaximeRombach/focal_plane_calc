@@ -18,32 +18,31 @@ from datetime import datetime
 
 ## Parameters ##
 
-project = 'MegaMapper'
+project = 'Spec-S5'
 surf = param.FocalSurf(project)
 
 Rc = surf.curvature_R # Curve radius [mm]
 vigR = surf.vigR
 d_plane = 2*vigR # Focal plane diameter [mm]
-nb_robots = 63
-saving_df = {"save_plots": False}
+nb_robots = 75
+saving_df = {"save_plots": True}
 display_BFS = False
 save = param.SavingResults(saving_df, project_name=project)
-mod_param = param.Module(nb_robots, saving_df)
+mod_param = param.Module(nb_robots, saving_df, BFS = surf.BFS)
 module_width = mod_param.module_width * np.sqrt(3)/2 #= triangle HEIGHT and NOT side
-nb_modules = 9 #number of modules of one side of the axis
+nb_modules = 6 #number of modules of one side of the axis
 tolerance_envelop_width = surf.focus_tolerance_width # [mm] tolerance in positioning around nominal focal surface
 start_offset = module_width/2
 
-optics_data = surf.read_focal_plane_data() # Read data from csv file
-optics_data['Z'] = -optics_data['Z'] 
-R2Z, R2CRD, R2NORM, R2S = surf.transfer_functions(optics_data)
+# optics_data = surf.read_focal_plane_data() # Read data from csv file
+optics_data = surf.optics_data
 # t = Table.read(f'Data_focal_planes/{project}.csv', comment='#', delimiter=';')
-Z_data = optics_data['Z']
+# Z_data = optics_data['Z']
 CRD_data = optics_data['CRD']
 R_data = optics_data['R']
 
 r = np.linspace(0,surf.vigR,500) # Define radius vector for focal plane curve
-z = R2Z(r) # Calculate focal plane curve from csv data
+z = surf.R2Z(r) # Calculate focal plane curve from csv data
 
 BFS = surf.calc_BFS(r, z)
 R2Z_BFS = lambda r: -np.sqrt(BFS**2-np.square(r)) + BFS
@@ -170,7 +169,7 @@ def draw_modules_oriented(plot_axis=0, draw=True, draw_one = False, module_numbe
 def draw_module_translated(new_left_module_translated, new_right_module_translated, module_number, translation_distance):
 
     plt.plot((new_left_module_translated[module_number][0],new_right_module_translated[module_number][0]),
-                        (new_left_module_translated[module_number][1],new_right_module_translated[module_number][1]),'k', label="Module translated ({} $\mu$m)".format(int(translation_distance*1000)))
+                        (new_left_module_translated[module_number][1],new_right_module_translated[module_number][1]),'g', label="Module translated ({} $\mu$m)".format(int(translation_distance*1000)))
 
 def draw_normals(x_modules, y_modules, normal, length=10, draw=True):
     if not draw:
@@ -252,9 +251,9 @@ def zoom_in_1module(module_number, xbound, ybound, draw=True):
     x_center, y_center = x_modules[module_number], y_modules[module_number]
     xlim_min, xlim_max, ylim_min, ylim_max = x_center - xbound, x_center + xbound,  y_center - ybound, y_center + ybound
 
-    plt.plot(r,z,'--g',label="Focal surface")
-    draw_modules_horizontal(plot_axis=1, draw=False, draw_one=False, module_number=module_number)
-    draw_envelop(plot_axis=1, draw_legend=False)
+    plt.plot(r,z,'--k',label="Focal surface")
+    draw_modules_horizontal(plot_axis=1, draw=True, draw_one=True, module_number=module_number)
+    draw_envelop(plot_axis=1, draw_legend=True)
     draw_modules_oriented(plot_axis=1, draw_one=True, module_number=module_number)
     # draw_normals(x_modules,y_modules,normal,length=1)
     draw_BFS(BFS,vigR, display_BFS=display_BFS, full_curve=False)
@@ -284,7 +283,7 @@ def normIntersects(normals, module_number, module_left, module_right, number_of_
     for b,x in zip(b_iterable, x_iterable):
 
         def fun(r1):
-            return a*r1 + b - R2Z(r1)
+            return a*r1 + b - surf.R2Z(r1)
     
         initial_guess = x
 
@@ -292,7 +291,7 @@ def normIntersects(normals, module_number, module_left, module_right, number_of_
 
         r_curve = np.append(r_curve, r_solved, axis=0)
     
-    z_curve = R2Z(r_curve)
+    z_curve = surf.R2Z(r_curve)
 
     return x_iterable, y, r_curve, z_curve
 
@@ -303,11 +302,11 @@ def dist2curve(r_module,z_module,r_curve,z_curve):
     return np.sqrt(dr**2+dz**2)
 
 
-x_modules, y_modules = calc_modules_pos(module_width, nb_modules, R2Z, on_BFS=False)
-normals = get_normals(x_modules, R2Z)
+x_modules, y_modules = calc_modules_pos(module_width, nb_modules, surf.R2Z, on_BFS=False)
+normals = get_normals(x_modules, surf.R2Z)
 angles = get_normals_angles(normals, print_data = True)
 new_left_module, new_right_module = rotate_modules_tangent_2_surface(x_modules, y_modules, angles)
-r_envelop_plus, z_envelop_plus, r_envelop_minus, z_envelop_minus = tolerance_envelop(r,R2Z)
+r_envelop_plus, z_envelop_plus, r_envelop_minus, z_envelop_minus = tolerance_envelop(r,surf.R2Z)
 
 ## Study on a particular module ##
 module_number = 3
@@ -334,11 +333,11 @@ print(f"Difference btw max distance and tolerance envelop translated = {diff_tra
 
 # Tilt tolerance
 
-normals_curve = get_normals(r_curve, R2Z)
+normals_curve = get_normals(r_curve, surf.R2Z)
 
 angles_normals_curve = get_normals_angles(normals_curve, print_data = True)
-angles_corrected = np.degrees(angles_normals_curve) + R2CRD(r_curve)
-angles_corrected = R2NORM(r_curve) + R2CRD(r_curve)
+angles_corrected = np.degrees(angles_normals_curve) + surf.R2CRD(r_curve)
+angles_corrected = surf.R2NORM(r_curve) + surf.R2CRD(r_curve)
 diff_angle = angles_corrected - np.degrees(angles[module_number])*np.ones(len(angles_corrected))
 
 ## Plotting time ##
@@ -350,19 +349,20 @@ draw = True
 plot_time = 20 #seconds
 is_timer = False
 save_fig = True
+save_eps_flag = False
+display_BFS = False
 
 draw_normals(x_modules,y_modules,normals,length=10, draw=True)
 draw_modules_horizontal(draw=True)
 draw_modules_oriented(draw = True)
-plt.plot(r,z,'--g',label="Focal surface")
+plt.plot(r,z,'--k',label="Focal surface")
 draw_BFS(BFS,vigR, display_BFS=display_BFS)
 plt.legend(shadow=True)
 plt.title('Project: $\\bf{'+f'{project}''}$'+f'\nFocal surface and module arrangement with normal vectors - {nb_robots} robots/module')
 plt.xlabel('R [mm]')
 plt.ylabel('Z [mm]')
 plt.grid()
-save.save_figures_to_dir('Focal surface and module arrangement with normal vectors')
-
+save.save_figures_to_dir(f'Focal_surface_and_module_arrangement_with_normal_vectors_{nb_robots}_robots_per_module')
 if nb_robots == 102:
     xbound=45
     ybound=1.2
@@ -376,7 +376,7 @@ zoom_in_1module(module_number = module_number, xbound=xbound, ybound=ybound, dra
 draw_module_translated(new_left_module_translated, new_right_module_translated, module_number, tolerance_envelop_width/2)
 
 plt.legend(shadow=True)
-save.save_figures_to_dir(f'Zoomed_in_module_{module_number+1}')
+save.save_figures_to_dir(f'Zoomed_in_module_{module_number+1}_{nb_robots}_robots_per_module', save_eps=save_eps_flag)
 
 plt.figure('dis2curve',figsize=(8,7))
 plt.scatter(r_module-x_modules[module_number], d*10**3, label='Tangent module')
@@ -388,7 +388,7 @@ plt.xlabel('Position on fiber tips plane [mm]')
 plt.ylabel(r'Normal distance to focal surface [$\mu$m]')
 plt.title('Project: $\\bf{'+f'{project}''}$' + f' - {nb_robots} robots/module'+f'\nDistance between module {module_number+1} and focal surface')
 plt.legend(shadow=True, loc='best')
-save.save_figures_to_dir(f'Normal_dist2surf_module_{module_number+1}')
+save.save_figures_to_dir(f'Normal_dist2surf_module_{module_number+1}_{nb_robots}_robots_per_module', save_eps=save_eps_flag)
 
 plt.figure('angle_diff',figsize=(8,7))
 plt.grid()
@@ -399,9 +399,9 @@ plt.xlabel('Position on fiber tips plane [mm]')
 plt.ylabel('Angle difference [deg]')
 plt.legend(shadow=True, loc='best')
 plt.title('Project: $\\bf{'+f'{project}''}$' + f' - {nb_robots} robots/module'+f'\nAngle difference btw normal of module {module_number+1} \n & chief ray along focal surface')
-save.save_figures_to_dir(f'Angle_diff_module_{module_number+1}')
+save.save_figures_to_dir(f'Angle_diff_module_{module_number+1}_{nb_robots}_robots_per_module', save_eps=save_eps_flag)
 
-draw_R2CRD(r,R_data,CRD_data,R2CRD, draw=False)
+draw_R2CRD(r,R_data,CRD_data,surf.R2CRD, draw=False)
 save.save_figures_to_dir(f'R2CRD')
 
 if is_timer:
