@@ -64,6 +64,8 @@ class FocalSurf():
           self.surf_name = self.focal_surf_param['name']
           self.FoV = self.focal_surf_param['FoV']
           self.focus_tolerance_width = self.focal_surf_param['focus_tolerance_width'] # [mm] width of the focus tolerance band around the focal surface
+          if 'sphere_sign' in self.focal_surf_param.keys():
+               self.sphere_sign = self.focal_surf_param['sphere_sign']
 
           # Transfer functions
           self.R2Z, self.R2CRD, self.R2NORM, self.R2S, self.R2NUT, self.S2R = self.transfer_functions()
@@ -75,8 +77,8 @@ class FocalSurf():
                focal_surf_param = {
                                    'name': 'MUST',
                                    'curvature_R': -11918, # [mm], curvature radius
-                                   'vigD': 1184.7, # [mm], vignetting diameter
-                                   'vigR': 1184.7/2, # [mm], vignetting radius
+                                   'vigD': 1068, # [mm], vignetting diameter
+                                   'vigR': 1068/2, # [mm], vignetting radius
                                    'asph_formula': False,
                                    'k': 0,
                                    'a2': 0, 
@@ -168,7 +170,7 @@ class FocalSurf():
                               'focus_tolerance_width': None # [mm]
                               }
                
-          elif self.project == 'Spec-s5-old':
+          elif self.project == 'Spec-S5-old':
                focal_surf_param = {
                     'name': r'$\bf{Spec-s5}$',
                     'curvature_R': -13000, # [mm], main radius of curvature (roughly 13m from Claire's info 20.10.2023)
@@ -177,20 +179,22 @@ class FocalSurf():
                     'BFS': 1.277364E+04, # [mm], radius of BFS,
                     'f-number': 3.64, # assumption based on previous telescope designs
                     'FoV': None, # [deg],
-                    'focus_tolerance_width': None # [mm]
+                    'focus_tolerance_width': None, # [mm]
+                    'sphere_sign': -1 # sign of the BFS radius
                     }
                
-          elif self.project == 'Spec-s5':
+          elif self.project == 'Spec-S5':
                #2024.02.16 update: New focal surface parameters for Spec-s5 (Pat Jelinsky new design - SPHERICAL focal surface youpi)
                focal_surf_param = {
-                    'name': r'$\bf{Spec-s5}$',
+                    'name': r'$\bf{Spec-S5}$',
                     'curvature_R': None, # [mm], main radius of curvature (roughly 13m from Claire's info 20.10.2023)
                     'vigR': 409.4, # [mm], vignetting radius
                     'asph_formula': False,
                     'BFS': 12657, # [mm], radius of BFS,
                     'f-number': 3.62002, # assumption based on previous telescope designs
                     'FoV': None, # [deg],
-                    'focus_tolerance_width': None # [mm]
+                    'focus_tolerance_width': 0.1, # [mm]
+                    'sphere_sign': -1 # sign of the BFS radius
                     }
           else: 
                logging.error(f'Setting focal surface parameters: {self.project} project is not defined')
@@ -249,9 +253,12 @@ class FocalSurf():
                if 'Z' in self.optics_data.keys():
                     Z = self.optics_data['Z']
                     R2Z = interp1d(R,Z,kind='cubic', fill_value = "extrapolate") #leave 'cubic' interpolation for normal vectors calculations
+               elif 'Spec-S5' in self.project:
+                    R2Z = lambda r: self.sphere_sign * (-self.BFS + np.sqrt(self.BFS**2 - r**2)) # Spherical focal surface
+                    logging.warning('No Z data available in samples - assuming SPHERICAL surface')
                else:
-                    R2Z = lambda r: -self.BFS + np.sqrt(self.BFS**2 - r**2) # Spherical focal surface
-                    logging.warning('No Z data available in samples - assuming SHERICAL surface')
+                    R2Z = lambda r: (-self.BFS + np.sqrt(self.BFS**2 - r**2)) # Spherical focal surface
+                    logging.warning('No Z data available in samples - assuming SPHERICAL surface')
 
                # R2CRD maps the radial position on the focal plane to the chief ray deviation (CRD) on the focal plane
                if 'CRD' in self.optics_data.keys():
@@ -332,8 +339,8 @@ class FocalSurf():
           result = optimize.least_squares(fun=calc_sphR_err, x0=z_guess)
           z_ctr = float(result.x) # signed BFS radius
           sphR = abs(z_ctr) # unsigned BFS radius
-          # is_convex = np.sign(z_ctr) < 1  # convention where +z is toward the fiber tips
-          # sphR_sign = -1 if is_convex else +1
+          is_convex = np.sign(z_ctr) < 1  # convention where +z is toward the fiber tips
+          self.sphR_sign = -1 if is_convex else +1
           logging.info(f"Best-fit sphere radius: {sphR:.3f} mm")
 
           return sphR
@@ -406,17 +413,14 @@ class SavingResults:
           if 'save_plots' in saving_df.keys():
                self.save_plots = saving_df['save_plots']
 
-               
           if 'save_dxf' in saving_df.keys():
                self.save_dxf = saving_df['save_dxf']
-
 
           if 'save_csv' in saving_df.keys():
                self.save_csv = saving_df['save_csv']
 
-
           if 'save_txt' in saving_df.keys():     
-               self.save_txt = saving_df['save_txt']   
+               self.save_txt = saving_df['save_txt']
 
      def path_to_results_dir(self):
 
@@ -493,7 +497,7 @@ class SavingResults:
           logging.info(f'{filename}.txt succesfully saved in {self.results_dir_path}')
 
      def save_grid_to_txt2(self, grid: pd, filename: str, **kwargs):
-
+          #TODO: more optimal than the previous function, needs to replace all calls to the previous function
           columns = kwargs.get('columns', None)
           index = kwargs.get('index', False)
           if not self.save_txt:
@@ -506,6 +510,19 @@ class SavingResults:
 
           logging.info(f'{filename}.txt succesfully saved in {self.results_dir_path}')
 
+     def save_grid_to_csv(self, grid: pd, filename: str, results_string: str = None):
+          if not self.save_txt:
+               return
+          now = datetime.now()
+          now_str = now.strftime("%Y-%m-%d-%H-%M_")
+          file_path = self.results_dir_path + now_str + self.project_name + '_' + filename + '.csv'
+          if results_string is not None:
+               with open(file_path, 'w') as file:
+                    file.write(results_string)
+          grid.to_csv(file_path, sep = ";", decimal = ".", mode = 'a')
+          
+          logging.info(f'{filename}.csv succesfully saved in {self.results_dir_path}')
+          
 """ Module parameters """ 
 
 # NOTE: Individual Module class

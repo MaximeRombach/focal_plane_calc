@@ -3,12 +3,17 @@
 # It is inspired from the work of Joe Silber (LBLN): https://github.com/joesilber/raft-design 
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+
+import argparse
+from datetime import datetime
 import numpy as np
 from numpy.linalg import norm
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import matplotlib.patches as mpatches
 import matplotlib.lines as mlines
+# plt.rcParams.update({'font.size': 13})
+plt.rc('axes', labelsize=13)    # fontsize of the x and y labels
 import geopandas as gpd
 import pandas as pd
 import array as array
@@ -71,11 +76,11 @@ full_framed = False # flag to check wether we are in semi frameless or in full f
 
 """ Intermediate frame parameters """
 
-inner_gap = 0.5 # [mm] spacing between modules inside intermediate frame
+inner_gap = 1 # [mm] spacing between modules inside intermediate frame
 
 """ Global frame parameters """
 
-global_gap = 4 # [mm] spacing between modules in global arrangement
+global_gap = 3 # [mm] spacing between modules in global arrangement
 
 """ Protective shields on module """
 
@@ -90,12 +95,12 @@ if inner_gap == global_gap and inner_gap != 0:
 
 """ Define focal surface """
 
-# Available projects: MUST, MegaMapper, DESI, WST1, WST2, WST3, Spec-s5
-project_surface = 'Spec-s5' 
+# Available projects: MUST, MegaMapper, DESI, WST1, WST2, WST3, Spec-S5
+project_surface = 'MUST' 
 surf = param.FocalSurf(project=project_surface)
 vigR = surf.vigR
 BFS = surf.BFS
-trimming_angle = 360 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
+trimming_angle = 60 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
 
 pizza = surf.make_vigR_polygon(trimming_angle = trimming_angle)
 
@@ -109,16 +114,20 @@ save_plots = True # Save most useful plots
 save_all_plots = False  # Save all plots (including intermediate ones)
 save_frame_as_dxf = False # DEPRECATED: Save the outline of the frame for Solidworks integration
 save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
-save_txt = False # Save positions of modules along curved focal surface
+save_txt = True # Save positions of modules along curved focal surface
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
 saving = param.SavingResults(saving_df, project_surface)
+now = datetime.now()
+now = now.strftime("%Y-%m-%d %H:%M")
+results_string = f"#Date: {now}\n #Project: {project_surface}\n #Distance unit: [mm] #Angle unit: [deg]\n #vigR: {surf.vigR} mm  #Inner gap: {inner_gap} mm  #Global gap: {global_gap} mm\n"
 
 """GFA stuff"""
 gfa_tune = 1
 nb_gfa = 6
 # gfa = param.GFA(length = 33.3*gfa_tune, width = 61*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
-gfa = param.GFA(length = 10*gfa_tune, width = 10*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
-# gfa = param.GFA(length = 50*gfa_tune, width = 60*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
+gfa = param.GFA(length = 5*gfa_tune, width = 5*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
+# gfa = param.GFA(length = 20*gfa_tune, width = 30*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
+gfa = param.GFA(length = 50*gfa_tune, width = 60*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
 gdf_gfa = gfa.gdf_gfa
 polygon_gfa = MultiPolygon(list(gdf_gfa['geometry']))
 
@@ -426,6 +435,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
           print(f"Out allowance: {out_allowance} \n", f"Total # modules: {total_modules} \n",
                f"Total # robots: {total_robots} \n", f"Useful robots: {total_robots-useless_robots} \n",
                f"Coverage: {global_coverage} %")
+          results_string += f"#Total modules: {total_modules} #Total robots: {total_robots} #Coverage: {global_coverage} %\n"
 
 #%% 2)d) Project grid on focal surface (BFS as a first try, aspherical will come later)
 # NOTE : Project on BFS and save modules in txt file for Solidworks integration
@@ -515,12 +525,14 @@ grid_aspherical = grid_aspherical.append(fiducials_df, ignore_index=True)
 
 # Save the grid to txt file for Solidworks integration
 saving.save_grid_to_txt2(grid_aspherical[(grid_aspherical['grid_pos']=='back') & (grid_aspherical['type']=='module')], f'back_grid_modules_{nb_robots}', columns = ['x', 'y', 'z', 'tri_spin'])
+# grid_aspherical[(grid_aspherical['grid_pos']=='back') & (grid_aspherical['type']=='module')].to_csv(saving.results_dir_path + f'back_grid_modules_{nb_robots}.csv', sep = ";", decimal = ".")
 saving.save_grid_to_txt2(grid_aspherical[(grid_aspherical['grid_pos']=='front') & (grid_aspherical['type']=='module')], f'front_grid_modules_{nb_robots}', columns = ['x', 'y', 'z', 'tri_spin'])
 
 saving.save_grid_to_txt2(grid_aspherical[(grid_aspherical['grid_pos']=='back') & (grid_aspherical['type']=='fiducial')], f'back_grid_fiducials_{nb_robots}', columns = ['x', 'y', 'z'])
 saving.save_grid_to_txt2(grid_aspherical[(grid_aspherical['grid_pos']=='front') & (grid_aspherical['type']=='fiducial')], f'front_grid_fiducials_{nb_robots}', columns = ['x', 'y', 'z'])
 
 saving.save_grid_to_txt2(grid_aspherical, f'grid_aspherical_{nb_robots}', index = True)
+saving.save_grid_to_csv(grid_aspherical, f'grid_asph_{nb_robots}', results_string)
 
 # Plot 3D grid for visualization/deguugging
 fig = plt.figure(figsize=(10,10))
@@ -533,7 +545,7 @@ grid.plot_3D_grid(ax,grid_aspherical_xyz_back[:,0], grid_aspherical_xyz_back[:,1
 # %% Plot plot time 
 
 fig = plt.figure(figsize=(8,8))
-figtitle = f"Module coverage raw - {nb_robots} robots per module"
+figtitle = f"Module coverage raw - {nb_robots} robots per module \n Pitch: {mod_param.pitch} mm"
 filename = f"Module_coverage_raw__{nb_robots}_robots_per_module"
 plt.title(figtitle)
 plot_polygon(module, facecolor='None', edgecolor='black', add_points=False)
@@ -551,7 +563,7 @@ plt.xlabel('x position [mm]')
 plt.ylabel('y position [mm]')
 plt.legend(shadow = True)
 if save_all_plots:
-     saving.save_figures_to_dir(figtitle)
+     saving.save_figures_to_dir(filename)
 
 plt.figure(figsize=(8,8))
 figtitle = f"Module coverage with summed coverage + walls \n {nb_robots} robots per module"
