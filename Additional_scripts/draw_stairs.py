@@ -8,6 +8,12 @@ sys.path.insert(0,'C:/Users/rombach/Documents/Astrobots/Inosuisse/focal_plane_ca
 
 import numpy as np
 import matplotlib.pyplot as plt
+plt.rc('axes', labelsize=16)    # fontsize of the x and y labels
+plt.rc('figure', titlesize=17)  # fontsize of the figure title
+plt.rc('axes', titlesize=17)     # fontsize of the axes title
+plt.rc('xtick', labelsize=16)    # fontsize of the tick labels
+plt.rc('ytick', labelsize=16)    # fontsize of the tick labels
+plt.rc('legend', fontsize=14)    # legend fontsi
 import math
 from astropy.table import Table, vstack
 from scipy.interpolate import interp1d
@@ -24,7 +30,7 @@ surf = param.FocalSurf(project)
 Rc = surf.curvature_R # Curve radius [mm]
 vigR = surf.vigR
 d_plane = 2*vigR # Focal plane diameter [mm]
-nb_robots = 75
+nb_robots = 102
 saving_df = {"save_plots": True}
 display_BFS = False
 save = param.SavingResults(saving_df, project_name=project)
