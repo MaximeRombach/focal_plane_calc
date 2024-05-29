@@ -12,8 +12,12 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import matplotlib.patches as mpatches
 import matplotlib.lines as mlines
-# plt.rcParams.update({'font.size': 13})
-plt.rc('axes', labelsize=13)    # fontsize of the x and y labels
+plt.rc('axes', labelsize=16)    # fontsize of the x and y labels
+plt.rc('figure', titlesize=17)  # fontsize of the figure title
+plt.rc('axes', titlesize=17)     # fontsize of the axes title
+plt.rc('xtick', labelsize=16)    # fontsize of the tick labels
+plt.rc('ytick', labelsize=16)    # fontsize of the tick labels
+plt.rc('legend', fontsize=14)    # legend fontsi
 import geopandas as gpd
 import pandas as pd
 import array as array
@@ -67,8 +71,8 @@ start_time = time.time()
 # out_allowances = np.arange(0, 0.95, 0.05) # how much is a module allowed to stick out of vigR (max value)
 
 ## Study one case at a time
-nbots = [63]
-out_allowances = [0.5]
+nbots = [102] # number of robots per module; available: 42, 52, 63, 75, 88, 102
+out_allowances = [0.5] # between 0 and 0.99; 1 does not make sense as it would mean the module is completely out of vigR
 width_increase = 0 # [mm] How much we want to increase the base length of a module (base value for 63 robots: 73.8mm)
 chanfer_length = 10.5 # [mm] Size of chanfers of module vertices (base value: 7.5); increase chanfer decreases coverage as it reduces the module size thus patrol area
 centered_on_triangle = False # move the center of the grid (red dot) on the centroid on a triangle instead of the edge
@@ -76,7 +80,7 @@ full_framed = False # flag to check wether we are in semi frameless or in full f
 
 """ Intermediate frame parameters """
 
-inner_gap = 1 # [mm] spacing between modules inside intermediate frame
+inner_gap = 0.5 # [mm] spacing between modules inside intermediate frame
 
 """ Global frame parameters """
 
@@ -96,11 +100,11 @@ if inner_gap == global_gap and inner_gap != 0:
 """ Define focal surface """
 
 # Available projects: MUST, MegaMapper, DESI, WST1, WST2, WST3, Spec-S5
-project_surface = 'MUST' 
+project_surface = 'Spec-S5' 
 surf = param.FocalSurf(project=project_surface)
 vigR = surf.vigR
 BFS = surf.BFS
-trimming_angle = 60 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
+trimming_angle = 360 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
 
 pizza = surf.make_vigR_polygon(trimming_angle = trimming_angle)
 
@@ -110,11 +114,11 @@ is_timer = False # Display time of final plots before automatic closing; stays o
 
 plot_time = 20 # [s] plotting time
 ignore_robots_positions = False
-save_plots = True # Save most useful plots 
+save_plots = False # Save most useful plots 
 save_all_plots = False  # Save all plots (including intermediate ones)
 save_frame_as_dxf = False # DEPRECATED: Save the outline of the frame for Solidworks integration
 save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
-save_txt = True # Save positions of modules along curved focal surface
+save_txt = False # Save positions of modules along curved focal surface
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
 saving = param.SavingResults(saving_df, project_surface)
 now = datetime.now()
@@ -124,10 +128,10 @@ results_string = f"#Date: {now}\n #Project: {project_surface}\n #Distance unit: 
 """GFA stuff"""
 gfa_tune = 1
 nb_gfa = 6
-# gfa = param.GFA(length = 33.3*gfa_tune, width = 61*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
-gfa = param.GFA(length = 5*gfa_tune, width = 5*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
-# gfa = param.GFA(length = 20*gfa_tune, width = 30*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
-gfa = param.GFA(length = 50*gfa_tune, width = 60*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
+# gfa = param.GFA(length = 33.3*gfa_tune, width = 60*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
+# gfa = param.GFA(length = 10*gfa_tune, width = 10*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
+gfa = param.GFA(length = 20*gfa_tune, width = 30*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
+# gfa = param.GFA(length = 60*gfa_tune, width = 60*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
 gdf_gfa = gfa.gdf_gfa
 polygon_gfa = MultiPolygon(list(gdf_gfa['geometry']))
 
@@ -447,9 +451,9 @@ grid_points, module_up = grid.trim_grid(final_grid, trimming_angle)
 projected_on_BFS = grid.project_grid_on_sphere(grid_points, BFS, module_length, module_up)
 
 #TODO: switch to version 2 of save_grid_to_txt
-# saving.save_grid_to_txt(projected_on_BFS['proj'], f'grid_{nb_robots}', direct_SW = True)
-# saving.save_grid_to_txt(projected_on_BFS['front'], f'front_grid_spherical_{nb_robots}')
-# saving.save_grid_to_txt(projected_on_BFS['back'], f'back_grid_spherical_{nb_robots}')
+saving.save_grid_to_txt(projected_on_BFS['proj'], f'grid_{nb_robots}', direct_SW = True)
+saving.save_grid_to_txt(projected_on_BFS['front'], f'front_grid_spherical_{nb_robots}')
+saving.save_grid_to_txt(projected_on_BFS['back'], f'back_grid_spherical_{nb_robots}')
 
 #%% 2)e) Project final flat grid on aspherical surface 
 
@@ -739,6 +743,7 @@ if len(out_allowances) > 1:
      plt.grid()
      plt.legend(shadow = True)
      saving.save_figures_to_dir(filename)
+     
 
      fig = plt.figure(figsize=(8,8))
      filename = "Robots_VS_out_allowance"
