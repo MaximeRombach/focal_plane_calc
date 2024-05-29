@@ -77,8 +77,8 @@ class FocalSurf():
                focal_surf_param = {
                                    'name': 'MUST',
                                    'curvature_R': -11918, # [mm], curvature radius
-                                   'vigD': 1068, # [mm], vignetting diameter
-                                   'vigR': 1068/2, # [mm], vignetting radius
+                                   'vigD': 1184.7, # [mm], vignetting diameter
+                                   'vigR': 1184.7/2, # [mm], vignetting radius
                                    'asph_formula': False,
                                    'k': 0,
                                    'a2': 0, 
@@ -91,21 +91,22 @@ class FocalSurf():
                                    'focus_tolerance_width': 0.02 # [mm]
                                    }
                ## Previous values for MUST focal plane parameters (update from: 2023-11-08)
-               # focal_surf_param = {
-               #                     'name': 'MUST',
-               #                     'curvature_R': -11365, # [mm], curvature radius
-               #                     'vigD': 1068, # [mm], vigneting diameter: last updated 2023-11-08 (previous value: 589.27 * 2)
-               #                     'vigR': 1068/2, # [mm], vignetting radius
-               #                     'asph_formula': True,
-               #                     'k': 0,
-               #                     'a1': 0, 
-               #                     'a2': -6e-12, 
-               #                     'a3': 0,
-               #                     'f-number': 3.699,
-               #                     'BFS': 10992.7, # [mm], radius of BFS # Value calculated with Joe's cal_BFS function with MUST data from 2023-09-06
-               #                     'FoV': None, # [deg]
-               #                     'focus_tolerance_width': 0.02 # [mm]
-               #                     }
+          elif self.project == 'MUST_old':
+               focal_surf_param = {
+                                   'name': 'MUST_old',
+                                   'curvature_R': -11365, # [mm], curvature radius
+                                   'vigD': 1068, # [mm], vigneting diameter: last updated 2023-11-08 (previous value: 589.27 * 2)
+                                   'vigR': 1068/2, # [mm], vignetting radius
+                                   'asph_formula': True,
+                                   'k': 0,
+                                   'a1': 0, 
+                                   'a2': -6e-12, 
+                                   'a3': 0,
+                                   'f-number': 3.699,
+                                   'BFS': 10992.7, # [mm], radius of BFS # Value calculated with Joe's cal_BFS function with MUST data from 2023-09-06
+                                   'FoV': None, # [deg]
+                                   'focus_tolerance_width': 0.02 # [mm]
+                                   }
           elif self.project == 'MegaMapper':
                focal_surf_param = {
                                    'name': 'MegaMapper',
