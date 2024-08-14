@@ -3,7 +3,7 @@
 import numpy as np
 from numpy.linalg import norm
 from numpy.polynomial import Polynomial
-from astropy.table import Table, vstack
+# from astropy.table import Table, vstack
 import json
 import logging
 from shapely import affinity, MultiPolygon, MultiPoint, GeometryCollection
@@ -14,7 +14,7 @@ from shapely.validation import make_valid
 from scipy import optimize
 from scipy.interpolate import interp1d
 from shapely.plotting import plot_polygon, plot_points
-from types import SimpleNamespace  # Python 3.3+ only.
+# from types import SimpleNamespace  # Python 3.3+ only.
 import os
 from datetime import datetime
 import geopandas as gpd
@@ -99,9 +99,10 @@ class FocalSurf():
                                    'vigR': 1068/2, # [mm], vignetting radius
                                    'asph_formula': True,
                                    'k': 0,
-                                   'a1': 0, 
-                                   'a2': -6e-12, 
-                                   'a3': 0,
+                                   'a2': 0, 
+                                   'a4': -6e-12, 
+                                   'a6': 0,
+                                   'a8': 0,
                                    'f-number': 3.699,
                                    'BFS': 10992.7, # [mm], radius of BFS # Value calculated with Joe's cal_BFS function with MUST data from 2023-09-06
                                    'FoV': None, # [deg]
@@ -195,7 +196,7 @@ class FocalSurf():
                     'f-number': 3.62002, # assumption based on previous telescope designs
                     'FoV': None, # [deg],
                     'focus_tolerance_width': 0.1, # [mm]
-                    'sphere_sign': -1 # sign of the BFS radius
+                    'sphere_sign': 1 # sign of the BFS radius
                     }
           else: 
                logging.error(f'Setting focal surface parameters: {self.project} project is not defined')
@@ -254,9 +255,6 @@ class FocalSurf():
                if 'Z' in self.optics_data.keys():
                     Z = self.optics_data['Z']
                     R2Z = interp1d(R,Z,kind='cubic', fill_value = "extrapolate") #leave 'cubic' interpolation for normal vectors calculations
-               elif 'Spec-S5' in self.project:
-                    R2Z = lambda r: self.sphere_sign * (-self.BFS + np.sqrt(self.BFS**2 - r**2)) # Spherical focal surface
-                    logging.warning('No Z data available in samples - assuming SPHERICAL surface')
                else:
                     R2Z = lambda r: (-self.BFS + np.sqrt(self.BFS**2 - r**2)) # Spherical focal surface
                     logging.warning('No Z data available in samples - assuming SPHERICAL surface')
@@ -284,7 +282,7 @@ class FocalSurf():
           dzdr = dz/dr # Get derivative of focal plane curve at the sample points
 
           # Assert in slope data is available in csv file
-          if 'Slope' in self.optics_data.keys():
+          if not self.asph_formula and 'Slope' in self.optics_data.keys():
                norm = self.optics_data['Slope'] # Calculate normal angles at the sample points
                R2NORM = interp1d(R, norm,kind='cubic', fill_value = "extrapolate")
                logging.info('Slope data available in samples - using it for R2NORM transfer function')
