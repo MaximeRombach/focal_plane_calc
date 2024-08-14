@@ -71,7 +71,7 @@ start_time = time.time()
 # out_allowances = np.arange(0, 0.95, 0.05) # how much is a module allowed to stick out of vigR (max value)
 
 ## Study one case at a time
-nbots = [102] # number of robots per module; available: 42, 52, 63, 75, 88, 102
+nbots = [63] # number of robots per module; available: 42, 52, 63, 75, 88, 102
 out_allowances = [0.5] # between 0 and 0.99; 1 does not make sense as it would mean the module is completely out of vigR
 width_increase = 0 # [mm] How much we want to increase the base length of a module (base value for 63 robots: 73.8mm)
 chanfer_length = 10.5 # [mm] Size of chanfers of module vertices (base value: 7.5); increase chanfer decreases coverage as it reduces the module size thus patrol area
@@ -80,11 +80,11 @@ full_framed = False # flag to check wether we are in semi frameless or in full f
 
 """ Intermediate frame parameters """
 
-inner_gap = 0.5 # [mm] spacing between modules inside intermediate frame
+inner_gap = 0.3 # [mm] spacing between modules inside intermediate frame
 
 """ Global frame parameters """
 
-global_gap = 3 # [mm] spacing between modules in global arrangement
+global_gap = 4.4 # [mm] spacing between modules in global arrangement
 
 """ Protective shields on module """
 
@@ -99,12 +99,12 @@ if inner_gap == global_gap and inner_gap != 0:
 
 """ Define focal surface """
 
-# Available projects: MUST, MegaMapper, DESI, WST1, WST2, WST3, Spec-S5
-project_surface = 'Spec-S5' 
+# Available projects: MUST, MUST__old, MegaMapper, DESI, WST1, WST2, WST3, Spec-S5, Spec-S5_old
+project_surface = 'Spec-S5' # name of the project surface to use
 surf = param.FocalSurf(project=project_surface)
 vigR = surf.vigR
 BFS = surf.BFS
-trimming_angle = 360 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
+trimming_angle = 60 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
 
 pizza = surf.make_vigR_polygon(trimming_angle = trimming_angle)
 
@@ -204,7 +204,9 @@ for nb_robots in nbots: # iterate over number of robots/module cases
      # Generate initial flat grid of modules center points
      grid = param.Grid(project_surface, module_width, inner_gap, global_gap, trimming_angle=trimming_angle, centered_on_triangle = centered_on_triangle)
 
-     # grid.plot_2D_grid()
+     plt.figure(figsize=(10,10))
+     grid.plot_2D_grid()
+     surf.plot_vigR_poly(pizza)
 
      #%% 2)c) Place the intermediate triangles accordingly on the grid
 
@@ -513,7 +515,7 @@ grid_aspherical_xyz_back = grid_aspherical_xyz - module_length*orientation_vecto
 # Store results
 grid_aspherical_back['x'], grid_aspherical_back['y'], grid_aspherical_back['z'], grid_aspherical_back['tri_spin'] = grid_aspherical_xyz_back[:,0], grid_aspherical_xyz_back[:,1], grid_aspherical_xyz_back[:,2], list(grid_aspherical['tri_spin'])
 grid_aspherical_back['type'], grid_aspherical_back['grid_pos']= 'module', 'back'
-grid_aspherical = grid_aspherical.append(grid_aspherical_back, ignore_index=True)
+grid_aspherical = pd.concat([grid_aspherical, grid_aspherical_back], ignore_index=True)
 
 # Same for back fiducials
 
@@ -524,8 +526,8 @@ fiducials_df_xyz_back = fiducials_df_xyz - module_length*orientation_vectors # c
 # Store results
 fiducials_df_back['x'], fiducials_df_back['y'], fiducials_df_back['z'] = fiducials_df_xyz_back[:,0], fiducials_df_xyz_back[:,1], fiducials_df_xyz_back[:,2]
 fiducials_df_back['type'], fiducials_df_back['grid_pos'] = 'fiducial', 'back'
-fiducials_df = fiducials_df.append(fiducials_df_back, ignore_index=True)
-grid_aspherical = grid_aspherical.append(fiducials_df, ignore_index=True)
+fiducials_df = pd.concat([fiducials_df, fiducials_df_back], ignore_index=True)
+grid_aspherical = pd.concat([grid_aspherical, fiducials_df], ignore_index=True)
 
 # Save the grid to txt file for Solidworks integration
 saving.save_grid_to_txt2(grid_aspherical[(grid_aspherical['grid_pos']=='back') & (grid_aspherical['type']=='module')], f'back_grid_modules_{nb_robots}', columns = ['x', 'y', 'z', 'tri_spin'])
