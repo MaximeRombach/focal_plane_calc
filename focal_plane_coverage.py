@@ -454,9 +454,10 @@ grid_points, module_up = grid.trim_grid(final_grid, trimming_angle)
 projected_on_BFS = grid.project_grid_on_sphere(grid_points, BFS, module_length, module_up)
 
 #TODO: switch to version 2 of save_grid_to_txt
-saving.save_grid_to_txt(projected_on_BFS['proj'], f'grid_{nb_robots}', direct_SW = True)
-saving.save_grid_to_txt(projected_on_BFS['front'], f'front_grid_spherical_{nb_robots}')
-saving.save_grid_to_txt(projected_on_BFS['back'], f'back_grid_spherical_{nb_robots}')
+#NOTE: keeping spherical grid for legacy and debugging tool for now
+# saving.save_grid_to_txt(projected_on_BFS['proj'], f'grid_{nb_robots}', direct_SW = True)
+# saving.save_grid_to_txt(projected_on_BFS['front'], f'front_grid_spherical_{nb_robots}')
+# saving.save_grid_to_txt(projected_on_BFS['back'], f'back_grid_spherical_{nb_robots}')
 
 #%% 2)e) Project final flat grid on aspherical surface 
 
