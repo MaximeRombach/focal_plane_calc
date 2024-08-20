@@ -205,7 +205,8 @@ for nb_robots in nbots: # iterate over number of robots/module cases
      grid = param.Grid(project_surface, module_width, inner_gap, global_gap, trimming_angle=trimming_angle, centered_on_triangle = centered_on_triangle)
 
      plt.figure(figsize=(10,10))
-     grid.plot_2D_grid()
+     grid.plot_2D_grid(label_plotting='grid_flat_init')
+     grid.plot_2D_grid(label_plotting='fiducials')
      surf.plot_vigR_poly(pizza)
 
      #%% 2)c) Place the intermediate triangles accordingly on the grid
@@ -515,10 +516,9 @@ grid_aspherical_xyz_back = grid_aspherical_xyz - module_length*orientation_vecto
 # Store results
 grid_aspherical_back['x'], grid_aspherical_back['y'], grid_aspherical_back['z'], grid_aspherical_back['tri_spin'] = grid_aspherical_xyz_back[:,0], grid_aspherical_xyz_back[:,1], grid_aspherical_xyz_back[:,2], list(grid_aspherical['tri_spin'])
 grid_aspherical_back['type'], grid_aspherical_back['grid_pos']= 'module', 'back'
+grid_aspherical_back.fillna(0, inplace=True)
 grid_aspherical = pd.concat([grid_aspherical, grid_aspherical_back], ignore_index=True)
-
 # Same for back fiducials
-
 fiducials_df_back = pd.DataFrame(data=None, columns=grid_aspherical.columns)
 orientation_vectors = grid.orientation_vector(np.deg2rad(fiducials_df['phi']), np.deg2rad(fiducials_df['theta'])) # get the orientation vectors of each module to project back grid in the right direction
 fiducials_df_xyz = np.vstack((fiducials_df['x'], fiducials_df['y'], fiducials_df['z'])).T # build numpy matrix for easier calculations
@@ -526,6 +526,7 @@ fiducials_df_xyz_back = fiducials_df_xyz - module_length*orientation_vectors # c
 # Store results
 fiducials_df_back['x'], fiducials_df_back['y'], fiducials_df_back['z'] = fiducials_df_xyz_back[:,0], fiducials_df_xyz_back[:,1], fiducials_df_xyz_back[:,2]
 fiducials_df_back['type'], fiducials_df_back['grid_pos'] = 'fiducial', 'back'
+fiducials_df_back.fillna(0, inplace=True)
 fiducials_df = pd.concat([fiducials_df, fiducials_df_back], ignore_index=True)
 grid_aspherical = pd.concat([grid_aspherical, fiducials_df], ignore_index=True)
 
@@ -676,6 +677,12 @@ fiducial_patch = mlines.Line2D([], [], color='red', marker='.', markersize=7, li
 gfa_handler = mpatches.Patch(facecolor='None', edgecolor='brown', linestyle='--', label=f'GFA: {len(gdf_gfa)}')
 plt.legend(handles=[fiducial_patch,coverage_patch, gfa_handler], shadow = True)
 
+x_final_modules = np.array(grid_aspherical[(grid_aspherical['type'] == 'module') & (grid_aspherical['grid_pos'] == 'front')]['x'])
+y_final_modules = np.array(grid_aspherical[(grid_aspherical['type'] == 'module') & (grid_aspherical['grid_pos'] == 'front')]['y'])
+modules_indices = list(range(1, len(x_final_modules)+1))
+for x,y,text in zip(x_final_modules, y_final_modules, modules_indices):
+     ax.text(x, y, text, fontsize=12)
+
 saving.save_figures_to_dir(filename)
 
 if save_csv:
@@ -700,8 +707,6 @@ if save_csv:
      # gpd.GeoDataFrame(indiv_pos_df).to_csv(saving.results_dir_path() + csv_filename, index_label = 'robot_number', sep = ";", decimal = ".", header='BONJOUR')
      # TBI: robot pos accounting for focal plane curvature
      logging.info(f'Robots positions saved to .csv file')
-
-
 
 if len(nbots)>1: # Useless to do multiple plots for only one case
      figtitle = param.final_title(surf.surf_name , vigR, nb_robots, total_modules, total_robots, inner_gap, global_gap, allow_small_out, out_allowance, disp_robots_info=False, )

@@ -1033,7 +1033,7 @@ class Grid(FocalSurf):
                               fiducial = tri.tri_corners(a,b,c, self.inter_frame_width/2)
                               # Fiducials placement
                               for fid in fiducial:
-                                   if Point(fid[0],fid[1]).within(self.pizza.buffer(10)): # limit fiducials outside vigR to inter modules with center inside vigR
+                                   if Point(fid[0],fid[1]).within(self.pizza.buffer(20)): # limit fiducials outside vigR to inter modules with center inside vigR
                                    
                                         self.fiducials['x'].append(fid[0])
                                         self.fiducials['y'].append(fid[1])
@@ -1162,11 +1162,22 @@ class Grid(FocalSurf):
           ax.set_ylabel('Y')
           ax.set_zlabel('Z')
 
-     def plot_2D_grid(self):
+     def plot_2D_grid(self, label_plotting = None):
 
+          if label_plotting == "grid_flat_init":
+               grid_plotting = self.grid_flat_init
+               color_plotting = 'black'
+          elif label_plotting == "fiducials":
+               grid_plotting = self.fiducials
+               color_plotting = 'red'
+          elif label_plotting == None: #default case if no label is given
+               grid_plotting = self.grid_flat_init
+               color_plotting = 'black'
+          else:
+               raise Exception('Error: only "grid_flat_init" or "fiducials" labels are supported')
           fig = plt.figure('2D grid', figsize=(8,8))
           ax = fig.add_subplot()
-          ax.scatter(self.grid_flat_init['x'], self.grid_flat_init['y'], label=f'Projected', color='red')
+          ax.scatter(grid_plotting['x'], grid_plotting['y'], label=label_plotting, color=color_plotting)
           # ax.scatter(self.grid_df['x_grid_flat'], self.grid_df['y_grid_flat'], label=f'Flat', color='blue')
           ax.set_box_aspect(1)
           plt.legend()
