@@ -72,7 +72,7 @@ start_time = time.time()
 
 ## Study one case at a time
 nbots = [63] # number of robots per module; available: 42, 52, 63, 75, 88, 102
-out_allowances = [0.5] # between 0 and 0.99; 1 does not make sense as it would mean the module is completely out of vigR
+out_allowances = [0] # between 0 and 0.99; 1 does not make sense as it would mean the module is completely out of vigR
 width_increase = 0 # [mm] How much we want to increase the base length of a module (base value for 63 robots: 73.8mm)
 chanfer_length = 10.5 # [mm] Size of chanfers of module vertices (base value: 7.5); increase chanfer decreases coverage as it reduces the module size thus patrol area
 centered_on_triangle = False # move the center of the grid (red dot) on the centroid on a triangle instead of the edge
@@ -80,11 +80,11 @@ full_framed = False # flag to check wether we are in semi frameless or in full f
 
 """ Intermediate frame parameters """
 
-inner_gap = 0.3 # [mm] spacing between modules inside intermediate frame
+inner_gap = 1 # [mm] spacing between modules inside intermediate frame
 
 """ Global frame parameters """
 
-global_gap = 4.4 # [mm] spacing between modules in global arrangement
+global_gap = 3 # [mm] spacing between modules in global arrangement
 
 """ Protective shields on module """
 
@@ -100,11 +100,11 @@ if inner_gap == global_gap and inner_gap != 0:
 """ Define focal surface """
 
 # Available projects: MUST, MUST__old, MegaMapper, DESI, WST1, WST2, WST3, Spec-S5, Spec-S5_old
-project_surface = 'Spec-S5' # name of the project surface to use
+project_surface = 'MUST' # name of the project surface to use
 surf = param.FocalSurf(project=project_surface)
 vigR = surf.vigR
 BFS = surf.BFS
-trimming_angle = 60 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
+trimming_angle = 360 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
 
 pizza = surf.make_vigR_polygon(trimming_angle = trimming_angle)
 
@@ -113,6 +113,7 @@ draw = True
 is_timer = False # Display time of final plots before automatic closing; stays open if False
 
 plot_time = 20 # [s] plotting time
+showModulesIndices = False # Show indices of modules on the grid
 ignore_robots_positions = False
 save_plots = False # Save most useful plots 
 save_all_plots = False  # Save all plots (including intermediate ones)
@@ -130,15 +131,16 @@ gfa_tune = 1
 nb_gfa = 6
 # gfa = param.GFA(length = 33.3*gfa_tune, width = 60*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
 # gfa = param.GFA(length = 10*gfa_tune, width = 10*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
-gfa = param.GFA(length = 20*gfa_tune, width = 30*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
-# gfa = param.GFA(length = 60*gfa_tune, width = 60*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
+# gfa = param.GFA(length = 20*gfa_tune, width = 30*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
+gfa = param.GFA(length = 120*gfa_tune, width = 120*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
 gdf_gfa = gfa.gdf_gfa
 polygon_gfa = MultiPolygon(list(gdf_gfa['geometry']))
+
 
 pizza_with_GFA = pizza.difference(polygon_gfa)
 surf.surfaces_polygon['pizza_with_GFA'] = pizza_with_GFA
 
-# plot_polygon(pizza_with_GFA)
+plot_polygon(pizza_with_GFA)
 # plt.show()
 
 logging.info(f'Loaded parameters: \n - Surface:  {project_surface} \n - Inter gap: {inner_gap} mm & Global gap: {global_gap} mm \n - {nbots} robots/module')
@@ -202,7 +204,8 @@ for nb_robots in nbots: # iterate over number of robots/module cases
      inter_centroid = inter_frame_width*np.sqrt(3)/3*np.array([np.cos(np.deg2rad(30)), np.sin(np.deg2rad(30))])
 
      # Generate initial flat grid of modules center points
-     grid = param.Grid(project_surface, module_width, inner_gap, global_gap, trimming_angle=trimming_angle, centered_on_triangle = centered_on_triangle)
+     limitation_radius = 560 # [mm] limitation radius of a circle that will limit the number of modules within the grid (SHOULD BE < vigR)
+     grid = param.Grid(project_surface, module_width, inner_gap, global_gap, trimming_angle=trimming_angle, centered_on_triangle = centered_on_triangle, limitation_radius=limitation_radius)
 
      plt.figure(figsize=(10,10))
      grid.plot_2D_grid(label_plotting='grid_flat_init')
@@ -216,10 +219,13 @@ for nb_robots in nbots: # iterate over number of robots/module cases
           fill_empty = True # Fill empty spaces by individual modules
           allow_small_out = True # allow covered area of module to stick out of vigR (i.e. useless covered area because does not receive light)
           out_allowance = out_allowance # percentage of the covered area of a module authorized to stick out of vigR
+          
           covered_area = 0 # total covered area of vigR
           total_modules = 0 # total number of modules in vigR
           useless_robots = 0 # robots that are not in the vigR
           # useful_robots = 0 # robots that are in the vigR
+
+          limitating_pizza = surf.make_vigR_polygon(changed_vigR=limitation_radius)
           if 'WST' in project_surface: donut = surf.surfaces_polygon['donut'] # define donut if WST project
           boundaries_df = {'geometry':[], 'color': []}
           modules_df = {'geometry':[], 'color': []}
@@ -257,8 +263,8 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                color_module = 'black'
 
                # Flags 
-               sticks_out = new_boundary.overlaps(pizza) # a portion of the int triangle sticks out
-               int_centroid_out = not Point(dx,dy).within(pizza)
+               sticks_out = new_boundary.overlaps(limitating_pizza) # a portion of the int triangle sticks out
+               int_centroid_out = not Point(dx,dy).within(limitating_pizza)
                int_overlaps_GFA = new_boundary.overlaps(polygon_gfa) # Is on GFA?
 
                # if 'WST' in project_surface: # Check if portion of int triangle is within center hole of WST
@@ -287,9 +293,9 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                          # plot_polygon(pizza,add_points=False,facecolor='None')
                          # plot_polygon(mod)
                          cent = np.array(cov.centroid.xy)
-                         cov_out = cov.difference(pizza)
+                         cov_out = cov.difference(limitating_pizza)
 
-                         centroid_out = not Point(cent[0], cent[1]).within(pizza)
+                         centroid_out = not Point(cent[0], cent[1]).within(limitating_pizza)
                          mod_overlaps_GFA = mod.overlaps(polygon_gfa)
 
                          if 'WST' in project_surface:
@@ -297,7 +303,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                          else:
                               mod_overlaps_donut = False
                          
-                         if not cov.overlaps(pizza) and not centroid_out and not mod_overlaps_GFA and not mod_overlaps_donut:
+                         if not cov.overlaps(limitating_pizza) and not centroid_out and not mod_overlaps_GFA and not mod_overlaps_donut:
                          # If the coverage area of a single module does not stick out of vigR and is within vigR, we keep it
                               temp_mod.append(mod)
                               temp_cov.append(cov)
@@ -312,7 +318,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                          elif allow_small_out and cov_out.area/cov.area < out_allowance and not mod_overlaps_GFA and not mod_overlaps_donut:
                               # If the coverage area of a module sticks out by less than the authorized amount, we keep it
                               # plot_polygon(cov)
-                              remaining_cov = cov.intersection(pizza)
+                              remaining_cov = cov.intersection(limitating_pizza)
 
                               # Sometimes coverage polygon is split in 2 polygons by pizza at the level of the arc de cercle given by the workspaces
                               # That gives a MultiPolygon which is better to split in separate polygons for further manipulations
@@ -323,7 +329,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                                    remaining_cov = remaining_temp
 
                               remaining_robs = robs     
-                              robs_in_vigR = robs.intersection(pizza)
+                              robs_in_vigR = robs.intersection(limitating_pizza)
                               # surf.plot_vigR_poly(pizza)
                               # plot_points(robs)
                               # plot_points(robs_in_vigR, color='red')
@@ -471,7 +477,9 @@ grid_aspherical['phi']= np.rad2deg(np.arctan2(np.array(final_grid['indiv']['y'])
 r = surf.S2R(grid_aspherical['s'])
 
 grid_aspherical['x'] = r * np.cos(np.deg2rad(grid_aspherical['phi']))
+grid_aspherical['dx_from_flat'] = grid_aspherical['x'] - np.array(final_grid['indiv']['x'])
 grid_aspherical['y'] = r * np.sin(np.deg2rad(grid_aspherical['phi']))
+grid_aspherical['dy_from_flat'] = grid_aspherical['y'] - np.array(final_grid['indiv']['y'])
 grid_aspherical['r'] = np.sqrt(grid_aspherical['x']**2 + grid_aspherical['y']**2)
 grid_aspherical['tri_spin'] = np.asarray(final_grid['indiv']['upward_tri'])    
 grid_aspherical['z'] = -surf.R2Z(grid_aspherical['r'])
@@ -479,6 +487,7 @@ grid_aspherical['theta'] = surf.R2NUT(r)
 grid_aspherical['type'] = 'module' # add a column to specify the type of point (module or fiducial)
 grid_aspherical['grid_pos'] = 'front'
 grid_aspherical['geometry'] = [Point(x, y, z) for x, y, z in zip(grid_aspherical['x'], grid_aspherical['y'], grid_aspherical['z'])]
+grid_aspherical = grid_aspherical.round(3)
 
 # Fiducials placement on the 3D grid
 # I know it's not the most optimal way to do it (copy/paste previous code) but it works for now, cleanup for later
@@ -650,6 +659,7 @@ gdf_modules.plot(ax=ax,facecolor='None',edgecolor=gdf_modules['color'])
 gdf_bound.plot(ax=ax,facecolor='None', edgecolor=gdf_bound['color'])
 gdf_fiducials.plot(ax=ax, color = 'red', markersize = 15, marker = '.')
 gdf_coverage.plot(ax=ax, alpha=0.2)
+# gdf_final_grid_indiv.plot(ax=ax, color='red') # Plot modules center, left there for debugging purposes
 
 if "WST" in project_surface:
      def custom_formatter(x, pos):
@@ -680,11 +690,17 @@ plt.legend(handles=[fiducial_patch,coverage_patch, gfa_handler], shadow = True)
 
 x_final_modules = np.array(grid_aspherical[(grid_aspherical['type'] == 'module') & (grid_aspherical['grid_pos'] == 'front')]['x'])
 y_final_modules = np.array(grid_aspherical[(grid_aspherical['type'] == 'module') & (grid_aspherical['grid_pos'] == 'front')]['y'])
-modules_indices = list(range(1, len(x_final_modules)+1))
-for x,y,text in zip(x_final_modules, y_final_modules, modules_indices):
-     ax.text(x, y, text, fontsize=12)
+x_fiducials = np.array(grid_aspherical[(grid_aspherical['type'] == 'fiducial') & (grid_aspherical['grid_pos'] == 'front')]['x'])
+y_fiducials = np.array(grid_aspherical[(grid_aspherical['type'] == 'fiducial') & (grid_aspherical['grid_pos'] == 'front')]['y'])
+modules_indices = list(range(0, len(x_final_modules)))
+fiducials_indices = list(range(0, len(x_fiducials)))
+if showModulesIndices:
+     for x_mod,y_mod,text_mod in zip(x_final_modules, y_final_modules, modules_indices):
+          ax.text(x_mod, y_mod, text_mod, fontsize=12, color='black', ha='center', va='center')
+     for x_fid,y_fid,text_fid in zip(x_fiducials, y_fiducials, fiducials_indices):
+          ax.text(x_fid, y_fid, text_mod, fontsize=12, color='blue', ha='center', va='center', fontweight='bold', alpha=0.5)
 
-saving.save_figures_to_dir(filename)
+saving.save_figures_to_dir(filename, save_eps=False, dpi=400)
 
 if save_csv:
      indiv_pos_df = {'x [mm]':[], 'y [mm]' :[], 'geometry_mm' : [], 'x [arcsec]':[], 'y [arcsec]' :[], 'geometry_arcsec' : []}

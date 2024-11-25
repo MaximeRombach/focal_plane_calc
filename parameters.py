@@ -88,7 +88,8 @@ class FocalSurf():
                                    'f-number': 3.72059,
                                    'BFS': 10477.594, # [mm], radius of BFS # Value calculated with Joe's cal_BFS function with MUST data from 2023-09-06
                                    'FoV': None, # [deg]
-                                   'focus_tolerance_width': 0.02 # [mm]
+                                   # 'focus_tolerance_width': 0.02 # [mm]
+                                   'focus_tolerance_width': 0.1 # [mm] #new value from 2024-08-21
                                    }
                ## Previous values for MUST focal plane parameters (update from: 2023-11-08)
           elif self.project == 'MUST_old':
@@ -210,7 +211,7 @@ class FocalSurf():
                comment_character = "#"  # The character that indicates a commented line
                # Read CSV file and ignore commented lines
                if self.project == 'MUST':
-                    sep = ',' # keeping distinction as delimiter might change from time to time
+                    sep = ';' # keeping distinction as delimiter might change from time to time
                elif self.project == 'MegaMapper':
                     sep = ','
                else :
@@ -344,7 +345,7 @@ class FocalSurf():
 
           return sphR
      
-     def make_vigR_polygon(self, trimming_angle = 360, n_vigR = 500, changed_vigR = None):
+     def make_vigR_polygon(self, trimming_angle = 360, n_vigR = 500, changed_vigR: float = None):
           
           if changed_vigR is not None:
                vigR = changed_vigR # [mm] allows to change the vignetting radius for specific cases
@@ -467,7 +468,8 @@ class SavingResults:
           today_filename = now.strftime("%Y-%m-%d-%H-%M-%S_") + image_name + f'.{file_format}'
           plt.savefig(self.results_dir_path + today_filename, bbox_inches = 'tight', format=file_format, dpi = dpi)
           if save_eps:
-               plt.savefig(self.results_dir_path + today_filename, bbox_inches = 'tight', format='eps')
+               plt.savefig(self.results_dir_path + today_filename + ".eps", bbox_inches = 'tight', format='eps')
+               logging.info(f'{image_name}.eps successfully saved in in {self.results_dir_path}')
 
           logging.info(f'{image_name}.png successfully saved in in {self.results_dir_path}')
 
@@ -972,7 +974,7 @@ class GFA(SavingResults):
      # NOTE: Grid generation class
 class Grid(FocalSurf):
 
-     def __init__(self, project_surface: str, module_width: float, inter_frame_thick: float, global_frame_thick: float, trimming_angle: float = 360, centered_on_triangle: bool  = False) -> None:
+     def __init__(self, project_surface: str, module_width: float, inter_frame_thick: float, global_frame_thick: float, trimming_angle: float = 360, centered_on_triangle: bool  = False, limitation_radius: float = None) -> None:
           
           
           self.centered_on_triangle = centered_on_triangle
@@ -980,9 +982,14 @@ class Grid(FocalSurf):
           self.inter_frame_thick = inter_frame_thick
           self.global_frame_thick = global_frame_thick
           self.inter_frame_width = 2*self.module_width + 2*self.inter_frame_thick*np.cos(np.deg2rad(30)) + 2*self.global_frame_thick*np.cos(np.deg2rad(30))
+          self.limitation_radius = limitation_radius
           
           super().__init__(project_surface)
-          self.pizza = FocalSurf.make_vigR_polygon(self, trimming_angle = trimming_angle)
+          if limitation_radius is not None:
+
+               self.pizza = FocalSurf.make_vigR_polygon(self, trimming_angle = trimming_angle, changed_vigR = limitation_radius)
+          else:
+               self.pizza = FocalSurf.make_vigR_polygon(self, trimming_angle = trimming_angle)
 
           self.grid_flat_init = {'geometry': []}
           self.grid_BFS = {'front':{}, 'back':{}}
@@ -993,7 +1000,8 @@ class Grid(FocalSurf):
      def create_flat_grid(self):
                     # Make global grid out of triangular grid method credited in updown_tri.py
           # Its logic is also explained in updown_tri.py
-          n = 7
+          # TODO: Use two diffrent n numbers for the two different grids: modules and ficudials OR find another optimization
+          n = 9
           center_coords = []
           a_max = n
           b_max = n
@@ -1033,7 +1041,7 @@ class Grid(FocalSurf):
                               fiducial = tri.tri_corners(a,b,c, self.inter_frame_width/2)
                               # Fiducials placement
                               for fid in fiducial:
-                                   if Point(fid[0],fid[1]).within(self.pizza.buffer(20)): # limit fiducials outside vigR to inter modules with center inside vigR
+                                   if Point(fid[0],fid[1]).within(self.pizza.buffer(30)): # limit fiducials outside vigR to inter modules with center inside vigR
                                    
                                         self.fiducials['x'].append(fid[0])
                                         self.fiducials['y'].append(fid[1])
@@ -1308,6 +1316,7 @@ def plot_intermediate(intermediate_collection, nb_robots, ignore_points, interme
 def final_title(project: str, vigR:float, nb_robots: int, total_modules: int, total_robots: int, inter_frame_thick, global_frame_thick, allow_small_out: bool, out_allowance: float, disp_robots_info: bool = True):
 
      project_info = r"$\bf{Project:}$" + project + f" - vigR: {vigR:0.1f} mm"
+     # project_info = r"$\bf{Project: MUST}$"
      
      if allow_small_out:
           small_out_info = f"Out allowance: {out_allowance * 100:0.1f} %"
