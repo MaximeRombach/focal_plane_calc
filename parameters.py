@@ -540,21 +540,13 @@ class Module(SavingResults):
           self.alpha = np.linspace(-180,180,180) # [deg] rotational range of alpha arm
           self.beta = np.linspace(-180,180,180) # [deg] rotational range of beta arm (holding the fiber)
           self.beta2fibre = 1 # [mm] distance fiber center to edge of beta arm
+
+          """
+          Dictionary to store the positions of all robots:
+          Coordinate origin (0,0) is the bottom left corner of the module
+          """
+          self.robots_positions = {"rob_id": [], "x": [], "y": [], "z": []} # dictionnary to store the positions of all robots
           
-          
-          @property
-          def robots_module_table(self):
-               """ Table of robots centroids within the module
-               Output: [nb_robots x 3] array with columns: x, y, z """
-               return self._robots_module_table
-
-
-          @property
-          def robots_module_table(self):
-               """ Table of robots centroids within the module
-               Output: [nb_robots x 3] array with columns: x, y, z """
-               return self._robots_module_table
-
           """Module parameters"""
 
           self.chanfer_length = chanfer_length # [mm] Length of chanfer on module vertices
@@ -726,7 +718,8 @@ class Module(SavingResults):
           # Their norm corresponds to the pitch defined in parameters
           xx1 = np.ones(self.nb_rows + 1)
           yy1 = np.ones(self.nb_rows + 1)
-          zz1 = self.BFS * np.ones(self.nb_rows + 1)
+          # zz1 = self.BFS * np.ones(self.nb_rows + 1)
+          
 
           for idx in range(self.nb_rows): # Create the grid of positioner's center points
           
@@ -752,12 +745,18 @@ class Module(SavingResults):
                     xx1 = np.hstack((xx1, xx_new))
                     yy1 = np.hstack((yy1, yy_new))
 
-          list_to_remove = [0, self.nb_rows, -1] # remove positioners at the edges of the triangle
-          # list_to_remove = [] # remove no positioner
-          xx1, yy1 = self.remove_positioner(xx1, yy1, list_to_remove)
+          triangle_edge_positioners = [0, self.nb_rows, -1] # remove positioners at the edges of the triangle
+          xx1, yy1 = self.remove_positioner(xx1, yy1, triangle_edge_positioners)
+          remove_additional_pos = [23, 38, 40]
+          # remove_additional_pos = []
+          xx1, yy1 = self.remove_positioner(xx1, yy1, remove_additional_pos)
           nbots = len(xx1)
 
+          zz1 = np.zeros(nbots)
           triang_meshgrid = MultiPoint(to_polygon_format(xx1, yy1)) # convert the meshgrid into shapely standard for later manipulation
+          # self.robots_positions = np.array([xx1, yy1, zz1]).T
+          self.robots_positions["rob_id"] = np.arange(nbots)
+          self.robots_positions["x"], self.robots_positions["y"], self.robots_positions["z"] = xx1 - reference_centroid.x, yy1 - reference_centroid.y, zz1 
 
           """ 1)b) Define coverage for 1 modules """
 

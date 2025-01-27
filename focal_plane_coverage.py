@@ -110,9 +110,9 @@ pizza = surf.make_vigR_polygon(trimming_angle = trimming_angle)
 
 """ Drawing parameters """
 draw = True
-is_timer = False # Display time of final plots before automatic closing; stays open if False
+is_timer = True # Display time of final plots before automatic closing; stays open if False
 
-plot_time = 20 # [s] plotting time
+plot_time = 30 # [s] plotting time
 showModulesIndices = False # Show indices of modules on the grid
 showFiducialsIndices = False # Show fiducials on the grid
 ignore_robots_positions = False
@@ -143,8 +143,7 @@ polygon_gfa = MultiPolygon(list(gdf_gfa['geometry']))
 pizza_with_GFA = pizza.difference(polygon_gfa)
 surf.surfaces_polygon['pizza_with_GFA'] = pizza_with_GFA
 
-plot_polygon(pizza_with_GFA)
-# plt.show()
+# plot_polygon(pizza_with_GFA)
 
 logging.info(f'Loaded parameters: \n - Surface:  {project_surface} \n - Inter gap: {inner_gap} mm & Global gap: {global_gap} mm \n - {nbots} robots/module')
 """ Data storage """
@@ -165,8 +164,6 @@ for nb_robots in nbots: # iterate over number of robots/module cases
      print("width increase1: ", width_increase)
      print("is_wall1: ", is_wall)
      mod_param = param.Module(nb_robots, saving_df, BFS, is_wall, width_increase, chanfer_length)
-     print("width increase2: ", mod_param.width_increase)
-     print("is_wall2: ", mod_param.is_wall)
      module_length = mod_param.module_length
      key = mod_param.key
      keys.append(key)
@@ -176,9 +173,17 @@ for nb_robots in nbots: # iterate over number of robots/module cases
      module_collection, wks_list, coverages = mod_param.module_collection, mod_param.multi_wks_list, mod_param.coverages
      module, module_w_beta_and_safety_dist, effective_wks, triang_meshgrid = module_collection.geoms
      coverage_with_walls, coverage_no_walls = coverages
+     rob_pos = pd.DataFrame(mod_param.robots_positions)
 
-     
-     # plot_polygon(module, add_points= False, facecolor='None', edgecolor='black')
+     plt.figure(figsize=(10,10))
+     plot_polygon(module, add_points= False, facecolor='None', edgecolor='black')
+     plt.scatter(rob_pos['x'], rob_pos['y'], color='red', s=1)
+     showRobotsIndices = True
+     if showRobotsIndices:
+          for x_rob, y_rob, rob_id in zip(rob_pos['x'], rob_pos['y'], rob_pos['rob_id']):
+               plt.text(x_rob, y_rob, rob_id, fontsize=12, color='black', ha='center', va='center')
+
+     plt.show()
      # plot_polygon(module.buffer(width_increase, join_style='mitre'), add_points= False, facecolor='None', edgecolor='red', linestyle = '--', label = f'Width increase = {width_increase} mm')
      # mod_param.plot_raw_module()
      # plot_polygon(effective_wks, add_points= False, alpha = 0.2, edgecolor='black', label=f'Coverage = {coverage_with_walls} %')
