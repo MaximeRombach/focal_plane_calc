@@ -1,6 +1,6 @@
 # %% For further information contact Maxime Rombach (EPFL - LASTRO) at maxime.rombach@epfl.ch
 # This code is a tool for calculating the coverage performed for different focal plane arrangements.
-# It is inspired from the work of Joe Silber (LBLN): https://github.com/joesilber/raft-design 
+# It is inspired from the work of Joe Silber (LBNL): https://github.com/joesilber/raft-design 
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
@@ -114,7 +114,10 @@ is_timer = False # Display time of final plots before automatic closing; stays o
 
 plot_time = 20 # [s] plotting time
 showModulesIndices = False # Show indices of modules on the grid
+showFiducialsIndices = False # Show fiducials on the grid
 ignore_robots_positions = False
+
+""" Saving parameters """
 save_plots = False # Save most useful plots 
 save_all_plots = False  # Save all plots (including intermediate ones)
 save_frame_as_dxf = False # DEPRECATED: Save the outline of the frame for Solidworks integration
@@ -204,7 +207,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
      inter_centroid = inter_frame_width*np.sqrt(3)/3*np.array([np.cos(np.deg2rad(30)), np.sin(np.deg2rad(30))])
 
      # Generate initial flat grid of modules center points
-     limitation_radius = 560 # [mm] limitation radius of a circle that will limit the number of modules within the grid (SHOULD BE < vigR)
+     limitation_radius = 560 # [mm] Default: None // limitation radius of a circle that will limit the number of modules within the grid (SHOULD BE < vigR)
      grid = param.Grid(project_surface, module_width, inner_gap, global_gap, trimming_angle=trimming_angle, centered_on_triangle = centered_on_triangle, limitation_radius=limitation_radius)
 
      plt.figure(figsize=(10,10))
@@ -225,7 +228,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
           useless_robots = 0 # robots that are not in the vigR
           # useful_robots = 0 # robots that are in the vigR
 
-          limitating_pizza = surf.make_vigR_polygon(changed_vigR=limitation_radius)
+          limitating_pizza = surf.make_vigR_polygon(trimming_angle=trimming_angle, changed_vigR=limitation_radius)
           if 'WST' in project_surface: donut = surf.surfaces_polygon['donut'] # define donut if WST project
           boundaries_df = {'geometry':[], 'color': []}
           modules_df = {'geometry':[], 'color': []}
@@ -697,13 +700,14 @@ fiducials_indices = list(range(0, len(x_fiducials)))
 if showModulesIndices:
      for x_mod,y_mod,text_mod in zip(x_final_modules, y_final_modules, modules_indices):
           ax.text(x_mod, y_mod, text_mod, fontsize=12, color='black', ha='center', va='center')
+if showFiducialsIndices:
      for x_fid,y_fid,text_fid in zip(x_fiducials, y_fiducials, fiducials_indices):
           ax.text(x_fid, y_fid, text_mod, fontsize=12, color='blue', ha='center', va='center', fontweight='bold', alpha=0.5)
 
 saving.save_figures_to_dir(filename, save_eps=False, dpi=400)
 
 if save_csv:
-     indiv_pos_df = {'x [mm]':[], 'y [mm]' :[], 'geometry_mm' : [], 'x [arcsec]':[], 'y [arcsec]' :[], 'geometry_arcsec' : []}
+     indiv_pos_df = {'x [mm]':[], 'y [mm]' :[], 'geometry_mm' : []}
      for idx, point in enumerate(robots_df['geometry'][0].geoms):
 
           if 'WST' in project_surface:
@@ -721,7 +725,7 @@ if save_csv:
      now = datetime.now()
      info_case = f"{nb_robots}_robots-per-module_{total_robots}_robots_{inner_gap}_inner_gap_{global_gap}_global_gap"
      csv_filename = now.strftime("%Y-%m-%d-%H-%M-%S_") + info_case + ".csv"
-     # gpd.GeoDataFrame(indiv_pos_df).to_csv(saving.results_dir_path() + csv_filename, index_label = 'robot_number', sep = ";", decimal = ".", header='BONJOUR')
+     gpd.GeoDataFrame(indiv_pos_df).to_csv(saving.results_dir_path + csv_filename, index_label = 'robot_number', sep = ";", decimal = ".")
      # TBI: robot pos accounting for focal plane curvature
      logging.info(f'Robots positions saved to .csv file')
 
