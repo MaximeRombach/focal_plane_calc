@@ -17,7 +17,7 @@ plt.rc('figure', titlesize=17)  # fontsize of the figure title
 plt.rc('axes', titlesize=17)     # fontsize of the axes title
 plt.rc('xtick', labelsize=16)    # fontsize of the tick labels
 plt.rc('ytick', labelsize=16)    # fontsize of the tick labels
-plt.rc('legend', fontsize=14)    # legend fontsi
+plt.rc('legend', fontsize=14)    # legend fontsize
 import geopandas as gpd
 import pandas as pd
 import array as array
@@ -72,7 +72,7 @@ start_time = time.time()
 
 ## Study one case at a time
 nbots = [63] # number of robots per module; available: 42, 52, 63, 75, 88, 102
-out_allowances = [0] # between 0 and 0.99; 1 does not make sense as it would mean the module is completely out of vigR
+out_allowances = [0.1] # between 0 and 0.99; 1 does not make sense as it would mean the module is completely out of vigR
 width_increase = 0 # [mm] How much we want to increase the base length of a module (base value for 63 robots: 73.8mm)
 chanfer_length = 10.5 # [mm] Size of chanfers of module vertices (base value: 7.5); increase chanfer decreases coverage as it reduces the module size thus patrol area
 centered_on_triangle = False # move the center of the grid (red dot) on the centroid on a triangle instead of the edge
@@ -80,11 +80,11 @@ full_framed = False # flag to check wether we are in semi frameless or in full f
 
 """ Intermediate frame parameters """
 
-inner_gap = 1 # [mm] spacing between modules inside intermediate frame
+inner_gap = 2 # [mm] spacing between modules inside intermediate frame
 
 """ Global frame parameters """
 
-global_gap = 3 # [mm] spacing between modules in global arrangement
+global_gap = 2 # [mm] spacing between modules in global arrangement
 
 """ Protective shields on module """
 
@@ -100,7 +100,7 @@ if inner_gap == global_gap and inner_gap != 0:
 """ Define focal surface """
 
 # Available projects: MUST, MUST__old, MegaMapper, DESI, WST1, WST2, WST3, Spec-S5, Spec-S5_old
-project_surface = 'MUST' # name of the project surface to use
+project_surface = 'Spec-S5' # name of the project surface to use
 surf = param.FocalSurf(project=project_surface)
 vigR = surf.vigR
 BFS = surf.BFS
@@ -115,6 +115,7 @@ is_timer = True # Display time of final plots before automatic closing; stays op
 plot_time = 30 # [s] plotting time
 showModulesIndices = False # Show indices of modules on the grid
 showFiducialsIndices = False # Show fiducials on the grid
+showRobotsIndices = True # Show indices of robots on the module plot
 ignore_robots_positions = False
 
 """ Saving parameters """
@@ -133,9 +134,9 @@ results_string = f"#Date: {now}\n #Project: {project_surface}\n #Distance unit: 
 gfa_tune = 1
 nb_gfa = 6
 # gfa = param.GFA(length = 33.3*gfa_tune, width = 60*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
-# gfa = param.GFA(length = 10*gfa_tune, width = 10*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
+gfa = param.GFA(length = 10*gfa_tune, width = 10*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
 # gfa = param.GFA(length = 20*gfa_tune, width = 30*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
-gfa = param.GFA(length = 120*gfa_tune, width = 120*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
+# gfa = param.GFA(length = 120*gfa_tune, width = 120*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
 gdf_gfa = gfa.gdf_gfa
 polygon_gfa = MultiPolygon(list(gdf_gfa['geometry']))
 
@@ -178,12 +179,9 @@ for nb_robots in nbots: # iterate over number of robots/module cases
      plt.figure(figsize=(10,10))
      plot_polygon(module, add_points= False, facecolor='None', edgecolor='black')
      plt.scatter(rob_pos['x'], rob_pos['y'], color='red', s=1)
-     showRobotsIndices = True
      if showRobotsIndices:
           for x_rob, y_rob, rob_id in zip(rob_pos['x'], rob_pos['y'], rob_pos['rob_id']):
                plt.text(x_rob, y_rob, rob_id, fontsize=12, color='black', ha='center', va='center')
-
-     plt.show()
      # plot_polygon(module.buffer(width_increase, join_style='mitre'), add_points= False, facecolor='None', edgecolor='red', linestyle = '--', label = f'Width increase = {width_increase} mm')
      # mod_param.plot_raw_module()
      # plot_polygon(effective_wks, add_points= False, alpha = 0.2, edgecolor='black', label=f'Coverage = {coverage_with_walls} %')
@@ -212,7 +210,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
      inter_centroid = inter_frame_width*np.sqrt(3)/3*np.array([np.cos(np.deg2rad(30)), np.sin(np.deg2rad(30))])
 
      # Generate initial flat grid of modules center points
-     limitation_radius = 560 # [mm] Default: None // limitation radius of a circle that will limit the number of modules within the grid (SHOULD BE < vigR)
+     limitation_radius = None # [mm] Default: None // limitation radius of a circle that will limit the number of modules within the grid (SHOULD BE < vigR)
      grid = param.Grid(project_surface, module_width, inner_gap, global_gap, trimming_angle=trimming_angle, centered_on_triangle = centered_on_triangle, limitation_radius=limitation_radius)
 
      plt.figure(figsize=(10,10))
@@ -243,7 +241,6 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                          'indiv': {'x': [], 'y': [], 'z': [], 'xyz': [], 'upward_tri': [], 'geometry': [], 'geometry_modules': []},
                          'robots': {'x': [], 'y': [], 'z': [], 'xyz': [], 'geometry': []}
                          }
-          
 
           # Create module arrangement from the global grid
           logging.info(f'Arranging focal plane for {nb_robots} robots case')
@@ -425,7 +422,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
           robots_df['geometry'] = [unary_union(robots_df['geometry'])]
           gdf_robots = gpd.GeoDataFrame(robots_df)
           gdf_robots['markersize'] = 0.05
-          total_robots = total_modules*nb_robots
+          total_robots = total_modules*mod_param.nbots
 
           gdf_final_grid_int = gpd.GeoDataFrame(final_grid['inter'])
           
@@ -567,16 +564,21 @@ grid.plot_3D_grid(ax,grid_aspherical_xyz_back[:,0], grid_aspherical_xyz_back[:,1
 # plt.show()
 
 # grid_aspherical.to_csv(saving.results_dir_path + f'asph_grid_{nb_robots}.csv', sep = ";", decimal = ".")
-# %% Plot plot time 
+""" Plotting time """
 
 fig = plt.figure(figsize=(8,8))
-figtitle = f"Module coverage raw - {nb_robots} robots per module \n Pitch: {mod_param.pitch} mm"
-filename = f"Module_coverage_raw__{nb_robots}_robots_per_module"
+figtitle = f"Module coverage raw - {mod_param.nbots} robots per module \n Pitch: {mod_param.pitch} mm"
+filename = f"Module_coverage_raw__{mod_param.nbots}_robots_per_module"
 plt.title(figtitle)
 plot_polygon(module, facecolor='None', edgecolor='black', add_points=False)
 plot_polygon(module_w_beta_and_safety_dist, facecolor='None', edgecolor='red', linestyle = '--', add_points=False
           , label = "Safety dist = {} mm".format(mod_param.offset_from_module_edges))
-plot_points(triang_meshgrid, marker='.', color='k', label = "{} robots".format(nb_robots))
+if showRobotsIndices:
+     for x_rob, y_rob, rob_id in zip(mod_param.robots_positions['x'], mod_param.robots_positions['y'], mod_param.robots_positions['rob_id']):
+          plt.text(x_rob, y_rob, rob_id, fontsize=12, color='black', ha='center', va='center')
+
+else:
+     plot_points(triang_meshgrid, marker='.', color='k', label = "{} robots".format(mod_param.nbots))
 
 for idx, wks in enumerate(wks_list.geoms):
      if idx == 0:
@@ -591,14 +593,22 @@ if save_all_plots:
      saving.save_figures_to_dir(filename)
 
 plt.figure(figsize=(8,8))
-figtitle = f"Module coverage with summed coverage + walls \n {nb_robots} robots per module"
-filename = f"Module_cov_w_walls__{nb_robots}_robots_per_mod"
+figtitle = f"Module coverage with summed coverage + walls \n {mod_param.nbots} robots per module"
+filename = f"Module_cov_w_walls__{mod_param.nbots}_robots_per_mod"
 plt.title(figtitle)
 plot_polygon(module, facecolor='None', edgecolor='black', add_points=False)
 plot_polygon(module_w_beta_and_safety_dist, facecolor='None', linestyle = '--', add_points=False
           , label = "Safety dist = {} mm".format(mod_param.offset_from_module_edges))
-plot_points(triang_meshgrid, marker='.', color='k', label = "{} robots".format(nb_robots))
+
 plot_polygon(effective_wks, add_points=False, alpha=0.2, edgecolor='black', label = "Coverage with walls: {} %".format(coverage_with_walls))
+
+if showRobotsIndices:
+     """" Plot robots indices or just a simple dot for positionner center """
+     for x_rob, y_rob, rob_id in zip(mod_param.robots_positions['x'], mod_param.robots_positions['y'], mod_param.robots_positions['rob_id']):
+          plt.text(x_rob, y_rob, rob_id, fontsize=12, color='black', ha='center', va='center')
+
+else:
+     plot_points(triang_meshgrid, marker='.', color='k', label = "{} robots".format(mod_param.nbots))
 
 plt.xlabel('x position [mm]')
 plt.ylabel('y position [mm]')
@@ -607,10 +617,10 @@ if save_all_plots:
      saving.save_figures_to_dir(filename)
 
 plt.figure(figsize=(10,10))
-figtitle = f"Intermediate frame - {nb_robots} robots per module \n Inner gap: {inner_gap} mm \n Total # modules: 4 - Total # robots: {nb_robots*4}"
-filename = f"Intermediate_plot_{nb_robots}_robots_per_mod"
+figtitle = f"Intermediate frame - {mod_param.nbots} robots per module \n Inner gap: {inner_gap} mm \n Total # modules: 4 - Total # robots: {mod_param.nbots*4}"
+filename = f"Intermediate_plot_{mod_param.nbots}_robots_per_mod"
 plt.title(figtitle)
-param.plot_intermediate(intermediate_collection, nb_robots, False, intermediate_coverage, draw_legend = True)
+param.plot_intermediate(intermediate_collection, mod_param.nbots, False, intermediate_coverage, draw_legend = True)
 gdf_inter_bound = gpd.GeoDataFrame(inter_df)
 plt.xlabel('x position [mm]')
 plt.ylabel('y position [mm]')
@@ -659,8 +669,8 @@ if global_gap > 0:
           saving.save_dxf_to_dir(to_dxf_dict, f'frame_{robots}_robots_{modules}_modules')
           ax.set_title('Outline saved to DXF file')     
      
-figtitle = param.final_title(surf.surf_name, vigR, nb_robots, total_modules, total_robots, inner_gap, global_gap, allow_small_out, out_allowance)
-filename = f"Coverage_global_{nb_robots}_rob__Inner_{inner_gap}_mm__Global_{global_gap}_mm"
+figtitle = param.final_title(surf.surf_name, vigR, mod_param.nbots, total_modules, total_robots, inner_gap, global_gap, allow_small_out, out_allowance)
+filename = f"Coverage_global_{mod_param.nbots}_rob__Inner_{inner_gap}_mm__Global_{global_gap}_mm"
 f, ax= plt.subplots(figsize=(12, 12), sharex = True, sharey=True)
 f.suptitle(figtitle)
 gdf_modules.plot(ax=ax,facecolor='None',edgecolor=gdf_modules['color'])
@@ -728,7 +738,7 @@ if save_csv:
           indiv_pos_df['y [mm]'].append(point.y)
           indiv_pos_df['geometry_mm'].append(point)
      now = datetime.now()
-     info_case = f"{nb_robots}_robots-per-module_{total_robots}_robots_{inner_gap}_inner_gap_{global_gap}_global_gap"
+     info_case = f"{mod_param.nbots}_robots-per-module_{total_robots}_robots_{inner_gap}_inner_gap_{global_gap}_global_gap"
      csv_filename = now.strftime("%Y-%m-%d-%H-%M-%S_") + info_case + ".csv"
      gpd.GeoDataFrame(indiv_pos_df).to_csv(saving.results_dir_path + csv_filename, index_label = 'robot_number', sep = ";", decimal = ".")
      # TBI: robot pos accounting for focal plane curvature

@@ -229,6 +229,25 @@ class FocalSurf():
                print(f"{self.project} focal plane data successfully read from {filename}")
                print(optics_data.head())
                self.optics_data = optics_data
+
+     def read_focal_plane_data_from_xls(self, filename: str, sheet_name: str = None, sep: str = ','):
+          
+          """ 
+          Read focal plane data from an excel file
+
+          Input:
+               - filename: [str] path to the excel file
+               - sheet_name: [str] name of the sheet containing the data
+               - sep: [str] delimiter used in the excel file
+
+          Output:
+               - optics_data: [pandas dataframe] containing the focal plane data from the excel file
+          """
+          filename = f"./Data_focal_planes/{self.project}.csv"
+          optics_data = pd.read_excel(filename, sheet_name = sheet_name, sep = sep)
+          print(f"{self.project} focal plane data successfully read from {filename}")
+          print(optics_data.head())
+          self.optics_data = optics_data
      
      def transfer_functions(self):
           # Those transfer functions and there implementation later are inspired from the work of Joseph Silber (LBNL) in the generate_raft_layout.py code in https://github.com/joesilber/raft-design 
@@ -533,7 +552,8 @@ class Module(SavingResults):
 
           """Robot parameters""" 
 
-          self.nb_robots = nb_robots
+          self.nb_robots = nb_robots # Initial number of robots per module (42, 52, 63, 75, 88, 102)
+          self.nbots = None # Final number of robots per module after eventual bots removal
           self.la = 1.8 # alpha arm length [mm] /!\ lb > la /!\
           self.lb = 1.8 # beta arm length [mm]
           self.pitch = 6.2 # pitch [mm]
@@ -750,12 +770,12 @@ class Module(SavingResults):
           remove_additional_pos = [23, 38, 40]
           # remove_additional_pos = []
           xx1, yy1 = self.remove_positioner(xx1, yy1, remove_additional_pos)
-          nbots = len(xx1)
+          self.nbots = len(xx1)
 
-          zz1 = np.zeros(nbots)
+          zz1 = np.zeros(self.nbots)
           triang_meshgrid = MultiPoint(to_polygon_format(xx1, yy1)) # convert the meshgrid into shapely standard for later manipulation
           # self.robots_positions = np.array([xx1, yy1, zz1]).T
-          self.robots_positions["rob_id"] = np.arange(nbots)
+          self.robots_positions["rob_id"] = np.arange(self.nbots)
           self.robots_positions["x"], self.robots_positions["y"], self.robots_positions["z"] = xx1 - reference_centroid.x, yy1 - reference_centroid.y, zz1 
 
           """ 1)b) Define coverage for 1 modules """
@@ -798,7 +818,7 @@ class Module(SavingResults):
           coverage_no_walls = round(total_positioners_workspace.area/module.area * 100,1)
           coverages = [coverage_with_walls, coverage_no_walls]
 
-          logging.info(f'Module object created with width {self.module_width} mm & {nbots} robots')
+          logging.info(f'Module object created with width {self.module_width} mm & {self.nbots} robots')
           return module_collection, multi_wks_list, coverages
      
      def plot_raw_module(self):
