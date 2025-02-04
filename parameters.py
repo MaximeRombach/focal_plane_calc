@@ -73,26 +73,26 @@ class FocalSurf():
      def set_surface_parameters(self):
 
           if self.project == 'MUST':
-               ## Last update of MUST focal plane parameters (update from: 2024-01-29)
+               ## Last update of MUST focal plane parameters (update from: 2025-01-22)
                focal_surf_param = {
                                    'name': 'MUST',
-                                   'curvature_R': -11918, # [mm], curvature radius
-                                   'vigD': 1184.7, # [mm], vignetting diameter
-                                   'vigR': 1184.7/2, # [mm], vignetting radius
+                                   'curvature_R': -11698.7, # [mm], curvature radius
+                                   'vigD': 1189.306, # [mm], vignetting diameter
+                                   'vigR': 1189.306/2, # [mm], vignetting radius
                                    'asph_formula': False,
                                    'k': 0,
                                    'a2': 0, 
-                                   'a4': -3.913848e-11, 
-                                   'a6': 5.905507e-17,
+                                   'a4': 3.76762e-11, 
+                                   'a6': -5.86796e-17,
                                    'a8': 0,
-                                   'f-number': 3.72059,
-                                   'BFS': 10477.594, # [mm], radius of BFS # Value calculated with Joe's cal_BFS function with MUST data from 2023-09-06
+                                   'f-number': 3.71798,
+                                   'BFS': 10215.81, # [mm], radius of BFS # Value calculated with Joe's cal_BFS function with MUST data from 2023-09-06
                                    'FoV': None, # [deg]
                                    # 'focus_tolerance_width': 0.02 # [mm]
                                    'focus_tolerance_width': 0.1 # [mm] #new value from 2024-08-21
                                    }
                ## Previous values for MUST focal plane parameters (update from: 2023-11-08)
-          elif self.project == 'MUST_old':
+          elif self.project == 'MUST_old':#kept for legacy to remind the diameter of the focal surface (smaller)
                focal_surf_param = {
                                    'name': 'MUST_old',
                                    'curvature_R': -11365, # [mm], curvature radius
@@ -149,9 +149,9 @@ class FocalSurf():
                
           elif self.project == 'WST2':
                focal_surf_param = {
-                              'name': r'$\bf{WST - Focal Plane \varnothing: 1.4 m - Center \varnothing: 0.2m}$',
+                              'name': r'$\bf{WST - Focal Plane \varnothing: 1.5 m - Center \varnothing: 0.2m}$',
                               'curvature_R': -11067, 
-                              'vigR': 700,# [mm], vignetting radius
+                              'vigR': 750,# [mm], vignetting radius
                               'donutDiam': 20, # [arcmin], diameter of donut hole
                               'asph_formula': False,
                               'BFS': 11067, # [mm], radius of BFS,
@@ -767,8 +767,8 @@ class Module(SavingResults):
 
           triangle_edge_positioners = [0, self.nb_rows, -1] # remove positioners at the edges of the triangle
           xx1, yy1 = self.remove_positioner(xx1, yy1, triangle_edge_positioners)
-          remove_additional_pos = [23, 38, 40]
-          # remove_additional_pos = []
+          # remove_additional_pos = [23, 38, 40]
+          remove_additional_pos = []
           xx1, yy1 = self.remove_positioner(xx1, yy1, remove_additional_pos)
           self.nbots = len(xx1)
 
@@ -1020,7 +1020,7 @@ class Grid(FocalSurf):
                     # Make global grid out of triangular grid method credited in updown_tri.py
           # Its logic is also explained in updown_tri.py
           # TODO: Use two diffrent n numbers for the two different grids: modules and ficudials OR find another optimization
-          n = 9
+          n = 11
           center_coords = []
           a_max = n
           b_max = n
