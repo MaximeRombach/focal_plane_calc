@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from shapely.geometry import Polygon, Point, box
 from shapely.ops import unary_union
 from shapely.validation import make_valid
+from shapely import concave_hull
 from scipy import optimize
 from scipy.interpolate import interp1d
 from shapely.plotting import plot_polygon, plot_points
@@ -229,25 +230,6 @@ class FocalSurf():
                print(f"{self.project} focal plane data successfully read from {filename}")
                print(optics_data.head())
                self.optics_data = optics_data
-
-     def read_focal_plane_data_from_xls(self, filename: str, sheet_name: str = None, sep: str = ','):
-          
-          """ 
-          Read focal plane data from an excel file
-
-          Input:
-               - filename: [str] path to the excel file
-               - sheet_name: [str] name of the sheet containing the data
-               - sep: [str] delimiter used in the excel file
-
-          Output:
-               - optics_data: [pandas dataframe] containing the focal plane data from the excel file
-          """
-          filename = f"./Data_focal_planes/{self.project}.csv"
-          optics_data = pd.read_excel(filename, sheet_name = sheet_name, sep = sep)
-          print(f"{self.project} focal plane data successfully read from {filename}")
-          print(optics_data.head())
-          self.optics_data = optics_data
      
      def transfer_functions(self):
           # Those transfer functions and there implementation later are inspired from the work of Joseph Silber (LBNL) in the generate_raft_layout.py code in https://github.com/joesilber/raft-design 
@@ -312,7 +294,7 @@ class FocalSurf():
                NORM2R = interp1d(norm, r[:-1])
                logging.info('No slope data available in samples - deriving normal angles from focal plane curve')
 
-          nut = -(R2NORM(r) + crd) # Joe: -(R2NORM(r) + crd)
+          nut = R2NORM(r) + crd # Joe: -(R2NORM(r) + crd)
           R2NUT = interp1d(r, nut, kind='cubic', fill_value = "extrapolate")
           NUT2R = interp1d(nut, r)
 
@@ -353,7 +335,7 @@ class FocalSurf():
                errors = sphR_test - np.mean(sphR_test) 
                scalar_error = np.sum(np.power(errors, 2)) # metric for optimization 
                return scalar_error
-          typical_fov = 3.7  # deg
+          typical_fov = 3.7  # deg #default: 3.7 deg
           z_guess = np.sign(np.mean(z)) * np.max(r) / np.radians(typical_fov/2)
           result = optimize.least_squares(fun=calc_sphR_err, x0=z_guess)
           z_ctr = float(result.x) # signed BFS radius
@@ -767,8 +749,8 @@ class Module(SavingResults):
 
           triangle_edge_positioners = [0, self.nb_rows, -1] # remove positioners at the edges of the triangle
           xx1, yy1 = self.remove_positioner(xx1, yy1, triangle_edge_positioners)
-          # remove_additional_pos = [23, 38, 40]
-          remove_additional_pos = []
+          remove_additional_pos = [23, 38, 40]
+          # remove_additional_pos = []
           xx1, yy1 = self.remove_positioner(xx1, yy1, remove_additional_pos)
           self.nbots = len(xx1)
 
@@ -1012,7 +994,7 @@ class Grid(FocalSurf):
 
           self.grid_flat_init = {'geometry': []}
           self.grid_BFS = {'front':{}, 'back':{}}
-          self.fiducials = {'x': [], 'y': [], 'z': [], 'geometry': []}
+          self.fiducials = {'x': [], 'y': [], 'z': [], 'r': [], 'geometry': []}
           self.x_grid, self.y_grid, self.z_grid = self.create_flat_grid()
           
           
@@ -1020,7 +1002,7 @@ class Grid(FocalSurf):
                     # Make global grid out of triangular grid method credited in updown_tri.py
           # Its logic is also explained in updown_tri.py
           # TODO: Use two diffrent n numbers for the two different grids: modules and ficudials OR find another optimization
-          n = 11
+          n = 9
           center_coords = []
           a_max = n
           b_max = n
@@ -1060,10 +1042,11 @@ class Grid(FocalSurf):
                               fiducial = tri.tri_corners(a,b,c, self.inter_frame_width/2)
                               # Fiducials placement
                               for fid in fiducial:
-                                   if Point(fid[0],fid[1]).within(self.pizza.buffer(30)): # limit fiducials outside vigR to inter modules with center inside vigR
+                                   if Point(fid[0],fid[1]).within(self.pizza): # limit fiducials outside vigR to inter modules with center inside vigR
                                    
                                         self.fiducials['x'].append(fid[0])
                                         self.fiducials['y'].append(fid[1])
+                                        self.fiducials['r'].append(np.round(np.sqrt(fid[0]**2 + fid[1]**2),4))
                                         self.fiducials['z'].append(0)
                                         self.fiducials['geometry'].append(Point(fid))
                                    # self.fiducials['xyz'] = np.vstack((self.fiducials['xyz'], np.asarray(fiducial)))
@@ -1081,6 +1064,8 @@ class Grid(FocalSurf):
           self.grid_flat_init['z'] = z_grid
           self.grid_flat_init['tri_orientation'] = np.array(flip_global)
           # self.grid_flat_init['geometry'] = MultiPoint(to_polygon_format(x_grid, y_grid, z_grid))
+
+          self.fiducials = pd.DataFrame(self.fiducials)
 
           return x_grid, y_grid, z_grid
      
@@ -1179,6 +1164,18 @@ class Grid(FocalSurf):
           z = np.cos(theta)
 
           return np.array([x,y,z]).T
+     
+     def layout_concave_hull(self):
+
+          max_distance = max(self.fiducials['r'])
+          # max_points = [[x, y] for x, y, r in zip(self.fiducials['x'], self.fiducials['y'], self.fiducials['r']) if r == max_distance]
+          self.fiducials.sort_values(by=['r'], inplace=True)
+          print(self.fiducials)
+          max_points = self.fiducials[(self.fiducials['r']==max_distance)]
+          # max_points = max_points[['x','y']].values
+          print(max_points)
+          
+          return max_points
 
      def plot_3D_grid(self,ax, x, y ,z,  color = 'red', label=None):
 
