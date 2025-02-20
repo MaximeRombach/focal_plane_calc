@@ -8,6 +8,7 @@ import argparse
 from datetime import datetime
 import numpy as np
 from numpy.linalg import norm
+np.set_printoptions(legacy='1.25')
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import matplotlib.patches as mpatches
@@ -20,20 +21,21 @@ plt.rc('ytick', labelsize=16)    # fontsize of the tick labels
 plt.rc('legend', fontsize=14)    # legend fontsize
 import geopandas as gpd
 import pandas as pd
+pd.set_option('future.no_silent_downcasting', True)
 import array as array
 import time
 from tqdm import tqdm
 from shapely.geometry import Polygon, Point
 from shapely.plotting import plot_polygon, plot_points, plot_line
-from shapely import MultiPoint, MultiPolygon, GeometryCollection
+from shapely import MultiPoint, MultiPolygon, GeometryCollection, concave_hull
 from shapely.ops import unary_union
+from shapely.validation import explain_validity
 import logging
 import warnings
 from shapely.errors import ShapelyDeprecationWarning
 warnings.filterwarnings("ignore", category=ShapelyDeprecationWarning) 
 import parameters as param
 from datetime import datetime
-
 logging.basicConfig(level=logging.INFO)
 
 """
@@ -72,7 +74,7 @@ start_time = time.time()
 
 ## Study one case at a time
 nbots = [63] # number of robots per module; available: 42, 52, 63, 75, 88, 102
-out_allowances = [0.1] # between 0 and 0.99; 1 does not make sense as it would mean the module is completely out of vigR
+out_allowances = [0] # between 0 and 0.99; 1 does not make sense as it would mean the module is completely out of vigR
 width_increase = 0 # [mm] How much we want to increase the base length of a module (base value for 63 robots: 73.8mm)
 chanfer_length = 10.5 # [mm] Size of chanfers of module vertices (base value: 7.5); increase chanfer decreases coverage as it reduces the module size thus patrol area
 centered_on_triangle = False # move the center of the grid (red dot) on the centroid on a triangle instead of the edge
@@ -80,11 +82,11 @@ full_framed = False # flag to check wether we are in semi frameless or in full f
 
 """ Intermediate frame parameters """
 
-inner_gap = 2 # [mm] spacing between modules inside intermediate frame
+inner_gap = 4 # [mm] spacing between modules inside intermediate frame
 
 """ Global frame parameters """
 
-global_gap = 2 # [mm] spacing between modules in global arrangement
+global_gap = 4 # [mm] spacing between modules in global arrangement
 
 """ Protective shields on module """
 
@@ -100,17 +102,20 @@ if inner_gap == global_gap and inner_gap != 0:
 """ Define focal surface """
 
 # Available projects: MUST, MUST__old, MegaMapper, DESI, WST1, WST2, WST3, Spec-S5, Spec-S5_old
-project_surface = 'Spec-S5' # name of the project surface to use
+project_surface = 'MUST' # name of the project surface to use
 surf = param.FocalSurf(project=project_surface)
 vigR = surf.vigR
 BFS = surf.BFS
 trimming_angle = 360 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
+limitation_radius = 570 # [mm] Default: None // limitation radius of a circle that will limit the number of modules within the grid (SHOULD BE < vigR)
+if limitation_radius is not None and limitation_radius > vigR:
+     raise ValueError(f"Limitation radius should be smaller than vigR ({surf.vigR} mm)")
 
 pizza = surf.make_vigR_polygon(trimming_angle = trimming_angle)
 
 """ Drawing parameters """
 draw = True
-is_timer = True # Display time of final plots before automatic closing; stays open if False
+is_timer = False # Display time of final plots before automatic closing; stays open if False
 
 plot_time = 30 # [s] plotting time
 showModulesIndices = False # Show indices of modules on the grid
@@ -134,9 +139,9 @@ results_string = f"#Date: {now}\n #Project: {project_surface}\n #Distance unit: 
 gfa_tune = 1
 nb_gfa = 6
 # gfa = param.GFA(length = 33.3*gfa_tune, width = 60*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
-gfa = param.GFA(length = 10*gfa_tune, width = 10*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
+# gfa = param.GFA(length = 10*gfa_tune, width = 10*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
 # gfa = param.GFA(length = 20*gfa_tune, width = 30*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
-# gfa = param.GFA(length = 120*gfa_tune, width = 120*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
+gfa = param.GFA(length = 120*gfa_tune, width = 120*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
 gdf_gfa = gfa.gdf_gfa
 polygon_gfa = MultiPolygon(list(gdf_gfa['geometry']))
 
@@ -154,7 +159,7 @@ global_dict = {}
 # Declaring global dictionnaries for storing results
 for number in nbots:
      main_key = 'n'+str(number)
-     global_dict[main_key]={'local_total_robots_list' : [], 'local_total_modules_list':[], 'local_coverages_list':[], 'local_unused_area_list':[], 'useless_robots_list': [], 'useful_robots_list': [], 'efficiency_list': [] }
+     global_dict[main_key]={'local_total_robots_list' : [], 'local_total_modules_list':[], 'local_coverages_list':[], 'local_unused_area_list':[], 'concave_hull': None , 'useless_robots_list': [], 'useful_robots_list': [], 'efficiency_list': [] }
 
 
 to_dxf_dict = {}
@@ -210,8 +215,15 @@ for nb_robots in nbots: # iterate over number of robots/module cases
      inter_centroid = inter_frame_width*np.sqrt(3)/3*np.array([np.cos(np.deg2rad(30)), np.sin(np.deg2rad(30))])
 
      # Generate initial flat grid of modules center points
-     limitation_radius = None # [mm] Default: None // limitation radius of a circle that will limit the number of modules within the grid (SHOULD BE < vigR)
-     grid = param.Grid(project_surface, module_width, inner_gap, global_gap, trimming_angle=trimming_angle, centered_on_triangle = centered_on_triangle, limitation_radius=limitation_radius)
+     
+     grid = param.Grid(project_surface,
+                       module_width,
+                       inner_gap,
+                       global_gap,
+                       trimming_angle = trimming_angle,
+                       centered_on_triangle = centered_on_triangle,
+                       limitation_radius = limitation_radius,
+                       GFAs = polygon_gfa)
 
      plt.figure(figsize=(10,10))
      grid.plot_2D_grid(label_plotting='grid_flat_init')
@@ -487,7 +499,7 @@ grid_aspherical['y'] = r * np.sin(np.deg2rad(grid_aspherical['phi']))
 grid_aspherical['dy_from_flat'] = grid_aspherical['y'] - np.array(final_grid['indiv']['y'])
 grid_aspherical['r'] = np.sqrt(grid_aspherical['x']**2 + grid_aspherical['y']**2)
 grid_aspherical['tri_spin'] = np.asarray(final_grid['indiv']['upward_tri'])    
-grid_aspherical['z'] = -surf.R2Z(grid_aspherical['r'])
+grid_aspherical['z'] = surf.R2Z(grid_aspherical['r'])
 grid_aspherical['theta'] = surf.R2NUT(r)
 grid_aspherical['type'] = 'module' # add a column to specify the type of point (module or fiducial)
 grid_aspherical['grid_pos'] = 'front'
@@ -505,7 +517,7 @@ r_fid = surf.S2R(fiducials_df['s'])
 fiducials_df['x'] = r_fid * np.cos(np.deg2rad(fiducials_df['phi']))
 fiducials_df['y'] = r_fid * np.sin(np.deg2rad(fiducials_df['phi']))
 fiducials_df['r'] = np.sqrt(fiducials_df['x']**2 + fiducials_df['y']**2)  
-fiducials_df['z'] = -surf.R2Z(fiducials_df['r'])
+fiducials_df['z'] = surf.R2Z(fiducials_df['r'])
 fiducials_df['theta'] = surf.R2NUT(r_fid)
 fiducials_df['type'] = 'fiducial' # add a column to specify the type of point (module or fiducial)
 fiducials_df['grid_pos'] = 'front'
@@ -563,6 +575,7 @@ grid.plot_3D_grid(ax,grid_aspherical_xyz[:,0], grid_aspherical_xyz[:,1], grid_as
 grid.plot_3D_grid(ax,grid_aspherical_xyz_back[:,0], grid_aspherical_xyz_back[:,1], grid_aspherical_xyz_back[:,2], color='red', label = 'Back grid')
 # plt.show()
 
+
 # grid_aspherical.to_csv(saving.results_dir_path + f'asph_grid_{nb_robots}.csv', sep = ";", decimal = ".")
 """ Plotting time """
 
@@ -588,7 +601,7 @@ for idx, wks in enumerate(wks_list.geoms):
      plot_polygon(wks, add_points=False, alpha=0.2, facecolor='red', edgecolor='black', label = label_cov)
 plt.xlabel('x position [mm]')
 plt.ylabel('y position [mm]')
-plt.legend(shadow = True)
+plt.legend(shadow = True, loc = 'upper right')
 if save_all_plots:
      saving.save_figures_to_dir(filename)
 
@@ -612,7 +625,7 @@ else:
 
 plt.xlabel('x position [mm]')
 plt.ylabel('y position [mm]')
-plt.legend(shadow = True)
+plt.legend(shadow = True, loc = 'upper right')
 if save_all_plots:
      saving.save_figures_to_dir(filename)
 
@@ -644,7 +657,6 @@ if global_gap > 0:
      frame=pizza.buffer(extra_material_for_frame).difference(GeometryCollection(list(global_dict[key_frame]['boundaries_df']['geometry']))) 
      frame_ishish = unary_union(global_dict[key_frame]['boundaries_df']['geometry'])
      gdf_gfa.plot(ax=ax,facecolor = 'None', edgecolor=gdf_gfa['color'], linestyle='--', legend = True, label = 'GFA')
-
      plot_polygon(frame, ax=ax, add_points=False, facecolor='red', alpha = 0.2, edgecolor = 'black', label=f'Wall thickness = {global_gap} mm')
      surf.plot_vigR_poly(pizza, ax=ax, label = f'vigD = {2*vigR} mm')
      ax.set_xlabel('x position [mm]')

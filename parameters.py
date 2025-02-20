@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from shapely.geometry import Polygon, Point, box
 from shapely.ops import unary_union
 from shapely.validation import make_valid
-from shapely import concave_hull
+from shapely import concave_hull, is_valid
 from scipy import optimize
 from scipy.interpolate import interp1d
 from shapely.plotting import plot_polygon, plot_points
@@ -975,7 +975,14 @@ class GFA(SavingResults):
      # NOTE: Grid generation class
 class Grid(FocalSurf):
 
-     def __init__(self, project_surface: str, module_width: float, inter_frame_thick: float, global_frame_thick: float, trimming_angle: float = 360, centered_on_triangle: bool  = False, limitation_radius: float = None) -> None:
+     def __init__(self, project_surface: str,
+                  module_width: float,
+                  inter_frame_thick: float,
+                  global_frame_thick: float, 
+                  trimming_angle: float = 360,
+                  centered_on_triangle: bool  = False,
+                  limitation_radius: float = None,
+                  GFAs: MultiPolygon = None) -> None:
           
           
           self.centered_on_triangle = centered_on_triangle
@@ -984,17 +991,25 @@ class Grid(FocalSurf):
           self.global_frame_thick = global_frame_thick
           self.inter_frame_width = 2*self.module_width + 2*self.inter_frame_thick*np.cos(np.deg2rad(30)) + 2*self.global_frame_thick*np.cos(np.deg2rad(30))
           self.limitation_radius = limitation_radius
+          self.GFAs = GFAs # GFAs to be placed on the grid if any, set to None by default to remain optional
+          self.unchanged_pizza = None # to store unchanged vignetting radius for fiducials placement
           
           super().__init__(project_surface)
           if limitation_radius is not None:
 
                self.pizza = FocalSurf.make_vigR_polygon(self, trimming_angle = trimming_angle, changed_vigR = limitation_radius)
+               self.unchanged_pizza = FocalSurf.make_vigR_polygon(self, trimming_angle = trimming_angle)
           else:
                self.pizza = FocalSurf.make_vigR_polygon(self, trimming_angle = trimming_angle)
+               self.unchanged_pizza = self.pizza
+
+          if GFAs is not None and self.pizza.overlaps(GFAs):
+               self.pizza = self.pizza.difference(GFAs)
+               self.unchanged_pizza = self.unchanged_pizza.difference(GFAs)
 
           self.grid_flat_init = {'geometry': []}
           self.grid_BFS = {'front':{}, 'back':{}}
-          self.fiducials = {'x': [], 'y': [], 'z': [], 'r': [], 'geometry': []}
+          self.fiducials = {'x': [], 'y': [], 'z': [], 'r': [], 'phi':[], 'geometry': []}
           self.x_grid, self.y_grid, self.z_grid = self.create_flat_grid()
           
           
@@ -1042,11 +1057,12 @@ class Grid(FocalSurf):
                               fiducial = tri.tri_corners(a,b,c, self.inter_frame_width/2)
                               # Fiducials placement
                               for fid in fiducial:
-                                   if Point(fid[0],fid[1]).within(self.pizza): # limit fiducials outside vigR to inter modules with center inside vigR
+                                   if Point(fid[0],fid[1]).within(self.unchanged_pizza): # limit fiducials outside vigR to inter modules with center inside vigR
                                    
-                                        self.fiducials['x'].append(fid[0])
-                                        self.fiducials['y'].append(fid[1])
+                                        self.fiducials['x'].append(np.round(fid[0],4))
+                                        self.fiducials['y'].append(np.round(fid[1],4))
                                         self.fiducials['r'].append(np.round(np.sqrt(fid[0]**2 + fid[1]**2),4))
+                                        self.fiducials['phi'].append(np.degrees(np.arctan2(fid[1],fid[0])))
                                         self.fiducials['z'].append(0)
                                         self.fiducials['geometry'].append(Point(fid))
                                    # self.fiducials['xyz'] = np.vstack((self.fiducials['xyz'], np.asarray(fiducial)))
@@ -1066,6 +1082,7 @@ class Grid(FocalSurf):
           # self.grid_flat_init['geometry'] = MultiPoint(to_polygon_format(x_grid, y_grid, z_grid))
 
           self.fiducials = pd.DataFrame(self.fiducials)
+          self.fiducials.drop_duplicates(subset=['x','y'],inplace=True)
 
           return x_grid, y_grid, z_grid
      
@@ -1167,15 +1184,25 @@ class Grid(FocalSurf):
      
      def layout_concave_hull(self):
 
-          max_distance = max(self.fiducials['r'])
-          # max_points = [[x, y] for x, y, r in zip(self.fiducials['x'], self.fiducials['y'], self.fiducials['r']) if r == max_distance]
-          self.fiducials.sort_values(by=['r'], inplace=True)
-          print(self.fiducials)
-          max_points = self.fiducials[(self.fiducials['r']==max_distance)]
-          # max_points = max_points[['x','y']].values
-          print(max_points)
+          """
+          Caluclate the exterior polygon of the layout by taking the concave hull of the fiducials
           
-          return max_points
+          Input:
+               - fiducials: [DataFrame] contains the x,y,z coordinates of the fiducials
+
+          Output:
+               - ch: [shapely Polygon] contains the exterior polygon of the layout  
+          
+          """
+          
+          self.fiducials.sort_values(by=['r'], inplace=True)
+          ch = concave_hull(MultiPoint(self.fiducials['geometry'].to_list()), ratio=0.1)
+          if not is_valid(ch):
+               ch = make_valid(ch)
+               if type(ch) == GeometryCollection:
+                    ch = ch.geoms[0]
+          
+          return ch
 
      def plot_3D_grid(self,ax, x, y ,z,  color = 'red', label=None):
 
@@ -1373,3 +1400,33 @@ def sort_points_for_polygon_format(x: list, y: list, centroid):
      d = np.hstack((vec, angles.reshape(len(angles),1))) # put everything in one array
      d = d[d[:, 2].argsort()] # sort the points by ascending order array
      return to_polygon_format(d[:,0] + centroid[0,0], d[:,1]+ centroid[0,1])
+
+def remove_duplicate_points(coords):
+    """Removes consecutive duplicate points from a coordinate list."""
+    unique_coords = []
+    seen = set()
+    for coord in coords:
+        if coord not in seen:
+            unique_coords.append(coord)
+            seen.add(coord)
+    # Ensure the polygon is closed (first and last points should be the same)
+    if unique_coords[0] != unique_coords[-1]:
+        unique_coords.append(unique_coords[0])
+    return unique_coords
+
+def clean_multipolygon(multipolygon):
+    """Removes duplicate points from all polygons in a MultiPolygon."""
+    new_polygons = []
+    for polygon in multipolygon.geoms:  # Iterate over each Polygon
+        # Process exterior ring
+        new_exterior = remove_duplicate_points(list(polygon.exterior.coords))
+
+        # Process interior rings (holes)
+        new_interiors = [
+            remove_duplicate_points(list(hole.coords)) for hole in polygon.interiors
+        ]
+
+        # Recreate the cleaned Polygon
+        new_polygons.append(Polygon(new_exterior, new_interiors))
+
+    return MultiPolygon(new_polygons)
