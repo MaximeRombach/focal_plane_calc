@@ -107,7 +107,7 @@ surf = param.FocalSurf(project=project_surface)
 vigR = surf.vigR
 BFS = surf.BFS
 trimming_angle = 360 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
-limitation_radius = 570 # [mm] Default: None // limitation radius of a circle that will limit the number of modules within the grid (SHOULD BE < vigR)
+limitation_radius = None # [mm] Default: None // limitation radius of a circle that will limit the number of modules within the grid (SHOULD BE < vigR)
 if limitation_radius is not None and limitation_radius > vigR:
      raise ValueError(f"Limitation radius should be smaller than vigR ({surf.vigR} mm)")
 
@@ -167,8 +167,6 @@ to_dxf_dict = {}
 
 for nb_robots in nbots: # iterate over number of robots/module cases
 
-     print("width increase1: ", width_increase)
-     print("is_wall1: ", is_wall)
      mod_param = param.Module(nb_robots, saving_df, BFS, is_wall, width_increase, chanfer_length)
      module_length = mod_param.module_length
      key = mod_param.key
@@ -181,16 +179,13 @@ for nb_robots in nbots: # iterate over number of robots/module cases
      coverage_with_walls, coverage_no_walls = coverages
      rob_pos = pd.DataFrame(mod_param.robots_positions)
 
-     plt.figure(figsize=(10,10))
-     plot_polygon(module, add_points= False, facecolor='None', edgecolor='black')
-     plt.scatter(rob_pos['x'], rob_pos['y'], color='red', s=1)
-     if showRobotsIndices:
-          for x_rob, y_rob, rob_id in zip(rob_pos['x'], rob_pos['y'], rob_pos['rob_id']):
-               plt.text(x_rob, y_rob, rob_id, fontsize=12, color='black', ha='center', va='center')
-     # plot_polygon(module.buffer(width_increase, join_style='mitre'), add_points= False, facecolor='None', edgecolor='red', linestyle = '--', label = f'Width increase = {width_increase} mm')
-     # mod_param.plot_raw_module()
-     # plot_polygon(effective_wks, add_points= False, alpha = 0.2, edgecolor='black', label=f'Coverage = {coverage_with_walls} %')
-     # plot_points(triang_meshgrid, color='black')
+     ## For debugging purposes
+     # plt.figure(figsize=(10,10))
+     # plot_polygon(module, add_points= False, facecolor='None', edgecolor='black')
+     # plt.scatter(rob_pos['x'], rob_pos['y'], color='red', s=1)
+     # if showRobotsIndices:
+     #      for x_rob, y_rob, rob_id in zip(rob_pos['x'], rob_pos['y'], rob_pos['rob_id']):
+     #           plt.text(x_rob, y_rob, rob_id, fontsize=12, color='black', ha='center', va='center')
 
      # %% 2)a) Meshing the grid for intermediate frame (4 triangles: 3 upwards + 1 downwards)
 
@@ -224,11 +219,11 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                        centered_on_triangle = centered_on_triangle,
                        limitation_radius = limitation_radius,
                        GFAs = polygon_gfa)
+     ch = grid.layout_concave_hull()
 
-     plt.figure(figsize=(10,10))
-     grid.plot_2D_grid(label_plotting='grid_flat_init')
-     grid.plot_2D_grid(label_plotting='fiducials')
-     surf.plot_vigR_poly(pizza)
+     # grid.plot_2D_grid(label_plotting='grid_flat_init')
+     # grid.plot_2D_grid(label_plotting='fiducials')
+     # surf.plot_vigR_poly(pizza)
 
      #%% 2)c) Place the intermediate triangles accordingly on the grid
 
@@ -425,6 +420,7 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                covered_area += new_coverage.area # add the net covered area of each module
 
           global_coverage = round(covered_area/pizza_with_GFA.area*100,1)
+          coverage_within_layout = round(covered_area/ch.area*100,1)
           unused_area = round((pizza_with_GFA.area - covered_area),1)
           # Using GeoDataFrames eases a lot the visualization of the data and the plotting !
           gdf_bound = gpd.GeoDataFrame(boundaries_df)
@@ -689,6 +685,7 @@ gdf_modules.plot(ax=ax,facecolor='None',edgecolor=gdf_modules['color'])
 gdf_bound.plot(ax=ax,facecolor='None', edgecolor=gdf_bound['color'])
 gdf_fiducials.plot(ax=ax, color = 'red', markersize = 15, marker = '.')
 gdf_coverage.plot(ax=ax, alpha=0.2)
+plot_polygon(ch, edgecolor = 'yellow', facecolor = 'None', label = f'Coverage within layout: {coverage_within_layout} %', add_points=False)
 # gdf_final_grid_indiv.plot(ax=ax, color='red') # Plot modules center, left there for debugging purposes
 
 if "WST" in project_surface:
@@ -714,9 +711,10 @@ plot_polygon(pizza, ax=ax, add_points=False, edgecolor='black', facecolor='None'
 # OK for some reason 'label' option for several gdf on the same figure DOES NOT work, had to manually add the legend
 coverage = gdf_coverage['label'][0]
 coverage_patch= mpatches.Patch(color='C0', alpha = 0.2, label= f'{coverage}')
+coverage_within_layout_handler = mpatches.Patch(facecolor='None', edgecolor='yellow', linestyle='--', label=f'Coverage within layout: {coverage_within_layout} %')
 fiducial_patch = mlines.Line2D([], [], color='red', marker='.', markersize=7, linestyle='None', label=f'Fiducials: {fiducials_number}')
 gfa_handler = mpatches.Patch(facecolor='None', edgecolor='brown', linestyle='--', label=f'GFA: {len(gdf_gfa)}')
-plt.legend(handles=[fiducial_patch,coverage_patch, gfa_handler], shadow = True)
+plt.legend(handles=[fiducial_patch,coverage_patch, gfa_handler, coverage_within_layout_handler])
 
 x_final_modules = np.array(grid_aspherical[(grid_aspherical['type'] == 'module') & (grid_aspherical['grid_pos'] == 'front')]['x'])
 y_final_modules = np.array(grid_aspherical[(grid_aspherical['type'] == 'module') & (grid_aspherical['grid_pos'] == 'front')]['y'])

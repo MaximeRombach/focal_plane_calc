@@ -749,8 +749,8 @@ class Module(SavingResults):
 
           triangle_edge_positioners = [0, self.nb_rows, -1] # remove positioners at the edges of the triangle
           xx1, yy1 = self.remove_positioner(xx1, yy1, triangle_edge_positioners)
-          remove_additional_pos = [23, 38, 40]
-          # remove_additional_pos = []
+          # remove_additional_pos = [23, 38, 40]
+          remove_additional_pos = []
           xx1, yy1 = self.remove_positioner(xx1, yy1, remove_additional_pos)
           self.nbots = len(xx1)
 
@@ -992,7 +992,7 @@ class Grid(FocalSurf):
           self.inter_frame_width = 2*self.module_width + 2*self.inter_frame_thick*np.cos(np.deg2rad(30)) + 2*self.global_frame_thick*np.cos(np.deg2rad(30))
           self.limitation_radius = limitation_radius
           self.GFAs = GFAs # GFAs to be placed on the grid if any, set to None by default to remain optional
-          self.unchanged_pizza = None # to store unchanged vignetting radius for fiducials placement
+          self.unchanged_pizza = None # to store unchanged vignetting radius for fiducials placement; fiducials are arbitrarily kept within vignetting minus a small margin
           
           super().__init__(project_surface)
           if limitation_radius is not None:
@@ -1057,7 +1057,7 @@ class Grid(FocalSurf):
                               fiducial = tri.tri_corners(a,b,c, self.inter_frame_width/2)
                               # Fiducials placement
                               for fid in fiducial:
-                                   if Point(fid[0],fid[1]).within(self.unchanged_pizza): # limit fiducials outside vigR to inter modules with center inside vigR
+                                   if Point(fid[0],fid[1]).within(self.unchanged_pizza.buffer(-10)): # limit fiducials outside vigR to inter modules with center inside vigR
                                    
                                         self.fiducials['x'].append(np.round(fid[0],4))
                                         self.fiducials['y'].append(np.round(fid[1],4))
