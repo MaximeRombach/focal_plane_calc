@@ -55,8 +55,9 @@ class FocalSurf():
                self.a8 = self.focal_surf_param['a8']
                self.k = self.focal_surf_param['k']
                self.c = 1/self.curvature_R
-          else:
-               self.read_focal_plane_data()
+          
+          #TODO: add check for presence of corresponding csv data file for project
+          self.read_focal_plane_data()
 
           if 'WST' in self.project:
                self.donutR = self.focal_surf_param['donutDiam']/2
@@ -80,7 +81,7 @@ class FocalSurf():
                                    'curvature_R': -11698.7, # [mm], curvature radius
                                    'vigD': 1189.306, # [mm], vignetting diameter
                                    'vigR': 1189.306/2, # [mm], vignetting radius
-                                   'asph_formula': False,
+                                   'asph_formula': True,
                                    'k': 0,
                                    'a2': 0, 
                                    'a4': 3.76762e-11, 
@@ -150,14 +151,14 @@ class FocalSurf():
                
           elif self.project == 'WST2':
                focal_surf_param = {
-                              'name': r'$\bf{WST - Focal Plane \varnothing: 1.5 m - Center \varnothing: 0.2m}$',
+                              'name': r'$\bf{WST - Focal Plane \varnothing: 1.44 m - Center \varnothing: 0.2m}$',
                               'curvature_R': -11067, 
-                              'vigR': 750,# [mm], vignetting radius
+                              'vigR': 720,# [mm], vignetting radius
                               'donutDiam': 20, # [arcmin], diameter of donut hole
                               'asph_formula': False,
                               'BFS': 11067, # [mm], radius of BFS,
                               'f-number': 3.7, # assumption based on previous telescope designs
-                              'FoV': 1.8, # [deg]
+                              'FoV': 2, # [deg]
                               'focus_tolerance_width': None # [mm]
                               }
 
@@ -168,7 +169,7 @@ class FocalSurf():
                               'vigR': 650,# [mm], vignetting radius
                               'donutDiam': 20, # [arcmin], diameter of donut hole
                               'asph_formula': False,
-                              'BFS': 11067, # [mm], radius of BFS,
+                              'BFS': 7700, # [mm], radius of BFS,
                               'f-number': 3.7, # assumption based on previous telescope designs
                               'FoV': 1.8, # [deg]
                               'focus_tolerance_width': None # [mm]
@@ -261,22 +262,23 @@ class FocalSurf():
                     R2Z = lambda r: (-self.BFS + np.sqrt(self.BFS**2 - r**2)) # Spherical focal surface
                     logging.warning('No Z data available in samples - assuming SPHERICAL surface')
 
-               # R2CRD maps the radial position on the focal plane to the chief ray deviation (CRD) on the focal plane
-               if 'CRD' in self.optics_data.keys():
-                    CRD = self.optics_data['CRD']
-                    R2CRD = interp1d(R,CRD,kind='cubic', fill_value = "extrapolate")
-                    
-                    logging.info('CRD data available in samples - using it for CRD transfer function')
-               else:
-                    CRD = np.zeros_like(R)
-                    R2CRD = interp1d(R,CRD,kind='cubic', fill_value = "extrapolate")
-                    logging.warning('No CRD data available - CRD = 0 everywhere on focal plane')
-               crd = R2CRD(r)
           else:
                logging.info('Transfer functions: using aspherical formula cofficients, no CRD data available')
                R2Z = self.analytical_R2Z
-               R2CRD = None
-               crd = np.zeros_like(r)
+
+          # R2CRD maps the radial position on the focal plane to the chief ray deviation (CRD) on the focal plane
+          if 'CRD' and 'R' in self.optics_data.keys():
+               CRD = self.optics_data['CRD']
+               R = self.optics_data['R']
+               R2CRD = interp1d(R,CRD,kind='cubic', fill_value = "extrapolate")
+               
+               logging.info('CRD data available in samples - using it for CRD transfer function')
+          else:
+               CRD = np.zeros_like(R)
+               R2CRD = interp1d(R,CRD,kind='cubic', fill_value = "extrapolate")
+               logging.warning('No CRD data available - CRD = 0 everywhere on focal plane')
+          crd = R2CRD(r)
+
 
           z = R2Z(r) # Calculate focal plane curve from csv data
           dr = np.diff(r)
@@ -320,7 +322,7 @@ class FocalSurf():
           if self.focal_surf_param['asph_formula']:
                main_term = self.c * np.power(r, 2) / (1 + np.sqrt(1 - (1 + self.k) * self.c**2 * np.power(r, 2)))
                secondary_terms = self.a2 * np.power(r, 2) + self.a4 * np.power(r, 4) + self.a6 * np.power(r, 6) + self.a8 * np.power(r, 8)
-               return  main_term + secondary_terms
+               return -(main_term + secondary_terms)
           else:
                return print('Aspherical coefficients not defined for this project \n Taking sampled data from csv file instead')
           
@@ -898,13 +900,14 @@ class IntermediateTriangle:
 
 # NOTE: GFA class
 class GFA(SavingResults):
-     def __init__(self, length: float, width: float, nb_gfa: int, saving_df, vigR: float, trimming_angle = 360, trimming_geometry = None) -> None:
+     def __init__(self, length: float, width: float, nb_gfa: int, saving_df, vigR: float, trimming_angle = 360, trimming_geometry = None, angle_offset = None) -> MultiPolygon:
           self.length = length
           self.width = width
           self.vigR = vigR
           self.nb_gfa = nb_gfa
           self.trimming_angle = trimming_angle
           self.trimming_geometry = trimming_geometry
+          self.angle_offset = angle_offset
           self.gdf_gfa = self.make_GFA_array()
 
           super().__init__(saving_df)
@@ -922,8 +925,8 @@ class GFA(SavingResults):
 
           gfa_df = {'gfa_index':[], 'center': [], 'orientation': [], 'geometry':[], 'color':[], 'label':[]}
           # gfa_pos_on_vigR = make_vigR_polygon(n_vigR = self.nb_gfa + 1).exterior.coords.xy
-          Dangle = 360/self.nb_gfa
-          angles = np.linspace(Dangle,Dangle * self.nb_gfa, self.nb_gfa)
+          Dangle = 360/self.nb_gfa 
+          angles = np.linspace(Dangle,Dangle * self.nb_gfa, self.nb_gfa) + self.angle_offset
           gfa_pos_on_vigR_x = self.vigR * np.cos(np.deg2rad(angles))
           gfa_pos_on_vigR_y = self.vigR * np.sin(np.deg2rad(angles))
 
@@ -1017,7 +1020,7 @@ class Grid(FocalSurf):
                     # Make global grid out of triangular grid method credited in updown_tri.py
           # Its logic is also explained in updown_tri.py
           # TODO: Use two diffrent n numbers for the two different grids: modules and ficudials OR find another optimization
-          n = 9
+          n = 11
           center_coords = []
           a_max = n
           b_max = n
@@ -1057,7 +1060,7 @@ class Grid(FocalSurf):
                               fiducial = tri.tri_corners(a,b,c, self.inter_frame_width/2)
                               # Fiducials placement
                               for fid in fiducial:
-                                   if Point(fid[0],fid[1]).within(self.unchanged_pizza.buffer(-10)): # limit fiducials outside vigR to inter modules with center inside vigR
+                                   if Point(fid[0],fid[1]).within(self.unchanged_pizza.buffer(20)): # limit fiducials outside vigR to inter modules with center inside vigR
                                    
                                         self.fiducials['x'].append(np.round(fid[0],4))
                                         self.fiducials['y'].append(np.round(fid[1],4))
@@ -1069,8 +1072,8 @@ class Grid(FocalSurf):
           
           x_grid = np.array(x_grid)
           y_grid = np.array(y_grid)
-          z_grid = -np.sqrt(self.BFS**2 - (self.vigR)**2)*np.ones(len(x_grid))
-          # z_grid = 0*np.ones(len(x_grid))
+          # z_grid = -np.sqrt(self.BFS**2 - (self.vigR)**2)*np.ones(len(x_grid))
+          z_grid = 0*np.ones(len(x_grid))
 
           #TODO: make use of the built-in strucutre there instead of returning just arrays
           # might be more clean and easier to manipulate
@@ -1223,7 +1226,7 @@ class Grid(FocalSurf):
                color_plotting = 'red'
           elif label_plotting == None: #default case if no label is given
                grid_plotting = self.grid_flat_init
-               color_plotting = 'black'
+               color_plotting = 'green'
           else:
                raise Exception('Error: only "grid_flat_init" or "fiducials" labels are supported')
           fig = plt.figure('2D grid', figsize=(8,8))
