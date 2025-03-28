@@ -74,7 +74,7 @@ start_time = time.time()
 
 ## Study one case at a time
 nbots = [63] # number of robots per module; available: 42, 52, 63, 75, 88, 102
-out_allowances = [0] # between 0 and 0.99; 1 does not make sense as it would mean the module is completely out of vigR
+out_allowances = [0.6] # between 0 and 0.99; 1 does not make sense as it would mean the module is completely out of vigR
 width_increase = 0 # [mm] How much we want to increase the base length of a module (base value for 63 robots: 73.8mm)
 chanfer_length = 10.5 # [mm] Size of chanfers of module vertices (base value: 7.5); increase chanfer decreases coverage as it reduces the module size thus patrol area
 centered_on_triangle = False # move the center of the grid (red dot) on the centroid on a triangle instead of the edge
@@ -82,7 +82,7 @@ full_framed = False # flag to check wether we are in semi frameless or in full f
 
 """ Intermediate frame parameters """
 
-inner_gap = 4 # [mm] spacing between modules inside intermediate frame
+inner_gap = 0.5 # [mm] spacing between modules inside intermediate frame
 
 """ Global frame parameters """
 
@@ -102,11 +102,11 @@ if inner_gap == global_gap and inner_gap != 0:
 """ Define focal surface """
 
 # Available projects: MUST, MUST__old, MegaMapper, DESI, WST1, WST2, WST3, Spec-S5, Spec-S5_old
-project_surface = 'MUST' # name of the project surface to use
+project_surface = 'Spec-S5' # name of the project surface to use
 surf = param.FocalSurf(project=project_surface)
 vigR = surf.vigR
 BFS = surf.BFS
-trimming_angle = 360 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
+trimming_angle = 60 # [deg] angle of the pizza slice to trim the grid (360° for full grid)
 limitation_radius = None # [mm] Default: None // limitation radius of a circle that will limit the number of modules within the grid (SHOULD BE < vigR)
 if limitation_radius is not None and limitation_radius > vigR:
      raise ValueError(f"Limitation radius should be smaller than vigR ({surf.vigR} mm)")
@@ -124,11 +124,11 @@ showRobotsIndices = True # Show indices of robots on the module plot
 ignore_robots_positions = False
 
 """ Saving parameters """
-save_plots = False # Save most useful plots 
+save_plots = True # Save most useful plots 
 save_all_plots = False  # Save all plots (including intermediate ones)
 save_frame_as_dxf = False # DEPRECATED: Save the outline of the frame for Solidworks integration
 save_csv = False # Save position of robots (flat for now, TBI: follow focal surface while staying flat in modules)
-save_txt = False # Save positions of modules along curved focal surface
+save_txt = True # Save positions of modules along curved focal surface
 saving_df = {"save_plots": save_plots, "save_dxf": save_frame_as_dxf, "save_csv": save_csv, "save_txt": save_txt}
 saving = param.SavingResults(saving_df, project_surface)
 now = datetime.now()
@@ -138,16 +138,29 @@ results_string = f"#Date: {now}\n #Project: {project_surface}\n #Distance unit: 
 """GFA stuff"""
 gfa_tune = 1
 nb_gfa = 6
+angle_offset = 0 # rotate GFAs array by offset angle
 # gfa = param.GFA(length = 33.3*gfa_tune, width = 60*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
 # gfa = param.GFA(length = 10*gfa_tune, width = 10*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
 # gfa = param.GFA(length = 20*gfa_tune, width = 30*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
-gfa = param.GFA(length = 120*gfa_tune, width = 120*gfa_tune, nb_gfa = nb_gfa, vigR=vigR, saving_df=saving_df, trimming_angle=trimming_angle, trimming_geometry=pizza)
+gfa = param.GFA(length= 20*gfa_tune,
+                width = 30*gfa_tune,
+               # length = 150*gfa_tune,
+               # width = 600*gfa_tune,
+                nb_gfa = nb_gfa,
+                vigR=vigR, 
+                saving_df=saving_df,
+                trimming_angle=trimming_angle,
+                trimming_geometry=pizza,
+                angle_offset=angle_offset)
 gdf_gfa = gfa.gdf_gfa
 polygon_gfa = MultiPolygon(list(gdf_gfa['geometry']))
 
 
 pizza_with_GFA = pizza.difference(polygon_gfa)
 surf.surfaces_polygon['pizza_with_GFA'] = pizza_with_GFA
+
+"""Spectro stuff"""
+nb_modules_per_spectro = 8
 
 # plot_polygon(pizza_with_GFA)
 
@@ -419,14 +432,24 @@ for nb_robots in nbots: # iterate over number of robots/module cases
                total_modules += len(list(new_modules.geoms))
                covered_area += new_coverage.area # add the net covered area of each module
 
-          global_coverage = round(covered_area/pizza_with_GFA.area*100,1)
+          gfa1 = param.GFA(length = 90*gfa_tune,
+                width = 90*gfa_tune,
+                nb_gfa = nb_gfa,
+                vigR=vigR, 
+                saving_df=saving_df,
+                trimming_angle=trimming_angle,
+                trimming_geometry=pizza,
+                angle_offset=angle_offset)
+          new_polygon_gfa = MultiPolygon(list(gdf_gfa['geometry']))
+          new_pizza_with_GFA = pizza_with_GFA.difference(new_polygon_gfa)
+          global_coverage = round(covered_area/new_pizza_with_GFA.area*100,1)
           coverage_within_layout = round(covered_area/ch.area*100,1)
           unused_area = round((pizza_with_GFA.area - covered_area),1)
           # Using GeoDataFrames eases a lot the visualization of the data and the plotting !
           gdf_bound = gpd.GeoDataFrame(boundaries_df)
           gdf_modules = gpd.GeoDataFrame(modules_df)
           gdf_coverage = gpd.GeoDataFrame(coverage_df)
-          gdf_coverage['label'] = f'Coverage: {global_coverage} %'
+          gdf_coverage['label'] = f'vigR coverage: {global_coverage} %'
           robots_df['geometry'] = [unary_union(robots_df['geometry'])]
           gdf_robots = gpd.GeoDataFrame(robots_df)
           gdf_robots['markersize'] = 0.05
@@ -520,8 +543,8 @@ fiducials_df['grid_pos'] = 'front'
 fiducials_df.drop_duplicates(inplace=True)
 fiducials_number = len(fiducials_df['x'])
 # Sort grid by ascending theta and phi to improve readability
-grid_aspherical.sort_values(by=['theta', 'phi'], inplace=True)
-fiducials_df.sort_values(by=['theta', 'phi'], inplace=True)
+grid_aspherical.sort_values(by=['x', 'y'], inplace=True)
+fiducials_df.sort_values(by=['x', 'y'], inplace=True)
 
 # Trim the grid to the desired angle
 def is_point_within_polygon(point, polygon):
@@ -567,6 +590,7 @@ saving.save_grid_to_csv(grid_aspherical, f'grid_asph_{nb_robots}', results_strin
 # Plot 3D grid for visualization/deguugging
 fig = plt.figure(figsize=(10,10))
 ax = fig.add_subplot(111, projection='3d')
+grid.plot_3D_grid(ax,grid.grid_flat_init['x'], grid.grid_flat_init['y'], grid.grid_flat_init['z'], color='green', label = 'Flat grid')
 grid.plot_3D_grid(ax,grid_aspherical_xyz[:,0], grid_aspherical_xyz[:,1], grid_aspherical_xyz[:,2], color='blue', label = 'Front grid')
 grid.plot_3D_grid(ax,grid_aspherical_xyz_back[:,0], grid_aspherical_xyz_back[:,1], grid_aspherical_xyz_back[:,2], color='red', label = 'Back grid')
 # plt.show()
@@ -685,7 +709,7 @@ gdf_modules.plot(ax=ax,facecolor='None',edgecolor=gdf_modules['color'])
 gdf_bound.plot(ax=ax,facecolor='None', edgecolor=gdf_bound['color'])
 gdf_fiducials.plot(ax=ax, color = 'red', markersize = 15, marker = '.')
 gdf_coverage.plot(ax=ax, alpha=0.2)
-plot_polygon(ch, edgecolor = 'yellow', facecolor = 'None', label = f'Coverage within layout: {coverage_within_layout} %', add_points=False)
+plot_polygon(ch, edgecolor = 'gold', facecolor = 'None', linestyle='--', label = f'Layout coverage: {coverage_within_layout} %', add_points=False)
 # gdf_final_grid_indiv.plot(ax=ax, color='red') # Plot modules center, left there for debugging purposes
 
 if "WST" in project_surface:
@@ -705,13 +729,15 @@ if not ignore_robots_positions:
      gdf_robots.plot(ax = ax, markersize = 0.05)
 
 gdf_gfa.plot(ax=ax, column='label',facecolor = 'None', edgecolor=gdf_gfa['color'], linestyle='--')
-# ax.scatter(0,0,s=2,color='black')
+""" Plot simpler gfa for WST"""
+# gfa1.gdf_gfa.plot(ax=ax, column='label',facecolor = 'None', edgecolor=gdf_gfa['color'], linestyle='--')
+
 plot_polygon(pizza, ax=ax, add_points=False, edgecolor='black', facecolor='None', linestyle='--')
 
 # OK for some reason 'label' option for several gdf on the same figure DOES NOT work, had to manually add the legend
 coverage = gdf_coverage['label'][0]
 coverage_patch= mpatches.Patch(color='C0', alpha = 0.2, label= f'{coverage}')
-coverage_within_layout_handler = mpatches.Patch(facecolor='None', edgecolor='yellow', linestyle='--', label=f'Coverage within layout: {coverage_within_layout} %')
+coverage_within_layout_handler = mpatches.Patch(facecolor='None', edgecolor='gold', linestyle='--', label=f'Layout coverage: {coverage_within_layout} %')
 fiducial_patch = mlines.Line2D([], [], color='red', marker='.', markersize=7, linestyle='None', label=f'Fiducials: {fiducials_number}')
 gfa_handler = mpatches.Patch(facecolor='None', edgecolor='brown', linestyle='--', label=f'GFA: {len(gdf_gfa)}')
 plt.legend(handles=[fiducial_patch,coverage_patch, gfa_handler, coverage_within_layout_handler])

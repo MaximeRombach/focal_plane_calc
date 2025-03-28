@@ -32,7 +32,7 @@ save = param.SavingResults(saving_df, project_name=project)
 
 ## Functions ##
 
-circles_diam = np.array([7.159, 14.318, 18.941, 25.813, 28.637, 31.206, 35.796, 37.883, 39.860, 43.547, 50.114, 51.625, 61.168]) # Diameter of the circles passing trough all pos centers [mm]
+circles_diam = np.array([7.159, 14.318, 18.941, 25.813, 28.637, 31.206, 35.796, 37.883, 39.860, 43.547, 50.114, 51.625, 61.168]) # Diameter of the circles passing trough all pos centers [mm] --> from CAD model of module chassis
 
 radial_pos = circles_diam / 2 # Radial pos used on BFS [mm]
 radial_pos_diff = np.diff(radial_pos) # Radial pos differences [mm]
@@ -50,49 +50,6 @@ results = {'Circles #': np.arange(1,len(circles_diam)+1),
 pd_results = pd.DataFrame(results)
 
 save.save_grid_to_csv(pd_results, 'Module_focuses_table')
-
-r = np.linspace(0, surf.vigR, 500)
-z=surf.R2Z(r)
-nut = surf.R2NUT(r)
-
-dz = np.diff(z)
-dr = np.diff(r)
-
-dz_dr = dz/dr
-
-module_xy_tol = 0.3
-r_tol = np.arange(0, 500, module_xy_tol)
-defocus_due_xy_tol_module = np.diff(surf.R2Z(r_tol))
-tilt_due_xy_tol_module = np.diff(surf.R2NUT(r_tol))
-
-plt.figure(figsize=(10,6))
-plt.plot(r, z)
-plt.scatter(r, z, color='red')
-plt.xlabel('Radial Position [mm]')
-plt.ylabel('R2Z [mm]')
-plt.grid()
-
-plt.figure(figsize=(10,6))
-plt.plot(r, nut)
-plt.scatter(r, nut, color='red')
-plt.xlabel('Radial Position [mm]')
-plt.ylabel('R2NUT [deg]')
-plt.grid()
-
-plt.figure(figsize=(10,6))
-plt.plot(r_tol, np.concat((np.zeros(1),defocus_due_xy_tol_module)))
-plt.xlabel('Radial Position [mm]')
-plt.ylabel('defocus_due_xy_tol_module [um]')
-plt.grid()
-
-plt.figure(figsize=(10,6))
-plt.plot(r_tol[:-1], tilt_due_xy_tol_module)
-plt.xlabel('Radial Position [mm]')
-plt.ylabel('tilt_due_xy_tol_module [deg]')
-plt.grid()
-
-
-plt.show()
 
 plt.figure(figsize=(10,6))
 plt.plot(r_plot,z_plot * 10**3, label=f'BFS radius = {surf.BFS} mm')
