@@ -24,19 +24,19 @@ from datetime import datetime
 
 ## Parameters ##
 
-project = 'Spec-S5'
+project = 'MUST'
 surf = param.FocalSurf(project)
 
 Rc = surf.curvature_R # Curve radius [mm]
 vigR = surf.vigR
 d_plane = 2*vigR # Focal plane diameter [mm]
-nb_robots = 102
-saving_df = {"save_plots": True}
+nb_robots = 63
+saving_df = {"save_plots": False}
 display_BFS = False
 save = param.SavingResults(saving_df, project_name=project)
 mod_param = param.Module(nb_robots, saving_df, BFS = surf.BFS)
 module_width = mod_param.module_width * np.sqrt(3)/2 #= triangle HEIGHT and NOT side
-nb_modules = 6 #number of modules of one side of the axis
+nb_modules = 9 #number of modules of one side of the axis
 tolerance_envelop_width = surf.focus_tolerance_width # [mm] tolerance in positioning around nominal focal surface
 start_offset = module_width/2
 
@@ -132,12 +132,24 @@ def rotate_modules_tangent_2_surface(x_modules, y_modules, angles):
 
     return np.array(new_left_module), np.array(new_right_module)
 
-def translate_module_in_envelop(new_left_module, new_right_module, dist):
+def translate_module_normal_direction(new_left_module, new_right_module, dist):
 
     new_left_module_translated = []
     new_right_module_translated = []
     for (theta,module_l,module_r) in zip(angles, new_left_module, new_right_module):
         dx, dy= np.sin(theta)*dist, np.cos(theta)*dist
+        Rt= np.array([[1,0,dx],[0,1,dy],[0,0,1]])
+        new_left_module_translated.append(Rt @ module_l)
+        new_right_module_translated.append(Rt @ module_r)
+
+    return new_left_module_translated, new_right_module_translated
+
+def translate_module_tangent_direction(new_left_module, new_right_module, dist):
+
+    new_left_module_translated = []
+    new_right_module_translated = []
+    for (theta,module_l,module_r) in zip(angles, new_left_module, new_right_module):
+        dx, dy= np.cos(theta)*dist, np.sin(theta)*dist
         Rt= np.array([[1,0,dx],[0,1,dy],[0,0,1]])
         new_left_module_translated.append(Rt @ module_l)
         new_right_module_translated.append(Rt @ module_r)
@@ -315,16 +327,20 @@ new_left_module, new_right_module = rotate_modules_tangent_2_surface(x_modules, 
 r_envelop_plus, z_envelop_plus, r_envelop_minus, z_envelop_minus = tolerance_envelop(r,surf.R2Z)
 
 ## Study on a particular module ##
-module_number = 3
+module_number = 8
 number_of_points= 100
 # Focus tolerance
+xy_tol = 0.3 # [mm] tolerance in xy position of module --> screws wiggle
+# new_left_module_translated, new_right_module_translated = translate_module_normal_direction(new_left_module, new_right_module, tolerance_envelop_width/4)
+new_left_module_translated, new_right_module_translated = translate_module_tangent_direction(new_left_module, new_right_module, xy_tol)
 
-new_left_module_translated, new_right_module_translated = translate_module_in_envelop(new_left_module, new_right_module, tolerance_envelop_width/4)
 r_module, z_module, r_curve, z_curve = normIntersects(normals, module_number, new_left_module, new_right_module, number_of_points)
 r_module_translated, z_module_translated, r_curve_translated, z_curve_translated = normIntersects(normals, module_number, new_left_module_translated, new_right_module_translated, number_of_points)
 
 d = dist2curve(r_module,z_module,r_curve,z_curve)
 d_translated = dist2curve(r_module_translated, z_module_translated, r_curve_translated, z_curve_translated)
+
+defocus_induced_by_xy_tol_of_module = d_translated - d
 
 # Calculating difference between max distance to focal surface and tolerance envelop
 
@@ -341,10 +357,17 @@ print(f"Difference btw max distance and tolerance envelop translated = {diff_tra
 
 normals_curve = get_normals(r_curve, surf.R2Z)
 
-angles_normals_curve = get_normals_angles(normals_curve, print_data = True)
-angles_corrected = np.degrees(angles_normals_curve) + surf.R2CRD(r_curve)
+# angles_normals_curve = get_normals_angles(normals_curve, print_data = True)
+# angles_corrected = np.degrees(angles_normals_curve) + surf.R2CRD(r_curve)
 angles_corrected = surf.R2NORM(r_curve) + surf.R2CRD(r_curve)
 diff_angle = angles_corrected - np.degrees(angles[module_number])*np.ones(len(angles_corrected))
+
+
+# Calculated imprecision due to tolerance of xy position of module
+angles_corrected_translated = surf.R2NORM(r_curve_translated) + surf.R2CRD(r_curve_translated)
+diff_angle_translated = angles_corrected_translated - np.degrees(angles[module_number])*np.ones(len(angles_corrected_translated))
+tilt_induced_by_xy_tol_of_module = diff_angle_translated - diff_angle
+
 
 ## Plotting time ##
 
@@ -396,6 +419,16 @@ plt.title('Project: $\\bf{'+f'{project}''}$' + f' - {nb_robots} robots/module'+f
 plt.legend(shadow=True, loc='best')
 save.save_figures_to_dir(f'Normal_dist2surf_module_{module_number+1}_{nb_robots}_robots_per_module', save_eps=save_eps_flag)
 
+plt.figure('dfocus_when_translated',figsize=(8,7))
+plt.scatter(r_module-x_modules[module_number], defocus_induced_by_xy_tol_of_module*10**3, label=f'Module translation = {xy_tol} mm')
+plt.grid()
+plt.xlabel('Position on fiber tips plane [mm]')
+plt.ylabel(r'Defocus for xy tol [$\mu$m]')
+plt.title('Project: $\\bf{'+f'{project}''}$' + f' - {nb_robots} robots/module'+f'\n Defocus between nominal and toleranced module position \n induced by a tangential translation of {xy_tol} mm')
+plt.legend(shadow=True, loc='best')
+save.save_figures_to_dir(f'Focus_of_xy_tol_{module_number+1}_{nb_robots}_robots_per_module', save_eps=save_eps_flag)
+
+
 plt.figure('angle_diff',figsize=(8,7))
 plt.grid()
 plt.scatter(r_module-x_modules[module_number],diff_angle)
@@ -404,8 +437,23 @@ plt.scatter(np.min(r_module-x_modules[module_number]),np.min(diff_angle), label=
 plt.xlabel('Position on fiber tips plane [mm]')
 plt.ylabel('Angle difference [deg]')
 plt.legend(shadow=True, loc='best')
-plt.title('Project: $\\bf{'+f'{project}''}$' + f' - {nb_robots} robots/module'+f'\nAngle difference btw normal of module {module_number+1} \n & chief ray along focal surface')
+plt.title('Project: $\\bf{'+f'{project}''}$' + f' - {nb_robots} robots/module'+f'\nAngle difference btw normal of module {module_number+1} \n & chief ray along focal surface \n Module radial pos: {x_modules[module_number]:0.2f} mm')
 save.save_figures_to_dir(f'Angle_diff_module_{module_number+1}_{nb_robots}_robots_per_module', save_eps=save_eps_flag)
+
+max_index = np.argmax(tilt_induced_by_xy_tol_of_module)
+min_index = np.argmin(tilt_induced_by_xy_tol_of_module)
+corresponding_module = r_module-x_modules[module_number]
+plt.figure('tilt_when_xy_tol_of_module',figsize=(8,7))
+plt.grid()
+plt.scatter(corresponding_module,tilt_induced_by_xy_tol_of_module)
+plt.scatter(corresponding_module[max_index],np.max(tilt_induced_by_xy_tol_of_module), label=f'Max = {np.max(tilt_induced_by_xy_tol_of_module):0.3f} °', color='r')
+plt.scatter(corresponding_module[min_index],np.min(tilt_induced_by_xy_tol_of_module), label=f'Min = {np.min(tilt_induced_by_xy_tol_of_module):0.3f} °', color='g')
+plt.xlabel('Position on fiber tips plane [mm]')
+plt.ylabel('Angle difference [deg]')
+plt.legend(shadow=True, loc='best')
+plt.title('Project: $\\bf{'+f'{project}''}$' + f' - {nb_robots} robots/module'+f'\n Angular diff between nominal and toleranced module position \n induced by a tangential translation of {xy_tol} mm \n Module radial pos: {x_modules[module_number]:0.2f} mm')
+save.save_figures_to_dir(f'Tilt_of_xy_tol_{module_number+1}_{nb_robots}_robots_per_module', save_eps=save_eps_flag)
+
 
 draw_R2CRD(r,R_data,CRD_data,surf.R2CRD, draw=False)
 save.save_figures_to_dir(f'R2CRD')
