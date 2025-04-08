@@ -1,0 +1,37 @@
+{
+    "MUST": {
+        "curvature_R": -11698.7,
+        "vigD": 1189.306, 
+        "asph_formula": false,
+        "k": 0,
+        "a2": 0, 
+        "a4": 3.76762e-11, 
+        "a6": -5.86796e-17,
+        "a8": 0,
+        "fnumber": 3.71798,
+        "BFS": 10215.81,
+        "FoV": null,
+        "focus_tolerance_width": 0.1
+    },
+
+    "WST25": {
+        "curvature_R": 5821,
+        "vigD": 1426, 
+        "fnumber": 3.71798,
+        "BFS": 5821,
+        "FoV": 2,
+        "focus_tolerance_width": 0.1,
+        "donut_diam": 200
+    },
+
+    "WST27": {
+        "curvature_R": 6998,
+        "vigD": 1341,
+        "fnumber": 3.71798,
+        "BFS": 6998,
+        "FoV": 2,
+        "focus_tolerance_width": 0.1,
+        "donut_diam": 200
+    }
+
+}
