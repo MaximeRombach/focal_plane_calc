@@ -31,7 +31,7 @@ Rc = surf.curvature_R # Curve radius [mm]
 vigR = surf.vigR
 d_plane = 2*vigR # Focal plane diameter [mm]
 nb_robots = 63
-saving_df = {"save_plots": False}
+saving_df = {"save_plots": True}
 display_BFS = False
 save = param.SavingResults(saving_df, project_name=project)
 mod_param = param.Module(nb_robots, saving_df, BFS = surf.BFS)
@@ -331,6 +331,7 @@ module_number = 8
 number_of_points= 100
 # Focus tolerance
 xy_tol = 0.3 # [mm] tolerance in xy position of module --> screws wiggle
+""" CHANGE FOR WHETHER YOU WANT TANGENTIAL OF NORMAL TRANSLATION"""
 # new_left_module_translated, new_right_module_translated = translate_module_normal_direction(new_left_module, new_right_module, tolerance_envelop_width/4)
 new_left_module_translated, new_right_module_translated = translate_module_tangent_direction(new_left_module, new_right_module, xy_tol)
 
@@ -402,7 +403,9 @@ elif nb_robots == 75:
     xbound=40
     ybound=0.9
 zoom_in_1module(module_number = module_number, xbound=xbound, ybound=ybound, draw=True)
-draw_module_translated(new_left_module_translated, new_right_module_translated, module_number, tolerance_envelop_width/2)
+# draw_module_translated(new_left_module_translated, new_right_module_translated, module_number, tolerance_envelop_width/2)
+draw_module_translated(new_left_module_translated, new_right_module_translated, module_number, xy_tol)
+
 
 plt.legend(shadow=True)
 save.save_figures_to_dir(f'Zoomed_in_module_{module_number+1}_{nb_robots}_robots_per_module', save_eps=save_eps_flag)
