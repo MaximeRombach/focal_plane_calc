@@ -1,5 +1,7 @@
 import numpy as np
 from shapely.geometry import Polygon
+from shapely.plotting import plot_polygon
+import matplotlib.pyplot as plt
 
 class Robot:
 
@@ -28,6 +30,8 @@ class Robot:
 
         self.l_alpha = l_alpha
         self.l_beta = l_beta
+        self._workspace_outer_radius = self.l_alpha + self.l_beta # [mm] outer radius of the workspace of the robot
+        self._workspace_inner_radius = abs(self.l_alpha - self.l_beta)
 
         self.__robot_id = kwargs.get('robot_id', None)
         self.__module_id = kwargs.get('module_id', None)
@@ -36,14 +40,25 @@ class Robot:
         self.__y0 = kwargs.get('y0', 0)
         self.__z0 = kwargs.get('z0', 0)
 
+    # Internal cache for expensive computation
+        self._workspace = None
+
 
     @property
     def robot_id(self):
         return self.__robot_id
     
+    @robot_id.setter
+    def robot_id(self, robot_id):
+        self.__robot_id = robot_id
+    
     @property
     def module_id(self):
         return self.__module_id
+    
+    @module_id.setter
+    def module_id(self, module_id):
+        self.__module_id = module_id
     
     @property
     def x0(self):
@@ -75,13 +90,20 @@ class Robot:
 
     @property
     def workspace(self):
+
+        """Lazy-cached workspace property."""
+        if self._workspace is not None:
+            return self._workspace
+
         """Returns the workspace of the robot as a shapely Polygon object"""
 
-        angle = np.linspace(0, 2* np.pi, 100)
+        angle_outer = np.linspace(0, 2* np.pi, 20)
+        angle_lower = np.linspace(0, 2* np.pi, 10)
 
         "Outer boundaries of positioner workspace"
-        x_wk_ext = self.x0 + (self.l_alpha + self.l_beta) * np.cos(angle)
-        y_wk_ext = self.y0 + (self.l_alpha + self.l_beta) * np.sin(angle)
+        # CALCULATE THE those things only once in declaration of class!!!
+        x_wk_ext = self.x0 + self._workspace_outer_radius * np.cos(angle_outer)
+        y_wk_ext = self.y0 + self._workspace_outer_radius * np.sin(angle_outer)
         z_wk_ext = self.z0 * np.ones_like(x_wk_ext)
         wk_ext = [(x,y,z) for x,y,z in zip(x_wk_ext, y_wk_ext, z_wk_ext)]
 
@@ -89,8 +111,8 @@ class Robot:
         if self.l_alpha == self.l_beta:
             wk_int = []
         else:
-            x_wk_int = self.x0 + (self.l_alpha - self.l_beta) * np.cos(angle)
-            y_wk_int = self.y0 + (self.l_alpha - self.l_beta) * np.sin(angle)
+            x_wk_int = self.x0 + self._workspace_inner_radius * np.cos(angle_lower)
+            y_wk_int = self.y0 + self._workspace_inner_radius * np.sin(angle_lower)
             z_wk_int = self.z0 * np.ones_like(x_wk_ext)
             wk_int = [(x,y,z) for x,y,z in zip(x_wk_int, y_wk_int, z_wk_int)]
             wk_int = wk_int[::-1] # Remove last point of inner boundary to avoid having a straight line in the center of the workspace
@@ -107,4 +129,11 @@ class Robot:
             return 'red'
         else:
             return 'C0'
+        
+
+if __name__ == '__main__':
+    robot = Robot(l_alpha = 1, l_beta = 2, robot_id=1, module_id=1, x0=0, y0=0, z0=0)
+    plot_polygon(robot.workspace) # Should print the workspace of the robot as a shapely Polygon object
+    plt.show()
+    print(robot.color) # Should print the color of the robot based on the fiber type
         

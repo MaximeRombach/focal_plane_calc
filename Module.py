@@ -6,8 +6,17 @@ from shapely.plotting import plot_polygon
 from shapely.ops import unary_union
 from Robot import Robot
 import matplotlib.pyplot as plt
+plt.rc('axes', labelsize=13)    # fontsize of the x and y labels
+plt.rc('figure', titlesize=16)  # fontsize of the figure title
+plt.rc('axes', titlesize=14)     # fontsize of the axes title
+plt.rc('xtick', labelsize=13)    # fontsize of the tick labels
+plt.rc('ytick', labelsize=13)    # fontsize of the tick labels
+plt.rc('legend', fontsize=13)    # legend fontsize
 import CustomLegends as cl
 import geopandas as gpd
+import SavingResults as sr
+
+import copy
 
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -32,7 +41,9 @@ class Module:
         self.l_beta = kwargs.get('l_beta', 1.8)
         self.HR_l_alpha = kwargs.get('HR_l_alpha', 1.8)
         self.HR_l_beta = kwargs.get('HR_l_beta', 1.8)
-        self.HR_fibers = kwargs.get('HR_fibers', [10, 12, 15, 17, 29, 34, 39, 50, 52, 59])
+        # self.HR_fibers = kwargs.get('HR_fibers', [10, 12, 15, 17, 29, 34, 39, 50, 52, 59])
+        self.HR_fibers = kwargs.get('HR_fibers', [21, 25, 51])
+        # self.HR_fibers = kwargs.get('HR_fibers', [12, 15, 29, 34, 50, 52])
         # self.HR_fibers = kwargs.get('HR_fibers', [])
 
         self.x0 = kwargs.get('x0', 0)
@@ -45,8 +56,10 @@ class Module:
         self.beta2fibre = kwargs.get('beta2fibre', 1)
         self.dist2wall = self.beta2fibre + self.safety_margin # The fiber is physically not at the edge of the beta arm which prevents it from reaching the wall + add a safety margin at which the positioner has to stay away from the wall
         self.LR_area = 0 # area covered by Low Resolution fibers
+        self._LR_coverage = None # Polygon of coverage of the LR fibers in the module
         self.HR_area = 0 # area covered by High Resolution fibers
-        self.module_area = 0 # total area covered by all robots in a module
+        self._HR_coverage = None # Polygon of coverage of the HR fibers in the module
+        self.module_coverage_area = 0 # total area covered by all robots in a module
         self.module_id = kwargs.get('module_id', 1)
         
         self.__r_flat = kwargs.get('r_flat', 0)
@@ -58,7 +71,6 @@ class Module:
         
         self.robots = []
         self.dataframe ={'module_id':[], 'robot_id':[], 'fiber_type':[], 'x0':[], 'y0':[], 'z0':[], 'color':[], 'geometry':[]}
-        self.__workspace = None
 
     @property
     def module_side_length(self):
@@ -71,7 +83,11 @@ class Module:
         
         """
         # return 80 + self.pitch * (self.nb_lines_of_robots() - 12)
-        return self.pitch * (self.nb_lines_of_robots() + 1)
+        if self.nb_robots == 63:
+            "Force value to 73.8 for 63 robots"
+            return 73.8
+        else:
+            return self.pitch * (self.nb_lines_of_robots() + 1)
     
     @property
     def module_height(self):
@@ -126,13 +142,43 @@ class Module:
 
         return Polygon(new_coords)
         # return new_coords
+
+    def module_boundaries_3D(self):
+        """Computes the 3D boundaries of the module."""
+        # Get the 2D polygon of the module boundaries
+        polygon_2d = self.module_boundaries
+        
+        # Create a 3D polygon by adding z-coordinates
+        points_3d = [(x, y, self.z0) for x, y in polygon_2d.exterior.coords]
+        
+        # Create a Poly3DCollection for the 3D polygon
+        poly3d = Poly3DCollection([points_3d], alpha=0.5, edgecolor='k')
+        
+        return poly3d
     
+    @property
+    def module_boundaries_with_safety_margin(self):
+        """Computes the limits inside the module where the robots can operats
+
+        Input: 
+        - (Polygon) module_boundaries: physical limits of the module walls
+        - (float) dist2wall: beta2fiber + safety_margin
+
+        Output:
+        - (Polygon) module_boundaries_with_safety_margin: boundaries inside which robots workspace are limited
+        
+        """
+        
+        return self.module_boundaries.buffer(-self.dist2wall)
     
     @property
     def fiber_type_assignment(self):
         """Assigns a fiber type to each robot in the module.
         
-        Returns:
+        Input:
+        - (list) predefined list of the HR fibers in the module
+        
+        Output:
         - (list) fiber_types: list of fiber types assigned to the robots in the module
         
         """
@@ -175,9 +221,16 @@ class Module:
         """
         n = self.nb_lines_of_robots()
         fiber_types = self.fiber_type_assignment
+        sqrt3 = np.sqrt(3)
         layout_center_x = -((n - 1) * self.pitch / 2)
-        layout_center_y = -((n - 1) * self.pitch * np.sqrt(3) / 6)
+        layout_center_y = -((n - 1) * self.pitch * sqrt3 / 6)
         robot_index =  0
+
+        prototype_hr = Robot(l_alpha = self.HR_l_alpha, l_beta = self.HR_l_beta, fiber_type='HR')
+        prototype_lr = Robot(l_alpha = self.l_alpha, l_beta = self.l_beta, fiber_type = 'LR')
+
+        
+
         "Starts from the bottom left corner of the module and builds each line of robots from left to right"
         for j in range(n):
             for i in range(n-j):
@@ -186,21 +239,27 @@ class Module:
                     continue
                 else:
                     x = (i * self.pitch + 0.5 * self.pitch * j) + layout_center_x
-                    y = (j * self.pitch * np.sqrt(3) / 2) + layout_center_y
+                    y = (j * self.pitch * sqrt3 / 2) + layout_center_y
                     z = self.z0
+                    is_hr = False
 
                     if not self.module_points_up:
                         x,y,z = self.flip_coordinates([x,y,z])
 
                     if robot_index in self.HR_fibers:
-                        """Change the arm lengths for High Resolution fibers"""
+                        is_hr =True
                         new_l_alpha = self.HR_l_alpha
                         new_l_beta = self.HR_l_beta
                     else:
-                        """Otherwise keep nominal"""
                         new_l_alpha = self.l_alpha
                         new_l_beta = self.l_beta
 
+                    # new_robot = copy.deepcopy(prototype_hr if is_hr else prototype_lr)
+                    # new_robot.x0 = x
+                    # new_robot.y0 = y
+                    # new_robot.z0 = z
+                    # new_robot.module_id = self.module_id
+                    # new_robot.robot_id = robot_index * self.module_id
                     new_robot = Robot(robot_id = robot_index * self.module_id,
                                     module_id = self.module_id,
                                     l_alpha = new_l_alpha,
@@ -224,6 +283,8 @@ class Module:
 
         return self.robots
         
+    
+    
     @property
     def LR_robots(self):
         """
@@ -246,20 +307,34 @@ class Module:
         - Polygon of coverage of the LR fibers in the module
         - Area covered by the LR fibers
         """
+        if self._LR_coverage is None:
+            LR_workspaces = [rob.workspace for rob in self.LR_robots]
+            LR_union = unary_union(LR_workspaces)
 
-        LR_workspaces = [rob.workspace for rob in self.LR_robots]
-        LR_union = unary_union(LR_workspaces)
+            if self.is_wall:
+                lr_cov = LR_union.intersection(self.module_boundaries_with_safety_margin)
+                # lr_cov = MultiPolygon(LR_workspaces)
+            else:
+                lr_cov = LR_union
 
-        if self.is_wall:
-            dist2wall = self.beta2fibre + self.safety_margin # The fiber is physically not at the edge of the beta arm which prevents it from reaching the wall + add a safety margin at which the positioner has to stay away from the wall
-            lr_cov = LR_union.intersection(self.module_boundaries.buffer(-dist2wall))
-
-        else:
-            lr_cov = LR_union
-
-        self.LR_area = lr_cov.area
+            self.LR_area = lr_cov.area
+            self._LR_coverage = lr_cov
                 
-        return lr_cov
+        return self._LR_coverage
+    
+    @LR_coverage.setter
+    def LR_coverage(self, coverage_polygon):
+        """
+        Setter for the LR_coverage property.
+        This allows to set the LR_coverage polygon directly.
+        
+        Input:
+        - (Polygon): coverage polygon of the LR fibers
+        
+        """
+        self._LR_coverage = coverage_polygon
+        self.LR_area = coverage_polygon.area
+        self.dataframe['geometry'] = coverage_polygon
     
     @property
     def HR_robots(self):
@@ -281,20 +356,37 @@ class Module:
         Input: list of all the HR robots in the module
         Output: Polygon of coverage of the HR fibers in the module
         """
-        HR_workspaces = [rob.workspace for rob in self.HR_robots]
-        HR_union = unary_union(HR_workspaces)
+        if self._HR_coverage is None:
+            HR_workspaces = [rob.workspace for rob in self.HR_robots]
+            HR_union = unary_union(HR_workspaces)
 
-        if self.is_wall:
-            
-            hr_cov = HR_union.intersection(self.module_boundaries.buffer(-self.dist2wall))
-
-        else:
-            hr_cov = HR_union
-
-        self.HR_area = hr_cov.area
+            if self.is_wall:
                 
-        return hr_cov
+                hr_cov = HR_union.intersection(self.module_boundaries_with_safety_margin)
+                # hr_cov_raw = MultiPolygon(HR_workspaces).intersection(self.module_boundaries.buffer(-self.dist2wall))
+
+            else:
+                hr_cov = HR_union
+
+            self.HR_area = hr_cov.area
+            self._HR_coverage = hr_cov
+                
+        return self._HR_coverage
     
+    @HR_coverage.setter
+    def HR_coverage(self, coverage_polygon):
+        """
+        Setter for the HR_coverage property.
+        This allows to set the HR_coverage polygon directly.
+        
+        Input:
+        - (Polygon): coverage polygon of the HR fibers
+        
+        """
+        self._HR_coverage = coverage_polygon
+        self.HR_area = coverage_polygon.area
+        self.dataframe['geometry'] = coverage_polygon
+
     @property
     def module_coverage(self):
         
@@ -306,12 +398,29 @@ class Module:
                 - Updates the module area attribute
         
         """
-        
         mod_cov = unary_union([self.LR_coverage, self.HR_coverage])
 
-        self.module_area = mod_cov.area
+        self.module_coverage_area = mod_cov.area
 
         return mod_cov
+    
+    def raw_module_coverage(self, coverage_polygon):
+        """
+        Computes coverage polygon of the robots WITHOUT summing up all the similar reaches.
+        Used for exporting DXFs of robots arrangements and visualization
+        Input:
+
+        - (Polygon): coverage polygon of corresponding HR or LR fibers
+        - (Polygon): module boundaries reduced with dist2wall
+
+        Output:
+       
+        - (Polygon): trimmed coverage polygon
+        
+        """
+        
+        return coverage_polygon.difference(self.module_boundaries_with_safety_margin)
+
     
     def nb_lines_of_robots(self):
         """Computes the number of lines of robots in a module for a given amount of robots.
@@ -355,30 +464,75 @@ class Module:
 
         return coord
     
+    def plot_module(self):
+        """Plots the module boundaries and the robots in the module."""
+        fig = plt.figure(figsize=(10, 10))
+        ax = fig.add_subplot(111)
+        
+        # Plot module boundaries
+        plot_polygon(self.module_boundaries, ax=ax, add_points=False, fill=False, color='black', linestyle='--')
+        
+        # Plot LR coverage
+        # if self.LR_coverage is not None:
+        #     plot_polygon(self.LR_coverage, add_points=False, ax=ax, fill=True, color='C0', alpha=0.4)
+        
+        # Plot HR coverage
+        # if self.HR_coverage is not None:
+        #     plot_polygon(self.HR_coverage, add_points=False, ax=ax, fill=True, color='red', alpha=0.2)
+        
+        # Plot module boundaries with safety margin
+        plot_polygon(self.module_boundaries_with_safety_margin, ax=ax, add_points=False, fill=False, color='red', linestyle='--')
+
+        # Plot robots
+        geo = gpd.GeoDataFrame(self.dataframe)
+        geo.plot(ax = ax, color=geo['color'], alpha=0.5, markersize=10, legend=True)
+        
+        for rob in self.robots_layout:
+            plt.text(rob.x0, rob.y0, str(rob.robot_id), fontsize=11, ha='center', va='center')
+
+
+        plt.legend(handles = [cl.LR_handle(extra_lab = f'{self.nb_of_LR_fibers}'),
+                              cl.HR_handle(extra_lab = f'{self.nb_of_HR_fibers}'),
+                              cl.safety_margin_handle(lab = f'Dist2wall: {self.dist2wall} mm')])
+
+        plt.xlabel('x [mm]')
+        plt.ylabel('y [mm]')
+        plt.title(cl.module_title(self.nb_robots, self.module_side_length, self.pitch, self.l_alpha, self.l_beta, self.HR_l_alpha, self.HR_l_beta))
+        plt.grid()
+    
 if __name__ == "__main__":
 
+    save = sr.SavingResults({"save_plots": True,
+                            "save_txt": False},
+                            project_name = 'test')
     mod = Module(63,
                 6.2, 
                 module_points_up = True,
                 x0 = 0,
                 y0 = 0,
-                z0 = 0)
+                z0 = 0,
+                HR_fibers = [21, 25, 39, 51])
 
     robots = mod.robots_layout
 
-    figure, ax = plt.subplots(figsize=(10, 10))
-    """ Using geopandas to plot Polygon objects is way faster than looping plot_polygon """
-    geo = gpd.GeoDataFrame(mod.dataframe)
-    geo.plot(ax = ax, color=geo['color'], alpha=0.5, markersize=10, legend=True)
-    plot_polygon(mod.module_boundaries, fill = False, add_points=False, color = 'black')
-    plot_polygon(mod.module_boundaries.buffer(-mod.dist2wall), fill = False, add_points=False, color = 'red', linestyle = '--')
-    for rob in robots:
-        plt.text(rob.x0, rob.y0, str(rob.robot_id), fontsize=11, ha='center', va='center')
-    plt.legend(handles = [cl.LR_handle(lab = f'LR fibers: {mod.nb_of_LR_fibers}'),
-                          cl.HR_handle(lab = f'HR fibers: {mod.nb_of_HR_fibers}'),
-                          cl.safety_margin_handle(lab = f'Dist2wall: {mod.dist2wall} mm')])
-    plt.grid(visible=True)
-    plt.xlabel('x [mm]')
-    plt.ylabel('y [mm]')
-    plt.title(f'Raw workspaces of robots \n {len(robots)} robots per module')
+    # figure, ax = plt.subplots(figsize=(10, 10))
+    # """ Using geopandas to plot Polygon objects is way faster than looping plot_polygon """
+    # geo = gpd.GeoDataFrame(mod.dataframe)
+    # geo.plot(ax = ax, color=geo['color'], alpha=0.5, markersize=10, legend=True)
+    # plot_polygon(mod.module_boundaries, fill = False, add_points=False, color = 'black')
+    # plot_polygon(mod.module_boundaries.buffer(-mod.dist2wall), fill = False, add_points=False, color = 'red', linestyle = '--')
+    # # plot_polygon(mod.LR_coverage, add_points=False, color = 'green', linestyle = '--')
+    # for rob in robots:
+    #     plt.text(rob.x0, rob.y0, str(rob.robot_id), fontsize=11, ha='center', va='center')
+    # plt.legend(handles = [cl.LR_handle(extra_lab = f'{mod.nb_of_LR_fibers}'),
+    #                       cl.HR_handle(extra_lab = f'{mod.nb_of_HR_fibers}'),
+    #                       cl.safety_margin_handle(lab = f'Dist2wall: {mod.dist2wall} mm')])
+    # plt.grid(visible=True)
+    # plt.xlabel('x [mm]')
+    # plt.ylabel('y [mm]')
+    # plt.title(cl.module_title(mod.nb_robots, mod.module_side_length, mod.pitch, mod.l_alpha, mod.l_beta, mod.HR_l_alpha, mod.HR_l_beta))
+    # save.save_figures_to_dir('raw_workspaces_63')
+    # plt.show()
+
+    mod.plot_module()
     plt.show()
