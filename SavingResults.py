@@ -138,6 +138,6 @@ class SavingResults:
           if results_string is not None:
                with open(file_path, 'w') as file:
                     file.write(results_string)
-          grid.to_csv(file_path, sep = ";", decimal = ".", mode = 'a')
+          grid.to_csv(file_path, sep = ",", decimal = ".", index = False)
           
           logging.info(f'{filename}.csv succesfully saved in {self.results_dir_path}')

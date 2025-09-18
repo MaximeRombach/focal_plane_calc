@@ -41,7 +41,10 @@ def final_layout_title(project: str,
 
     robots_info = f"Total # modules: {total_modules} - Total # robots: {total_robots}"
     modules_info = f" {nb_robots} robots per module"
-    fibers_info = f"{LR_fibers} LR fibers - {HR_fibers} HR fibers"
+    if HR_fibers == 0:
+        fibers_info = ""
+    else:
+        fibers_info = f"{LR_fibers} LR fibers - {HR_fibers} HR fibers"
 
     out_allowance_info = f"Out allowance: {out_allowance * 100} %" # convert to %
 

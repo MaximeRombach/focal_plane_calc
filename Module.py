@@ -61,11 +61,6 @@ class Module:
         self._HR_coverage = None # Polygon of coverage of the HR fibers in the module
         self.module_coverage_area = 0 # total area covered by all robots in a module
         self.module_id = kwargs.get('module_id', 1)
-        
-        self.__r_flat = kwargs.get('r_flat', 0)
-        self.__theta_flat = kwargs.get('theta_flat', 0)
-        self.__phi_flat = kwargs.get('phi_flat', 0)
-
         self.is_wall = kwargs.get('is_wall', True)
         self.remove_corners = kwargs.get('remove_corners', True)
         
@@ -226,11 +221,6 @@ class Module:
         layout_center_y = -((n - 1) * self.pitch * sqrt3 / 6)
         robot_index =  0
 
-        prototype_hr = Robot(l_alpha = self.HR_l_alpha, l_beta = self.HR_l_beta, fiber_type='HR')
-        prototype_lr = Robot(l_alpha = self.l_alpha, l_beta = self.l_beta, fiber_type = 'LR')
-
-        
-
         "Starts from the bottom left corner of the module and builds each line of robots from left to right"
         for j in range(n):
             for i in range(n-j):
@@ -254,12 +244,6 @@ class Module:
                         new_l_alpha = self.l_alpha
                         new_l_beta = self.l_beta
 
-                    # new_robot = copy.deepcopy(prototype_hr if is_hr else prototype_lr)
-                    # new_robot.x0 = x
-                    # new_robot.y0 = y
-                    # new_robot.z0 = z
-                    # new_robot.module_id = self.module_id
-                    # new_robot.robot_id = robot_index * self.module_id
                     new_robot = Robot(robot_id = robot_index * self.module_id,
                                     module_id = self.module_id,
                                     l_alpha = new_l_alpha,
@@ -464,7 +448,7 @@ class Module:
 
         return coord
     
-    def plot_module(self):
+    def plot_module(self, plot_rob_numbers = False):
         """Plots the module boundaries and the robots in the module."""
         fig = plt.figure(figsize=(10, 10))
         ax = fig.add_subplot(111)
@@ -487,16 +471,24 @@ class Module:
         geo = gpd.GeoDataFrame(self.dataframe)
         geo.plot(ax = ax, color=geo['color'], alpha=0.5, markersize=10, legend=True)
         
-        for rob in self.robots_layout:
-            plt.text(rob.x0, rob.y0, str(rob.robot_id), fontsize=11, ha='center', va='center')
+        if plot_rob_numbers == True:
+            """ Plot robot ID at the center of each robot """
+            for rob in self.robots_layout:
+                plt.text(rob.x0, rob.y0, str(rob.robot_id+1), fontsize=11, ha='center', va='center')
 
 
-        plt.legend(handles = [cl.LR_handle(extra_lab = f'{self.nb_of_LR_fibers}'),
-                              cl.HR_handle(extra_lab = f'{self.nb_of_HR_fibers}'),
-                              cl.safety_margin_handle(lab = f'Dist2wall: {self.dist2wall} mm')])
+        if self.nb_of_HR_fibers != 0:
+            plt.legend(handles = [cl.LR_handle(extra_lab = f'{self.nb_of_LR_fibers}'),
+                                cl.HR_handle(extra_lab = f'{self.nb_of_HR_fibers}'),
+                                cl.safety_margin_handle(lab = f'Dist2wall: {self.dist2wall} mm')])
+        else:
+            plt.legend(handles = [cl.LR_handle(extra_lab = f'{self.nb_of_LR_fibers} robots workspaces'),
+                                cl.safety_margin_handle(lab = f'Dist2wall: {self.dist2wall} mm')])
 
         plt.xlabel('x [mm]')
         plt.ylabel('y [mm]')
+        # plt.xlim([-500, 500])
+        # plt.ylim([-500, 500])
         plt.title(cl.module_title(self.nb_robots, self.module_side_length, self.pitch, self.l_alpha, self.l_beta, self.HR_l_alpha, self.HR_l_beta))
         plt.grid()
     
@@ -508,31 +500,14 @@ if __name__ == "__main__":
     mod = Module(63,
                 6.2, 
                 module_points_up = True,
-                x0 = 0,
-                y0 = 0,
+                x0 = 100,
+                y0 = 100,
                 z0 = 0,
                 HR_fibers = [21, 25, 39, 51])
 
     robots = mod.robots_layout
+    print(robots[0].theta, robots[0].phi, robots[0].r, robots[0].r_flat)
 
-    # figure, ax = plt.subplots(figsize=(10, 10))
-    # """ Using geopandas to plot Polygon objects is way faster than looping plot_polygon """
-    # geo = gpd.GeoDataFrame(mod.dataframe)
-    # geo.plot(ax = ax, color=geo['color'], alpha=0.5, markersize=10, legend=True)
-    # plot_polygon(mod.module_boundaries, fill = False, add_points=False, color = 'black')
-    # plot_polygon(mod.module_boundaries.buffer(-mod.dist2wall), fill = False, add_points=False, color = 'red', linestyle = '--')
-    # # plot_polygon(mod.LR_coverage, add_points=False, color = 'green', linestyle = '--')
-    # for rob in robots:
-    #     plt.text(rob.x0, rob.y0, str(rob.robot_id), fontsize=11, ha='center', va='center')
-    # plt.legend(handles = [cl.LR_handle(extra_lab = f'{mod.nb_of_LR_fibers}'),
-    #                       cl.HR_handle(extra_lab = f'{mod.nb_of_HR_fibers}'),
-    #                       cl.safety_margin_handle(lab = f'Dist2wall: {mod.dist2wall} mm')])
-    # plt.grid(visible=True)
-    # plt.xlabel('x [mm]')
-    # plt.ylabel('y [mm]')
-    # plt.title(cl.module_title(mod.nb_robots, mod.module_side_length, mod.pitch, mod.l_alpha, mod.l_beta, mod.HR_l_alpha, mod.HR_l_beta))
-    # save.save_figures_to_dir('raw_workspaces_63')
-    # plt.show()
-
-    mod.plot_module()
+    mod.plot_module(plot_rob_numbers=True)
+    plt.scatter(robots[31].x0, robots[31].y0, color='blue')
     plt.show()

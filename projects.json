@@ -15,23 +15,44 @@
     },
 
     "WST25": {
+        "curvature_R": 6021,
+        "vigD": 1406, 
+        "fnumber": 3.425,
+        "BFS": 6021,
+        "FoV": 2,
+        "focus_tolerance_width": 0.1,
+        "donut_diam": 19,
+        "plate_scale": 195
+    },
+
+    "WST25_old": {
         "curvature_R": 5821,
-        "vigD": 1426, 
-        "fnumber": 3.71798,
+        "vigD": 1440, 
+        "fnumber": 3.425,
         "BFS": 5821,
         "FoV": 2,
         "focus_tolerance_width": 0.1,
-        "donut_diam": 200
+        "donut_diam": 20,
+        "plate_scale": 199.3
     },
 
-    "WST27": {
+    "WST27_old": {
         "curvature_R": 6998,
         "vigD": 1341,
-        "fnumber": 3.71798,
+        "fnumber": 3.185,
         "BFS": 6998,
         "FoV": 2,
         "focus_tolerance_width": 0.1,
-        "donut_diam": 200
+        "donut_diam": 20,
+        "plate_scale": 185.3
+    },
+
+    "VLT_2030": {
+    "curvature_R": 4210,
+    "vigD": 1000,
+    "fnumber": 3.185,
+    "BFS": 69421098,
+    "FoV": 2
     }
 
 }

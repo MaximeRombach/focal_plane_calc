@@ -211,7 +211,7 @@ class FocalSurf:
         elif geometry == 'hex':
             points = 7 #one more point to close the polygon
         elif geometry == 'circle':
-            points = 20
+            points = 50
         else:
             raise ValueError("geometry must be 'hex', 'square' or 'circle'")
 

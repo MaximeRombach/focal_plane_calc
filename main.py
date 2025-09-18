@@ -34,12 +34,14 @@ logging.basicConfig(
 timesstamp0 = time.time()
 
 """ Available projects: MUST, Spec-S5, WST25, WST27 """
-PROJECT = "MUST"
+PROJECT = "VLT_2030"
 
 """ Saving results """
-save = SavingResults({"save_plots": True,
-                      "save_txt": True,
-                      "save_dxf": True},
+save = SavingResults({"save_plots": False,
+                      "save_txt": False,
+                      "save_csv": False,
+                      "save_dxf": False,
+                      "project_name": PROJECT},
                       project_name = PROJECT)
 
 """ Load focal surface data """
@@ -47,11 +49,11 @@ project_parameters = json.load(open('projects.json', 'r'))
 surf = FocalSurf(PROJECT, **project_parameters[PROJECT])
 vigR = surf.vigD / 2
 vignetting_area = surf.vignetting_disk.area
-limit_pol = True
+limit_pol = False
 if limit_pol:
-    limiting_polygon = surf.trimming_polygon(geometry='circle', trim_diff_to_vigR = 5)
+    limiting_polygon = surf.trimming_polygon(geometry='circle', trim_diff_to_vigR = 1)
 else:
-    limiting_polygon = surf.vignetting_diskexce
+    limiting_polygon = surf.vignetting_disk
 
 """ Module parameters"""
 
@@ -62,7 +64,7 @@ pitch = 6.2 # [mm] distance between two adjacent robots
 HR_fibers = []
 is_HR = len(HR_fibers) != 0
 # HR_fibers = [21, 25, 39, 51]
-HR_l_beta = 3.6 # [mm] length of the HR fibers in beta direction
+HR_l_beta = 1.8 # [mm] length of the HR fibers in beta direction
 HR_l_alpha = 1.8 # [mm] length of the HR fibers in alpha direction
 
 mod0 = Module(nb_robots = 63, 
@@ -75,14 +77,14 @@ robots0 = mod0.robots_layout
 
 inner_gap = 0.5 # [mm] gap between two modules within an intermediate triangle
 global_gap = 4 # [mm] gap between two intermediate triangles; if inner = global, all modules are eqaully spaced
-out_allowance = 0 # fraction of the module coverage that is allowed to stick out of the vignetting disk
+out_allowance = 0.5 # fraction of the module coverage that is allowed to stick out of the vignetting disk
 
 """ GFA parameters """
 
 nb_gfa = 6
-angle_offset = 0
-gfa_length = 120
-gfa_width = 120
+angle_offset = 30
+gfa_length = 50
+gfa_width = 50
 #TODO: fix warning appearing twice --> FocalSurf called twice at begining of main AND within Grid class
 #FIX: input surf as parameter to Grid class
 gfa = GFA(nb_gfa = nb_gfa,
@@ -100,17 +102,21 @@ grid = Grid(PROJECT,
             global_gap,
             mod0.module_side_length,
             GFA_polygon = gfa_polygon,
-            is_limiting_polygon = limit_pol,
+            limiting_polygon = limiting_polygon,
             **project_parameters[PROJECT])
 
 grid.flat_grid() # create the grid of modules
 grid_3d = grid.grid_3d(grid.flat_grid_dict['x'], grid.flat_grid_dict['y'])
+grid.fiducials.to_csv('fiducials.csv', index=False)
 concave_hull = grid.layout_concave_hull() # concave hull of the module layout
 concave_hull_area = concave_hull.area # area of the concave hull
 
 
 modules = [] # list of modules
-robots_workspaces = {'geometry': [], 'color': [], 'Module id': []}
+robots_workspaces = {'Module ID': [], 'Robot ID': [], 'x':[], 'y':[], 'z':[], 'geometry': []}
+# robots_workspaces = {'geometry': []}
+# robots_workspaces = {'Module ID': [], 'Robot ID': [], 'x':[], 'y':[]}
+
 total_HR_fibers = 0
 total_HR_area = 0
 total_LR_fibers = 0
@@ -127,14 +133,8 @@ with Bar('Aranging focal plane modules', max = len(grid_3d['x'])) as bar:
     for mod_id,(x,y,z,points_up) in enumerate(zip(grid_3d['x'], grid_3d['y'], grid_3d['z'], grid_3d['tri_points_up'])):
 
         time1 = time.time()
-        # mod = Module(module_id = mod_id+1,
-        #                 nb_robots = 63, 
-        #                 pitch = 6.2,
-        #                 module_points_up = points_up,
-        #                 x0 = x,
-        #                 y0 = y,
-        #                 z0 = z,
-        #                 HR_fibers = HR_fibers)
+
+        """ Create module object"""
         
         mod = Module(module_id = mod_id+1,
                         nb_robots = 63, 
@@ -188,24 +188,40 @@ with Bar('Aranging focal plane modules', max = len(grid_3d['x'])) as bar:
             total_HR_fibers += mod.nb_of_HR_fibers
             total_LR_fibers += mod.nb_of_LR_fibers
 
-            if save.save_dxf:
-                robots_workspaces['geometry'].append(MultiPolygon(mod.dataframe['geometry']))
-                robots_workspaces['Module id'].append(f'{mod.module_id}')
-                robots_workspaces['color'].append('yellow')
+
+            robots_workspaces['geometry'].append(MultiPolygon(mod.dataframe['geometry']))
+            # robots_workspaces['geometry'].append(mod.module_boundaries)
+            # robots_workspaces['color'].append('yellow')
+            robots_workspaces['Module ID'].extend(mod.dataframe["module_id"])
+            robots_workspaces['Robot ID'].extend(mod.dataframe['robot_id'])
+            robots_workspaces['x'].extend(mod.dataframe['x0'])
+            robots_workspaces['y'].extend(mod.dataframe['y0'])
+            robots_workspaces['z'].extend(mod.dataframe['z0'])
+
         assign_times.append(time.time() - assign_stamp)
 
         for_times.append(time.time() - time1)
         bar.next()
 
 #%% 
+
+# robots_workspaces = pd.DataFrame(robots_workspaces)
+# # Renumber the 'Module ID' column in robots_workspaces to be consecutive starting from 1
+# unique_ids = robots_workspaces['Module ID'].unique()
+# id_map = {old_id: new_id for new_id, old_id in enumerate(sorted(unique_ids), start=1)}
+# robots_workspaces['Module ID'] = robots_workspaces['Module ID'].map(id_map)
+# # Renumber 'Robot ID' within each module from 1 to 63
+# robots_workspaces['Robot ID'] = robots_workspaces.groupby('Module ID').cumcount() + 1
+
+#%%
 grid_3d.drop(index2drop, inplace = True) # drop the modules that do not contribute to the coverage
-grid_3d = grid.trim_grid(grid_3d, trimming_angle = 0) # trim the grid to remove modules with phi < 0
+grid_3d = grid.trim_grid(grid_3d, trimming_angle = 360) # trim the grid to remove modules with phi < 0
 grid_3d_back = grid.grid_3d_back(grid_3d)
 
 save.save_grid_to_txt2(grid_3d, filename = f"Grid_{nb_robots_per_module}_rob__Inner_{inner_gap}_mm__Global_{global_gap}_mm", columns = ['x', 'y', 'z', 'tri_points_up'])
 save.save_grid_to_txt2(grid_3d_back, filename = f"Grid_back_{nb_robots_per_module}_rob__Inner_{inner_gap}_mm__Global_{global_gap}_mm", columns = ['x', 'y', 'z', 'tri_points_up'])
 save.save_grid_to_csv(grid_3d, filename = f"Grid_{nb_robots_per_module}_rob__Inner_{inner_gap}_mm__Global_{global_gap}_mm", results_string = f"Grid with {len(grid_3d)} modules, {len(modules)} contributing to the coverage")
-save.save_grid_to_csv(pd.DataFrame(robots_workspaces), filename = f"Robots_positions_{nb_robots_per_module}_rob__Inner_{inner_gap}_mm__Global_{global_gap}_mm", results_string = f"Robots workspaces of the modules contributing to the coverage")
+save.save_grid_to_csv(robots_workspaces, filename = f"Robots_positions_{nb_robots_per_module}_rob__Inner_{inner_gap}_mm__Global_{global_gap}_mm")
 
 LR_coverage_dict = {'geometry': [mod.LR_coverage for mod in modules]}
 HR_coverage_dict = {'geometry': [mod.HR_coverage for mod in modules]}
@@ -235,9 +251,14 @@ gdf_gfa = gfa.make_GFA_array()
 gdf_gfa.plot(ax = ax, facecolor = 'None', edgecolor = gdf_gfa['color'], linestyle = '--')
 geo_fiducials = gpd.GeoDataFrame(grid.fiducials)
 geo_fiducials.plot(ax = ax, facecolor = 'red', edgecolor = 'w', markersize = 10, label='Fiducials')
+gdf_robots = gpd.GeoDataFrame({}, geometry = [Point(xy) for xy in zip(robots_workspaces['x'], robots_workspaces['y'])])
+gdf_robots.plot(ax = ax, facecolor = 'blue', edgecolor = 'None', alpha =0.5, markersize = 1)
+# for i, mod in enumerate(modules):
+#     plt.text(mod.x0, mod.y0, f"{i+1}", fontsize=8, ha='center', va='center', color='white')
 plot_polygon(grid.vignetting_disk, ax = ax, fill = False, add_points=False, linestyle = '--', color = 'black')
 plot_polygon(grid.layout_concave_hull(), ax = ax, fill = False, add_points=False, color = 'orange')
-# plot_polygon(limiting_polygon, ax = ax, fill = False, add_points=False, linestyle = ':', color = 'purple')
+
+# plot_polygon(grid.fiducials_bounding_polygon, ax = ax, fill = False, add_points=False, color = 'purple')
 # geo_grid = gpd.GeoDataFrame(grid_3d)
 # geo_grid.plot(ax = ax, facecolor= 'None', markersize = 16, edgecolor = 'orange')
 nb_fiducials = len(grid.fiducials['x'])
@@ -279,7 +300,7 @@ print(f"Mean time for geom check: {sum(geom_times)/len(geom_times)} s")
 print(f"Mean time for 1 for loop: {sum(for_times)/len(for_times)} s")
 
 filename = f"Coverage_global_{nb_robots_per_module}_rob__Inner_{inner_gap}_mm__Global_{global_gap}_mm"
-save.save_figures_to_dir(filename)
+save.save_figures_to_dir(filename, dpi = 800)
 
 timesstamp1 = time.time()
 print(f"Total time: {timesstamp1 - timesstamp0} s")

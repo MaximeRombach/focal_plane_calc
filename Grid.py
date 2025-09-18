@@ -35,7 +35,7 @@ class Grid(FocalSurf):
         self.module_length = 600 # [mm] length of the module (default value, can be changed later)
         self.centered_on_triangle = kwargs.get("centered_on_triangle", False)
         self.GFA_polygon = kwargs.get("GFA_polygon", None)
-        self.is_limiting_polygon = kwargs.get("is_limiting_polygon", False)
+        self.limiting_polygon = kwargs.get("limiting_polygon", None)
         self.module_centroids_bounding_polygon = None
      #    self._focal_plane_polygon = None
         self.n = None
@@ -64,21 +64,33 @@ class Grid(FocalSurf):
          return self.module_side_length + 2*self.inner_gap*np.cos(np.pi/6)
 
     @property
-    def limiting_polygon(self):
-        """ Returns the polygon that limits the grid, i.e. the vignetting disk
-        or an arbitray hexagon as defined in FocalSurf class.
+    def fiducials_bounding_polygon(self):
+        """ Returns the polygon that bounds the fiducials within the grid.
         """
-        if self.is_limiting_polygon:
-            return self.trimming_polygon(geometry='circle',trim_diff_to_vigR = 5)
-          #   return self.vignetting_disk
+        fid_lim_pol = None
+        buffer = 30 # [mm] buffer to always include fiducials close to the edge
+        # Check if limiting polygon already provided, otherwise use vignetting disk
+        if self.limiting_polygon is not None:
+            fid_lim_pol = self.limiting_polygon.difference(self.donut_hole)
         else:
-            return self.vignetting_disk.buffer(20)
-    
+             fid_lim_pol = self.vignetting_disk
+        # Then check if GFA polygon is provided, otherwise use vignetting disk
+        if self.GFA_polygon is not None:
+            fid_lim_pol = fid_lim_pol.buffer(buffer)
+            fid_lim_pol = fid_lim_pol.difference(self.GFA_polygon)
+
+        else:
+            fid_lim_pol = fid_lim_pol.buffer(buffer)
+
+         # buffer outwads to always include fiducials close to the edge
+
+        return fid_lim_pol
+
     def flat_grid(self):
         # Make global grid out of triangular grid method credited in updown_tri.py
           # Its logic is also explained in updown_tri.py
           # TODO: Use two diffrent n numbers for the two different grids: modules and ficudials OR find another optimization
-          self.n = int(self.vigR/self.module_side_length) + 1 # first raw guess of number of lines of modules
+          self.n = int(self.vigR/self.module_side_length) + 2 # first raw guess of number of lines of modules
           n = self.n
           center_coords = []
           a_max = n
@@ -93,15 +105,8 @@ class Grid(FocalSurf):
                valid = [1,2]
           
           vigR_tresh = 10
-          fiducials_bounding_polygon = self.limiting_polygon.difference(self.donut_hole)
-          fiducials_bounding_polygon = fiducials_bounding_polygon.difference(self.GFA_polygon)
           self.module_centroids_bounding_polygon = self.vignetting_disk.buffer(vigR_tresh)
           self.module_centroids_bounding_polygon = self.module_centroids_bounding_polygon.difference(self.GFA_polygon)
-
-          # if self.GFA_polygon is not None:
-          #      self._focal_plane_polygon = self.vignetting_disk.difference(self.GFA_polygon)
-          # else:
-          #      self._focal_plane_polygon = self.vignetting_disk
 
           for a in np.arange(-a_max,a_max):
                for b in np.arange(-b_max,b_max):
@@ -123,7 +128,7 @@ class Grid(FocalSurf):
                               fiducial = tri.tri_corners(a,b,c,self.inter_triangle_side_length / 2)
                               # Fiducials placement
                               for fid in fiducial:
-                                   if Point(fid[0],fid[1]).within(fiducials_bounding_polygon): # limit fiducials outside vigR to inter modules with center inside vigR
+                                   if Point(fid[0],fid[1]).within(self.fiducials_bounding_polygon): # limit fiducials outside vigR to inter modules with center inside vigR
                                    
                                         self.fiducials['x'].append(np.round(fid[0],4))
                                         self.fiducials['y'].append(np.round(fid[1],4))
@@ -198,16 +203,24 @@ class Grid(FocalSurf):
           """
           
           self.fiducials.sort_values(by=['r'], inplace=True)
-          ch = concave_hull(MultiPoint(self.fiducials['geometry'].to_list()), ratio=0.1, allow_holes=True)
-          if not is_valid(ch):
-               ch = make_valid(ch)
-               if type(ch) == GeometryCollection:
-                    ch = ch.geoms[0]
+          fiducials = MultiPoint(self.fiducials['geometry'].to_list())
+          if not is_valid(fiducials):
+               fiducials = make_valid(fiducials)
+
+          try :     
+               ch = concave_hull(fiducials, ratio=0.2, allow_holes=True)
+               if not is_valid(ch):
+                    ch = make_valid(ch)
+                    if type(ch) == GeometryCollection:
+                         ch = ch.geoms[0]
+               
+               # if 'WST' in self.project:
+               #      ch = ch.difference(self.donut_hole)
+               return ch
+          except: 
+               return fiducials.convex_hull
           
-          # if 'WST' in self.project:
-          #      ch = ch.difference(self.donut_hole)
           
-          return ch
 
     
     def add_neighboring_modules(self, x, y, points_up):
@@ -263,7 +276,7 @@ if __name__ == "__main__":
     # Example of how to use the Grid class
     
 
-     project = "MUST"
+     project = "VLT_2030"
      project_parameters = json.load(open('projects.json', 'r'))
      inner_gap = 0.5 # [mm] gap between two adjacent modules
      global_gap = 4 # [mm] gap between two adjacent modules
@@ -274,8 +287,8 @@ if __name__ == "__main__":
      
      nb_gfa = 6
      angle_offset = 30
-     gfa_length = 150
-     gfa_width = 150
+     gfa_length = 60
+     gfa_width = 60
      gfa = GFA(nb_gfa = nb_gfa,
           angle_offset = angle_offset,
           vigR = project_parameters[project]['vigD'] / 2,
@@ -284,29 +297,37 @@ if __name__ == "__main__":
      gdf_gfa = gfa.gdf_gfa
      polygon_gfa = MultiPolygon(list(gdf_gfa['geometry']))
 
+     surf = FocalSurf(project, **project_parameters[project])
+     # limiting_polygon = surf.trimming_polygon(geometry='hex', trim_diff_to_vigR = 10)
+     limiting_polygon = surf.vignetting_disk
+
      grid = Grid(project,
                inner_gap,
                global_gap,
                mod.module_side_length,
                GFA_polygon = polygon_gfa,
+               limiting_polygon = limiting_polygon,
                **project_parameters[project])
      modules = []
 
      grid.flat_grid()
      grid_3d = grid.grid_3d(grid.flat_grid_dict['x'], grid.flat_grid_dict['y'])
-     print(grid_3d)
+     print(grid.fiducials)
+
+     duplicate_values = grid.fiducials['geometry'].is_unique
+     print(duplicate_values)
 
 #%%
-     project2 =  'MUST'
-     grid2 = Grid(project2,
-               inner_gap,
-               global_gap,
-               mod.module_side_length,
-               GFA_polygon = polygon_gfa,
-               **project_parameters[project2])
+     # project2 =  'VLT_2030'
+     # grid2 = Grid(project2,
+     #           inner_gap,
+     #           global_gap,
+     #           mod.module_side_length,
+     #           GFA_polygon = polygon_gfa,
+     #           **project_parameters[project2])
      
-     grid2.flat_grid()
-     grid2_3d = grid2.grid_3d(grid2.flat_grid_dict['x'], grid2.flat_grid_dict['y'])
+     # grid2.flat_grid()
+     # grid2_3d = grid2.grid_3d(grid2.flat_grid_dict['x'], grid2.flat_grid_dict['y'])
 
 
      LR_coverage_dict = {'geometry': [], 'color': [], 'label': []}
@@ -314,6 +335,8 @@ if __name__ == "__main__":
      boundaries = {'geometry': [], 'color': [], 'label': []}
      total_HR = 0
      total_LR = 0
+     # print(f'Number of modules: {len(grid.flat_grid_dict)}')
+     print(f'Number of fiducials: {len(grid.fiducials["x"])}')
 
      figure, ax = plt.subplots(figsize=(10, 10))
      # geo_HR = gpd.GeoDataFrame(HR_coverage_dict)
@@ -323,9 +346,10 @@ if __name__ == "__main__":
      # geo_boundaries = gpd.GeoDataFrame(boundaries)
      # geo_boundaries.plot(ax = ax, facecolor = 'None', edgecolor = boundaries['color'])
      plt.scatter(grid.flat_grid_dict['x'], grid.flat_grid_dict['y'], color='blue', alpha=0.4, label='Modules')
-     plot_polygon(grid.vignetting_disk, ax = ax, fill = False, add_points=False, linestyle = '--', color = 'black')
-     plot_polygon(polygon_gfa, ax = ax, fill = True, add_points=False, alpha = 0.3, color = 'orange')
-     plot_polygon(grid.module_centroids_bounding_polygon, ax = ax, fill = False, add_points=False, linestyle = '--', color = 'green')
+     plot_polygon(grid.vignetting_disk, ax = ax, fill = False, add_points=False, linestyle = '--', color = 'black', label = 'Vignetting disk')
+     plot_polygon(polygon_gfa, ax = ax, fill = True, add_points=False, alpha = 0.3, color = 'orange', label = 'GFAs')
+     plot_polygon(grid.module_centroids_bounding_polygon, ax = ax, fill = False, add_points=False, linestyle = '--', color = 'green', label = 'Modules boundary')
+     plot_polygon(grid.fiducials_bounding_polygon, ax = ax, fill = False, add_points=False, linestyle = '--', color = 'red', label = 'Fiducials boundary')
      plt.scatter(grid.fiducials['x'], grid.fiducials['y'], color='red', alpha=0.4, label='Fiducials')
      plt.legend(loc='upper right')
      plt.title(f'{grid.project} - {len(modules)} modules - {total_HR + total_LR} fibers')
@@ -338,8 +362,8 @@ if __name__ == "__main__":
      fig = plt.figure(figsize=(10, 10))
      ax = fig.add_subplot(projection='3d')
 
-     # ax.scatter(grid_3d['x'], grid_3d['y'], grid_3d['z'], c='blue', alpha=0.4, label=f'{project}')
-     ax.scatter(grid2_3d['x'], grid2_3d['y'], grid2_3d['z'], c='red', alpha=0.4, label=f'{project2}')
+     ax.scatter(grid_3d['x'], grid_3d['y'], grid_3d['z'], c='blue', alpha=0.4, label=f'{project}')
+     # ax.scatter(grid_3d['x'], grid2_3d['y'], grid2_3d['z'], c='red', alpha=0.4, label=f'{project2}')
      ax.set_xlabel('X [mm]')
      ax.set_ylabel('Y [mm]')
      ax.set_zlabel('Z [mm]')

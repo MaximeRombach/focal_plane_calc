@@ -39,6 +39,9 @@ class Robot:
         self.__x0 = kwargs.get('x0', 0)
         self.__y0 = kwargs.get('y0', 0)
         self.__z0 = kwargs.get('z0', 0)
+        self.r = np.sqrt(self.__x0**2 + self.__y0**2 + self.__z0**2) # [mm] radial distance of the center of the robot in 3D space
+        self.phi = np.degrees(np.arctan2(self.__y0, self.__x0)) # [deg] azimuthal angle of the center of the robot in spherical coordinates
+        self.theta = np.degrees(np.arccos(self.__z0 / self.r)) if self.r != 0 else 0 # [deg] polar angle of the center of the robot in spherical coordinates
 
     # Internal cache for expensive computation
         self._workspace = None
@@ -86,7 +89,7 @@ class Robot:
 
     @property
     def r_flat(self):
-        return np.sqrt(self.__x0**2 + self.__y0**2 + self.__z0**2)
+        return np.sqrt(self.__x0**2 + self.__y0**2)
 
     @property
     def workspace(self):
@@ -130,9 +133,23 @@ class Robot:
         else:
             return 'C0'
         
+    def set_spherical_coords(self, r: float, theta: float, phi: float):
+        self.r = r
+        self.theta = theta
+        self.phi = phi
+        self.__x0 = r * np.sin(np.radians(theta)) * np.cos(np.radians(phi))
+        self.__y0 = r * np.sin(np.radians(theta)) * np.sin(np.radians(phi))
+        self.__z0 = r * np.cos(np.radians(theta))
+        self.r_flat = np.sqrt(self.__x0**2 + self.__y0**2)
 
 if __name__ == '__main__':
-    robot = Robot(l_alpha = 1, l_beta = 2, robot_id=1, module_id=1, x0=0, y0=0, z0=0)
+    robot = Robot(l_alpha = 1,
+                  l_beta = 2,
+                  robot_id=1,
+                  module_id=1,
+                  x0=0,
+                  y0=0, 
+                  z0=0)
     plot_polygon(robot.workspace) # Should print the workspace of the robot as a shapely Polygon object
     plt.show()
     print(robot.color) # Should print the color of the robot based on the fiber type
