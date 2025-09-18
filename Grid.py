@@ -21,14 +21,16 @@ logging.basicConfig(
     level=logging.INFO,
     datefmt='%Y-%m-%d %H:%M:%S')
 
-class Grid(FocalSurf):
-    def __init__(self, project: str,
+class Grid():
+    def __init__(self,
+                 focal_surface: FocalSurf,
                  inner_gap: float, 
                  global_gap: float,
                  module_side_length: float,
                  **kwargs):
 
-        self.project = project # project name    
+        self.surf = focal_surface
+        self.project = self.surf.project_name # project name    
         self.inner_gap = inner_gap
         self.global_gap = global_gap
         self.module_side_length = module_side_length
@@ -37,15 +39,13 @@ class Grid(FocalSurf):
         self.GFA_polygon = kwargs.get("GFA_polygon", None)
         self.limiting_polygon = kwargs.get("limiting_polygon", None)
         self.module_centroids_bounding_polygon = None
-     #    self._focal_plane_polygon = None
         self.n = None
 
         self.flat_grid_dict = {'x': [], 'y': [], 'z': [], 'tri_points_up': []}
         self.grid_3d_dict = {'x':[], 'y':[], 'z':[], 'r':[], 's':[], 'phi':[], 'theta':[], 'tri_spin':[], 'type':[], 'grid_pos':[]}
         self.fiducials = {'x': [], 'y': [], 'r': [], 'phi': [], 'z': [], 'geometry': []}
 
-        super().__init__(project, **kwargs)
-        self.R2Z, self.R2CRD, self.R2NORM, self.R2NUT, self.S2R = self.transfer_functions()
+        self.R2Z, self.R2CRD, self.R2NORM, self.R2NUT, self.S2R = self.surf.transfer_functions()
 
     @property
     def inter_triangle_side_length(self):
@@ -68,16 +68,16 @@ class Grid(FocalSurf):
         """ Returns the polygon that bounds the fiducials within the grid.
         """
         fid_lim_pol = None
-        buffer = 30 # [mm] buffer to always include fiducials close to the edge
+        buffer = 1 # [mm] buffer to always include fiducials close to the edge
         # Check if limiting polygon already provided, otherwise use vignetting disk
         if self.limiting_polygon is not None:
-            fid_lim_pol = self.limiting_polygon.difference(self.donut_hole)
+            fid_lim_pol = self.limiting_polygon.difference(self.surf.donut_hole)
         else:
              fid_lim_pol = self.vignetting_disk
         # Then check if GFA polygon is provided, otherwise use vignetting disk
         if self.GFA_polygon is not None:
             fid_lim_pol = fid_lim_pol.buffer(buffer)
-            fid_lim_pol = fid_lim_pol.difference(self.GFA_polygon)
+            fid_lim_pol = fid_lim_pol.difference(self.GFA_polygon.buffer(buffer))
 
         else:
             fid_lim_pol = fid_lim_pol.buffer(buffer)
@@ -90,7 +90,7 @@ class Grid(FocalSurf):
         # Make global grid out of triangular grid method credited in updown_tri.py
           # Its logic is also explained in updown_tri.py
           # TODO: Use two diffrent n numbers for the two different grids: modules and ficudials OR find another optimization
-          self.n = int(self.vigR/self.module_side_length) + 2 # first raw guess of number of lines of modules
+          self.n = int(self.surf.vigR/self.module_side_length) + 2 # first raw guess of number of lines of modules
           n = self.n
           center_coords = []
           a_max = n
@@ -105,7 +105,7 @@ class Grid(FocalSurf):
                valid = [1,2]
           
           vigR_tresh = 10
-          self.module_centroids_bounding_polygon = self.vignetting_disk.buffer(vigR_tresh)
+          self.module_centroids_bounding_polygon = self.surf.vignetting_disk.buffer(vigR_tresh)
           self.module_centroids_bounding_polygon = self.module_centroids_bounding_polygon.difference(self.GFA_polygon)
 
           for a in np.arange(-a_max,a_max):
@@ -276,10 +276,10 @@ if __name__ == "__main__":
     # Example of how to use the Grid class
     
 
-     project = "VLT_2030"
+     PROJECT = "VLT_2030"
      project_parameters = json.load(open('projects.json', 'r'))
-     inner_gap = 0.5 # [mm] gap between two adjacent modules
-     global_gap = 4 # [mm] gap between two adjacent modules
+     INNER_GAP = 0.5 # [mm] gap between two adjacent modules
+     GLOBAL_GAP = 4 # [mm] gap between two adjacent modules
      from Module import Module
      mod = Module(nb_robots = 63, 
                pitch = 6.2,
@@ -291,31 +291,30 @@ if __name__ == "__main__":
      gfa_width = 60
      gfa = GFA(nb_gfa = nb_gfa,
           angle_offset = angle_offset,
-          vigR = project_parameters[project]['vigD'] / 2,
+          vigR = project_parameters[PROJECT]['vigD'] / 2,
           length = gfa_length,
           width = gfa_width)
      gdf_gfa = gfa.gdf_gfa
      polygon_gfa = MultiPolygon(list(gdf_gfa['geometry']))
 
-     surf = FocalSurf(project, **project_parameters[project])
      # limiting_polygon = surf.trimming_polygon(geometry='hex', trim_diff_to_vigR = 10)
+     surf = FocalSurf(PROJECT, **project_parameters[PROJECT])
      limiting_polygon = surf.vignetting_disk
 
-     grid = Grid(project,
-               inner_gap,
-               global_gap,
-               mod.module_side_length,
+     grid = Grid(focal_surface = surf,
+               inner_gap = INNER_GAP,
+               global_gap = GLOBAL_GAP,
+               module_side_length = mod.module_side_length,
                GFA_polygon = polygon_gfa,
                limiting_polygon = limiting_polygon,
-               **project_parameters[project])
+               **project_parameters[PROJECT])
+
      modules = []
 
      grid.flat_grid()
      grid_3d = grid.grid_3d(grid.flat_grid_dict['x'], grid.flat_grid_dict['y'])
+     grid_3d_back = grid.grid_3d_back(grid_3d)
      print(grid.fiducials)
-
-     duplicate_values = grid.fiducials['geometry'].is_unique
-     print(duplicate_values)
 
 #%%
      # project2 =  'VLT_2030'
@@ -346,7 +345,7 @@ if __name__ == "__main__":
      # geo_boundaries = gpd.GeoDataFrame(boundaries)
      # geo_boundaries.plot(ax = ax, facecolor = 'None', edgecolor = boundaries['color'])
      plt.scatter(grid.flat_grid_dict['x'], grid.flat_grid_dict['y'], color='blue', alpha=0.4, label='Modules')
-     plot_polygon(grid.vignetting_disk, ax = ax, fill = False, add_points=False, linestyle = '--', color = 'black', label = 'Vignetting disk')
+     plot_polygon(grid.surf.vignetting_disk, ax = ax, fill = False, add_points=False, linestyle = '--', color = 'black', label = 'Vignetting disk')
      plot_polygon(polygon_gfa, ax = ax, fill = True, add_points=False, alpha = 0.3, color = 'orange', label = 'GFAs')
      plot_polygon(grid.module_centroids_bounding_polygon, ax = ax, fill = False, add_points=False, linestyle = '--', color = 'green', label = 'Modules boundary')
      plot_polygon(grid.fiducials_bounding_polygon, ax = ax, fill = False, add_points=False, linestyle = '--', color = 'red', label = 'Fiducials boundary')
@@ -362,10 +361,14 @@ if __name__ == "__main__":
      fig = plt.figure(figsize=(10, 10))
      ax = fig.add_subplot(projection='3d')
 
-     ax.scatter(grid_3d['x'], grid_3d['y'], grid_3d['z'], c='blue', alpha=0.4, label=f'{project}')
-     # ax.scatter(grid_3d['x'], grid2_3d['y'], grid2_3d['z'], c='red', alpha=0.4, label=f'{project2}')
+     ax.scatter(grid_3d['x'], grid_3d['y'], grid_3d['z'], c='blue', alpha=0.4, label=f'grid_front')
+     ax.scatter(grid_3d_back['x'], grid_3d_back['y'], grid_3d_back['z'], c='red', alpha=0.4, label=f'grid_back')
+     for x_start, y_start, z_start, x_end, y_end, z_end in zip(grid_3d['x'], grid_3d['y'], grid_3d['z'], grid_3d_back['x'], grid_3d_back['y'], grid_3d_back['z']):
+          ax.plot([x_start, x_end], [y_start, y_end], [z_start, z_end], c='gray', alpha=0.2)
      ax.set_xlabel('X [mm]')
      ax.set_ylabel('Y [mm]')
      ax.set_zlabel('Z [mm]')
+     ax.set_title(f'{grid.project} - 3D grid')
+     ax.legend()
      ax.set_box_aspect((5,5,1))
      plt.show()

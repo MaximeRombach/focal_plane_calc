@@ -42,8 +42,9 @@ class FocalSurf:
         self.focus_tolerance_width = kwargs.get('focus_tolerance_width', None) # [mm] tolerance on the focal surface
         self.plate_scale = kwargs.get('focus_tolerance_width', None) # [um/arcsec] corresponding distance on the focal surface mapped to angular position on sky
         self.donut_diam = kwargs.get('donut_diam', None) # [um/arcsec] corresponding distance on the focal surface mapped to angular position on sky
-
-    @property    
+    
+        self.optics_data = self.optics_data() # pandas dataframe containing the focal surface data from Zemax csv file   
+    
     def optics_data(self, alt_file_name: str = None):
 
         if alt_file_name is not None:
@@ -163,7 +164,6 @@ class FocalSurf:
 
         """ R2CRD """
         if self.is_CRD:
-            print(self.optics_data.keys())
             CRD = self.optics_data['CRD']
             R = self.optics_data['R']
             R2CRD = interp1d(R,CRD,kind='cubic', fill_value = "extrapolate")
@@ -256,12 +256,12 @@ class FocalSurf:
         return arcmin * self.vigD / (self.FoV * 60)
 
 if __name__ == "__main__":
-    project = 'MUST'  # Example project name, change as needed
+    project = 'VLT_2030'  # Example project name, change as needed
     project_parameters = json.load(open('projects.json', 'r'))
     surf = FocalSurf(project, **project_parameters[project])
     R2Z, R2CRD, R2NORM, R2NUT, S2R = surf.transfer_functions()
 
-    print(optical_data := surf.optics_data)  # Should print the optics data as a pandas DataFrame
+    # print(optical_data := surf.optics_data)  # Should print the optics data as a pandas DataFrame
 
     plot_polygon(surf.vignetting_disk) # Should print the vignetting disk as a shapely Polygon object
     plot_polygon(surf.trimming_polygon(geometry='hex')) # Should print the trimming polygon as a shapely Polygon object
@@ -270,6 +270,8 @@ if __name__ == "__main__":
     r = np.linspace(0,surf.vigR,500)
     z = R2Z(r)
     plt.plot(r, z)
+    plt.xlabel('Radial position on focal surface (R) [mm]')
+    plt.ylabel('Height on focal surface (Z) [mm]')
     plt.grid()
     
     plt.show()
