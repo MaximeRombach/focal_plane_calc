@@ -41,6 +41,7 @@ class Module:
         self.l_beta = kwargs.get('l_beta', 1.8)
         self.HR_l_alpha = kwargs.get('HR_l_alpha', 1.8)
         self.HR_l_beta = kwargs.get('HR_l_beta', 1.8)
+        self.arms_lengths_std = kwargs.get('arms_lengths_uncertainty', 0.1) # Uncertainty on the arms lengths of the robots in mm, used to compute the worst case coverage of the module
         # self.HR_fibers = kwargs.get('HR_fibers', [10, 12, 15, 17, 29, 34, 39, 50, 52, 59])
         self.HR_fibers = kwargs.get('HR_fibers', [21, 25, 51])
         # self.HR_fibers = kwargs.get('HR_fibers', [12, 15, 29, 34, 50, 52])
@@ -244,10 +245,12 @@ class Module:
                         new_l_alpha = self.l_alpha
                         new_l_beta = self.l_beta
 
+                    l_alpha_tolerance, l_beta_tolerance = self.arms_lengths_uncertainty()
+
                     new_robot = Robot(robot_id = robot_index * self.module_id,
                                     module_id = self.module_id,
-                                    l_alpha = new_l_alpha,
-                                    l_beta = new_l_beta,
+                                    l_alpha = new_l_alpha + l_alpha_tolerance,
+                                    l_beta = new_l_beta + l_beta_tolerance,
                                     fiber_type = fiber_types[robot_index],
                                     x0 = x + self.x0,
                                     y0 = y + self.y0,
@@ -427,7 +430,7 @@ class Module:
 
         return n
     
-    def change_arms_lengths(self, new_l_alpha, new_l_beta):
+    def arms_lengths_uncertainty(self):
             """Changes the lengths of the alpha and beta arms of the robots in the module.
             
             Args:
@@ -435,8 +438,10 @@ class Module:
             - (float) l_beta: new length of the beta arm
             
             """
-            self.l_alpha = new_l_alpha
-            self.l_beta = new_l_beta
+            l_alpha_tolerance = np.random.normal(loc=0, scale=self.arms_lengths_std)
+            l_beta_tolerance = np.random.normal(loc=0, scale=self.arms_lengths_std)
+            
+            return l_alpha_tolerance, l_beta_tolerance
 
     def flip_coordinates(self, coord):
         """ Flips coordinates 180° about z axis """
@@ -478,11 +483,11 @@ class Module:
 
 
         if self.nb_of_HR_fibers != 0:
-            plt.legend(handles = [cl.LR_handle(extra_lab = f'{self.nb_of_LR_fibers}'),
-                                cl.HR_handle(extra_lab = f'{self.nb_of_HR_fibers}'),
+            plt.legend(handles = [cl.LR_handle(extra_lab = f'LR fibers: {self.nb_of_LR_fibers}'),
+                                cl.HR_handle(extra_lab = f'HR fibers: {self.nb_of_HR_fibers}'),
                                 cl.safety_margin_handle(lab = f'Dist2wall: {self.dist2wall} mm')])
         else:
-            plt.legend(handles = [cl.LR_handle(extra_lab = f'{self.nb_of_LR_fibers} robots workspaces'),
+            plt.legend(handles = [cl.LR_handle(extra_lab = f'LR fibers: {self.nb_of_LR_fibers} robots workspaces'),
                                 cl.safety_margin_handle(lab = f'Dist2wall: {self.dist2wall} mm')])
 
         plt.xlabel('x [mm]')
@@ -503,11 +508,12 @@ if __name__ == "__main__":
                 x0 = 100,
                 y0 = 100,
                 z0 = 0,
-                HR_fibers = [21, 25, 39, 51])
+                HR_fibers = [])
+                # HR_fibers = [21, 25, 39, 51])
 
     robots = mod.robots_layout
     print(robots[0].theta, robots[0].phi, robots[0].r, robots[0].r_flat)
 
     mod.plot_module(plot_rob_numbers=True)
-    plt.scatter(robots[31].x0, robots[31].y0, color='blue')
+    # plt.scatter(robots[31].x0, robots[31].y0, color='blue')
     plt.show()
