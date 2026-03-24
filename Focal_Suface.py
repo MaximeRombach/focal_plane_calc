@@ -43,7 +43,9 @@ class FocalSurf:
         self.plate_scale = kwargs.get('focus_tolerance_width', None) # [um/arcsec] corresponding distance on the focal surface mapped to angular position on sky
         self.donut_diam = kwargs.get('donut_diam', None) # [um/arcsec] corresponding distance on the focal surface mapped to angular position on sky
     
-        self.optics_data = self.optics_data() # pandas dataframe containing the focal surface data from Zemax csv file   
+        self.optics_data = self.optics_data() # pandas dataframe containing the focal surface data from Zemax csv file
+
+        self.trimming_angle = kwargs.get('trimming_angle', 360) # [deg] angle to trim the vignetting disk at
     
     def optics_data(self, alt_file_name: str = None):
 
