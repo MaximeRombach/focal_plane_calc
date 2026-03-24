@@ -41,7 +41,7 @@ class Module:
         self.l_beta = kwargs.get('l_beta', 1.8)
         self.HR_l_alpha = kwargs.get('HR_l_alpha', 1.8)
         self.HR_l_beta = kwargs.get('HR_l_beta', 1.8)
-        self.arms_lengths_std = kwargs.get('arms_lengths_uncertainty', 0.1) # Uncertainty on the arms lengths of the robots in mm, used to compute the worst case coverage of the module
+        self.arms_lengths_std = kwargs.get('arms_lengths_uncertainty', 0) # Uncertainty on the arms lengths of the robots in mm, used to compute the worst case coverage of the module
         # self.HR_fibers = kwargs.get('HR_fibers', [10, 12, 15, 17, 29, 34, 39, 50, 52, 59])
         self.HR_fibers = kwargs.get('HR_fibers', [21, 25, 51])
         # self.HR_fibers = kwargs.get('HR_fibers', [12, 15, 29, 34, 50, 52])

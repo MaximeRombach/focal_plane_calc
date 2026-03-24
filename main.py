@@ -34,7 +34,7 @@ logging.basicConfig(
 timesstamp0 = time.time()
 
 """ Available projects: MUST, Spec-S5, WST25, WST27, VLT_2030"""
-PROJECT = "WST25"
+PROJECT = "MUST"
 
 """ Saving results """
 save = SavingResults({"save_plots": False,
@@ -52,7 +52,7 @@ vigR = surf.vigD / 2
 vignetting_area = surf.vignetting_disk.area
 limit_pol = True
 if limit_pol:
-    limiting_polygon = surf.trimming_polygon(geometry='hex', trim_diff_to_vigR = 1)
+    limiting_polygon = surf.trimming_polygon(geometry='circle', trim_diff_to_vigR = 15)
 else:
     limiting_polygon = surf.vignetting_disk
 
@@ -68,6 +68,7 @@ is_HR = len(HR_fibers) != 0
 
 HR_l_beta = 3.6 # [mm] length of the HR fibers in beta direction
 HR_l_alpha = 3.6 # [mm] length of the HR fibers in alpha direction
+arms_length_rms_error = 0.1 # [mm] RMS error on the arms lengths of the robots, used to compute the worst case coverage of the module
 is_wall = False
 
 mod0 = Module(nb_robots = 63, 
@@ -75,7 +76,8 @@ mod0 = Module(nb_robots = 63,
                 HR_fibers = HR_fibers,
                 HR_l_beta = HR_l_beta,
                 HR_l_alpha = HR_l_alpha,
-                is_wall = is_wall)
+                is_wall = is_wall,
+                arms_lengths_std = arms_length_rms_error)
 robots0 = mod0.robots_layout
 
 INNER_GAP = 0.3 # [mm] gap between two modules within an intermediate triangle
@@ -85,9 +87,9 @@ OUT_ALLOWANCE = 0 # fraction of the module coverage that is allowed to stick out
 """ GFA parameters """
 
 nb_gfa = 6
-angle_offset = 30
-gfa_length = 90
-gfa_width = 90
+angle_offset = 0
+gfa_length = 100
+gfa_width = 100
 #TODO: fix warning appearing twice --> FocalSurf called twice at begining of main AND within Grid class
 #FIX: input surf as parameter to Grid class
 gfa = GFA(nb_gfa = nb_gfa,
@@ -149,7 +151,8 @@ with Bar('Aranging focal plane modules', max = len(grid_3d['x'])) as bar:
                         HR_fibers = HR_fibers,
                         HR_l_beta = HR_l_beta,
                         HR_l_alpha = HR_l_alpha,
-                        is_wall = is_wall)
+                        is_wall = is_wall,
+                        arms_lengths_std = arms_length_rms_error)
         
         robots = mod.robots_layout
         time2 = time.time()
