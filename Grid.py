@@ -38,6 +38,7 @@ class Grid():
         self.centered_on_triangle = kwargs.get("centered_on_triangle", False)
         self.GFA_polygon = kwargs.get("GFA_polygon", None)
         self.limiting_polygon = kwargs.get("limiting_polygon", None)
+        self.trimming_angle = kwargs.get("trimming_angle", None) # [deg] angle to trim the grid in phi direction
         self.module_centroids_bounding_polygon = None
         self.n = None
 
@@ -68,7 +69,7 @@ class Grid():
         """ Returns the polygon that bounds the fiducials within the grid.
         """
         fid_lim_pol = None
-        buffer = 1 # [mm] buffer to always include fiducials close to the edge
+        buffer = 0 # [mm] buffer to always include fiducials close to the edge
         # Check if limiting polygon already provided, otherwise use vignetting disk
         if self.limiting_polygon is not None:
             fid_lim_pol = self.limiting_polygon.difference(self.surf.donut_hole)
@@ -77,7 +78,7 @@ class Grid():
         # Then check if GFA polygon is provided, otherwise use vignetting disk
         if self.GFA_polygon is not None:
             fid_lim_pol = fid_lim_pol.buffer(buffer)
-            fid_lim_pol = fid_lim_pol.difference(self.GFA_polygon.buffer(buffer))
+            fid_lim_pol = fid_lim_pol.difference(self.GFA_polygon)
 
         else:
             fid_lim_pol = fid_lim_pol.buffer(buffer)
@@ -140,10 +141,12 @@ class Grid():
           
           self.flat_grid_dict['z'] = np.zeros_like(self.flat_grid_dict['x'])
           self.flat_grid_dict = pd.DataFrame(self.flat_grid_dict)
-          self.flat_grid_dict.drop_duplicates(subset=['x','y'],inplace=True)
+          self.flat_grid_dict.drop_duplicates(subset=['x','y'],inplace=True) # remove duplicates to avoid problems with geometries
+          self.flat_grid_dict = self.trim_grid(self.flat_grid_dict, trimming_angle=self.trimming_angle) if self.trimming_angle is not None else self.flat_grid_dict #trim grid if trimming angle provided
 
           self.fiducials = pd.DataFrame(self.fiducials)
           self.fiducials.drop_duplicates(subset=['x','y'],inplace=True)
+          self.fiducials = self.trim_grid(self.fiducials, trimming_angle=self.trimming_angle) if self.trimming_angle is not None else self.fiducials
 
           return
     
@@ -265,8 +268,8 @@ class Grid():
           return np.array([x,y,z]).T
     
     def trim_grid(self, grid : pd.DataFrame, trimming_angle: float = 0):
-         
-     #     index2drop = grid[(grid['phi'] > trimming_angle) & (grid['phi'] < 0)].index
+         #     index2drop = grid[(grid['phi'] > trimming_angle) & (grid['phi'] < 0)].index
+         grid['phi'] =  np.rad2deg(np.arctan2(np.array(grid['y']), np.array(grid['x'])))
          trimmed_grid = grid[(0 <= grid['phi']) & (grid['phi'] <= trimming_angle)]
          
          return trimmed_grid
