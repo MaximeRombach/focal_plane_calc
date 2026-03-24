@@ -33,8 +33,8 @@ logging.basicConfig(
 
 timesstamp0 = time.time()
 
-""" Available projects: MUST, Spec-S5, WST25, WST27 """
-PROJECT = "MUST"
+""" Available projects: MUST, Spec-S5, WST25, WST27, VLT_2030"""
+PROJECT = "WST25"
 
 """ Saving results """
 save = SavingResults({"save_plots": False,
@@ -46,12 +46,13 @@ save = SavingResults({"save_plots": False,
 
 """ Load focal surface data """
 project_parameters = json.load(open('projects.json', 'r'))
-surf = FocalSurf(PROJECT, **project_parameters[PROJECT])
+trimming_angle = None # [deg] angle to trim the grid in phi direction
+surf = FocalSurf(PROJECT, trimming_angle = trimming_angle, **project_parameters[PROJECT])
 vigR = surf.vigD / 2
 vignetting_area = surf.vignetting_disk.area
 limit_pol = True
 if limit_pol:
-    limiting_polygon = surf.trimming_polygon(geometry='circle', trim_diff_to_vigR = 5)
+    limiting_polygon = surf.trimming_polygon(geometry='hex', trim_diff_to_vigR = 1)
 else:
     limiting_polygon = surf.vignetting_disk
 
@@ -61,30 +62,32 @@ nb_robots_per_module = 63 # number of robots per module
 pitch = 6.2 # [mm] distance between two adjacent robots
 # HR_fibers = [10, 12, 15, 17, 29, 34, 39, 50, 52, 59] # position of the HR fibers in the module
 # HR_fibers = [12, 15, 29, 34, 50, 52]
+# HR_fibers = [21, 25, 39, 51]
 HR_fibers = []
 is_HR = len(HR_fibers) != 0
-# HR_fibers = [21, 25, 39, 51]
-HR_l_beta = 1.8 # [mm] length of the HR fibers in beta direction
-HR_l_alpha = 1.8 # [mm] length of the HR fibers in alpha direction
+
+HR_l_beta = 3.6 # [mm] length of the HR fibers in beta direction
+HR_l_alpha = 3.6 # [mm] length of the HR fibers in alpha direction
+is_wall = False
 
 mod0 = Module(nb_robots = 63, 
                 pitch = 6.2,
                 HR_fibers = HR_fibers,
                 HR_l_beta = HR_l_beta,
                 HR_l_alpha = HR_l_alpha,
-                is_wall = False)
+                is_wall = is_wall)
 robots0 = mod0.robots_layout
 
-INNER_GAP = 0.5 # [mm] gap between two modules within an intermediate triangle
-GLOBAL_GAP = 4 # [mm] gap between two intermediate triangles; if inner = global, all modules are eqaully spaced
-OUT_ALLOWANCE = 0.0 # fraction of the module coverage that is allowed to stick out of the vignetting disk
+INNER_GAP = 0.3 # [mm] gap between two modules within an intermediate triangle
+GLOBAL_GAP = 4.4 # [mm] gap between two intermediate triangles; if inner = global, all modules are eqaully spaced
+OUT_ALLOWANCE = 0 # fraction of the module coverage that is allowed to stick out of the vignetting disk
 
 """ GFA parameters """
 
 nb_gfa = 6
-angle_offset = 0
-gfa_length = 120
-gfa_width = 120
+angle_offset = 30
+gfa_length = 90
+gfa_width = 90
 #TODO: fix warning appearing twice --> FocalSurf called twice at begining of main AND within Grid class
 #FIX: input surf as parameter to Grid class
 gfa = GFA(nb_gfa = nb_gfa,
@@ -103,11 +106,11 @@ grid = Grid(focal_surface = surf,
             module_side_length = mod0.module_side_length,
             GFA_polygon = gfa_polygon,
             limiting_polygon = limiting_polygon,
+            trimming_angle = trimming_angle,
             **project_parameters[PROJECT])
 
 grid.flat_grid() # create the grid of modules
 grid_3d = grid.grid_3d(grid.flat_grid_dict['x'], grid.flat_grid_dict['y'])
-grid.fiducials.to_csv('fiducials.csv', index=False)
 concave_hull = grid.layout_concave_hull() # concave hull of the module layout
 concave_hull_area = concave_hull.area # area of the concave hull
 
@@ -146,7 +149,7 @@ with Bar('Aranging focal plane modules', max = len(grid_3d['x'])) as bar:
                         HR_fibers = HR_fibers,
                         HR_l_beta = HR_l_beta,
                         HR_l_alpha = HR_l_alpha,
-                        is_wall = False)
+                        is_wall = is_wall)
         
         robots = mod.robots_layout
         time2 = time.time()
@@ -235,7 +238,7 @@ LR_layout_coverage = 100 * total_LR_area/concave_hull_area
 
 #%%
 
-mod0.plot_module()
+mod0.plot_module(plot_rob_numbers = True)
 filename = f"Module_{nb_robots_per_module}_rob_pitch_{mod.pitch}_mm"
 save.save_figures_to_dir(filename)
 
@@ -263,9 +266,9 @@ plot_polygon(grid.layout_concave_hull(), ax = ax, fill = False, add_points=False
 # geo_grid.plot(ax = ax, facecolor= 'None', markersize = 16, edgecolor = 'orange')
 nb_fiducials = len(grid.fiducials['x'])
 if len(HR_fibers) != 0:
-    plt.legend(handles=[cl.HR_handle(extra_lab = f'vig : {HR_vignetting_coverage: .1f} %, layout : {HR_layout_coverage: .1f} %'),
+    plt.legend(handles=[cl.HR_handle(extra_lab = f'HR vig : {HR_vignetting_coverage: .1f} %, layout : {HR_layout_coverage: .1f} %'),
                         cl.LR_handle(f'LR vig : {LR_vignetting_coverage: .1f} %, layout : {LR_layout_coverage: .1f} %'),
-                        cl.GFA_handle(lab = f'GFAs: {nb_gfa}'), 
+                        cl.GFA_handle(lab = f'GFAs: {nb_gfa}; {gfa_length}x{gfa_width} mm'), 
                         cl.fiducials_handle(lab = f'Fiducials: {nb_fiducials}')], loc='upper right')
 else:
     plt.legend(handles=[cl.LR_handle(f'Vignetting coverage: {LR_vignetting_coverage: .1f} % \nLayout coverage: {LR_layout_coverage: .1f} %'),
