@@ -14,6 +14,21 @@
         "focus_tolerance_width": 0.1
     },
 
+    "Spec-S5": {
+        "curvature_R": -13000,
+        "vigD": 818.08, 
+        "asph_formula": false,
+        "k": 0,
+        "a2": 0, 
+        "a4": 0, 
+        "a6": 0,
+        "a8": 0,
+        "fnumber": 3.62002,
+        "BFS": 12657,
+        "FoV": null,
+        "focus_tolerance_width": 0.1
+    }, 
+
     "WST25": {
         "curvature_R": 6021,
         "vigD": 1406, 
@@ -49,9 +64,9 @@
 
     "VLT_2030": {
     "curvature_R": 4210,
-    "vigD": 1000,
+    "vigD": 900,
     "fnumber": 3.185,
-    "BFS": 69421098,
+    "BFS": 4210,
     "FoV": 2
     }
 
