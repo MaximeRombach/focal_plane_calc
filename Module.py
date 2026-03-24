@@ -34,14 +34,14 @@ class Module:
     """
     def __init__(self, nb_robots, pitch, **kwargs):
         
-        self.pitch = pitch
+        self.pitch = pitch # [mm] distance between 2 neighboring robots center
         self.nb_robots = nb_robots # Number of robots in the module
-        self.chamfer_size = kwargs.get('chamfer_size', 10.5)
-        self.l_alpha = kwargs.get('l_alpha', 1.8)
-        self.l_beta = kwargs.get('l_beta', 1.8)
-        self.HR_l_alpha = kwargs.get('HR_l_alpha', 1.8)
-        self.HR_l_beta = kwargs.get('HR_l_beta', 1.8)
-        self.arms_lengths_std = kwargs.get('arms_lengths_uncertainty', 0) # Uncertainty on the arms lengths of the robots in mm, used to compute the worst case coverage of the module
+        self.chamfer_size = kwargs.get('chamfer_size', 10.5) # [mm] size of the chamfer at the corners of the module
+        self.l_alpha = kwargs.get('l_alpha', 1.8) # [mm], length of the alpha arm for LR (or normal) fibers
+        self.l_beta = kwargs.get('l_beta', 1.8) # [mm], length of the beta arm for LR (or normal) fibers
+        self.HR_l_alpha = kwargs.get('HR_l_alpha', 1.8) # [mm], length of the alpha arm for HR fibers
+        self.HR_l_beta = kwargs.get('HR_l_beta', 1.8) # [mm], length of the beta arm for HR fibers
+        self.arms_length_tol = kwargs.get('arms_length_tol', 0) # [mm] worst tolerance on the arms lengths of the robots, used to compute the worst case coverage of the module
         # self.HR_fibers = kwargs.get('HR_fibers', [10, 12, 15, 17, 29, 34, 39, 50, 52, 59])
         self.HR_fibers = kwargs.get('HR_fibers', [21, 25, 51])
         # self.HR_fibers = kwargs.get('HR_fibers', [12, 15, 29, 34, 50, 52])
@@ -53,8 +53,8 @@ class Module:
         self.module_centroid = [self.x0, self.y0, self.z0]
         self.module_points_up = kwargs.get('module_points_up', True) # True if module oriented upward; False if module points down
 
-        self.safety_margin = kwargs.get('safety_margin', 0.5)
-        self.beta2fibre = kwargs.get('beta2fibre', 1)
+        self.safety_margin = kwargs.get('safety_margin', 0.5) # [mm] distance kept betwee a positioner and the module walls
+        self.beta2fibre = kwargs.get('beta2fibre', 1) # [mm] physical distance between tip of the physical beta arm and the center of the optical fiber
         self.dist2wall = self.beta2fibre + self.safety_margin # The fiber is physically not at the edge of the beta arm which prevents it from reaching the wall + add a safety margin at which the positioner has to stay away from the wall
         self.LR_area = 0 # area covered by Low Resolution fibers
         self._LR_coverage = None # Polygon of coverage of the LR fibers in the module
@@ -66,7 +66,7 @@ class Module:
         self.remove_corners = kwargs.get('remove_corners', True)
         
         self.robots = []
-        self.dataframe ={'module_id':[], 'robot_id':[], 'fiber_type':[], 'x0':[], 'y0':[], 'z0':[], 'color':[], 'geometry':[]}
+        self.dataframe ={'module_id':[], 'robot_id':[], 'fiber_type':[], 'l_alpha':[], 'l_beta':[], 'x0':[], 'y0':[], 'z0':[], 'color':[], 'geometry':[]}
 
     @property
     def module_side_length(self):
@@ -246,6 +246,7 @@ class Module:
                         new_l_beta = self.l_beta
 
                     l_alpha_tolerance, l_beta_tolerance = self.arms_lengths_uncertainty()
+                    # print(f"Robot {robot_index}: l_alpha = {new_l_alpha} + {l_alpha_tolerance}, l_beta = {new_l_beta} + {l_beta_tolerance}")
 
                     new_robot = Robot(robot_id = robot_index * self.module_id,
                                     module_id = self.module_id,
@@ -259,6 +260,8 @@ class Module:
                     self.dataframe['module_id'].append(new_robot.module_id)
                     self.dataframe['robot_id'].append(new_robot.robot_id)
                     self.dataframe['fiber_type'].append(new_robot.fiber_type)
+                    self.dataframe['l_alpha'].append(new_robot.l_alpha)
+                    self.dataframe['l_beta'].append(new_robot.l_beta)
                     self.dataframe['x0'].append(new_robot.x0)
                     self.dataframe['y0'].append(new_robot.y0)
                     self.dataframe['z0'].append(new_robot.z0)
@@ -438,8 +441,11 @@ class Module:
             - (float) l_beta: new length of the beta arm
             
             """
-            l_alpha_tolerance = np.random.normal(loc=0, scale=self.arms_lengths_std)
-            l_beta_tolerance = np.random.normal(loc=0, scale=self.arms_lengths_std)
+            # l_alpha_tolerance = np.random.normal(loc=0, scale=self.arms_lengths_tol)
+            # l_beta_tolerance = np.random.normal(loc=0, scale=self.arms_lengths_tol)
+
+            l_alpha_tolerance = np.random.uniform(-self.arms_length_tol, self.arms_length_tol)
+            l_beta_tolerance = np.random.uniform(-self.arms_length_tol, self.arms_length_tol)
             
             return l_alpha_tolerance, l_beta_tolerance
 
@@ -508,12 +514,14 @@ if __name__ == "__main__":
                 x0 = 100,
                 y0 = 100,
                 z0 = 0,
-                HR_fibers = [])
+                HR_fibers = [],
+                arms_length_tol = 0.1)
                 # HR_fibers = [21, 25, 39, 51])
 
     robots = mod.robots_layout
     print(robots[0].theta, robots[0].phi, robots[0].r, robots[0].r_flat)
 
     mod.plot_module(plot_rob_numbers=True)
+    print(mod.dataframe)
     # plt.scatter(robots[31].x0, robots[31].y0, color='blue')
     plt.show()

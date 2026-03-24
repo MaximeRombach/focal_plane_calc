@@ -37,7 +37,7 @@ timesstamp0 = time.time()
 PROJECT = "MUST"
 
 """ Saving results """
-save = SavingResults({"save_plots": False,
+save = SavingResults({"save_plots": True,
                       "save_txt": False,
                       "save_csv": False,
                       "save_dxf": False,
@@ -68,7 +68,7 @@ is_HR = len(HR_fibers) != 0
 
 HR_l_beta = 3.6 # [mm] length of the HR fibers in beta direction
 HR_l_alpha = 3.6 # [mm] length of the HR fibers in alpha direction
-arms_length_rms_error = 0.1 # [mm] RMS error on the arms lengths of the robots, used to compute the worst case coverage of the module
+arms_length_tol = 0 # [mm] max error on the arms lengths of the robots, used to compute the worst case coverage of the module
 is_wall = False
 
 mod0 = Module(nb_robots = 63, 
@@ -77,7 +77,7 @@ mod0 = Module(nb_robots = 63,
                 HR_l_beta = HR_l_beta,
                 HR_l_alpha = HR_l_alpha,
                 is_wall = is_wall,
-                arms_lengths_std = arms_length_rms_error)
+                arms_length_tol = arms_length_tol)
 robots0 = mod0.robots_layout
 
 INNER_GAP = 0.3 # [mm] gap between two modules within an intermediate triangle
@@ -152,8 +152,8 @@ with Bar('Aranging focal plane modules', max = len(grid_3d['x'])) as bar:
                         HR_l_beta = HR_l_beta,
                         HR_l_alpha = HR_l_alpha,
                         is_wall = is_wall,
-                        arms_lengths_std = arms_length_rms_error)
-        
+                        arms_length_tol = arms_length_tol)
+
         robots = mod.robots_layout
         time2 = time.time()
         times.append(time2 - time1)
