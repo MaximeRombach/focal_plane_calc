@@ -54,8 +54,8 @@ class Grid():
         """ Defines the triangular enveloppe of the "intermediate triangle"
         that locally brings closer 4 modules together
         """
-        return 2 * self.single_triangle_side_length + 2*self.global_gap*np.cos(np.pi/6)
-        # return 2*self.module_side_length + 2*self.inner_gap*np.cos(np.pi/6) + 2*self.global_gap*np.cos(np.pi/6)
+     #    return 2 * self.single_triangle_side_length + 2*self.global_gap*np.cos(np.pi/6)
+        return 2*self.module_side_length + 2*self.inner_gap*np.cos(np.pi/6) + 2*self.global_gap*np.cos(np.pi/6)
 
     @property
     def single_triangle_side_length(self):
