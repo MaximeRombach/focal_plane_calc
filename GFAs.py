@@ -5,15 +5,16 @@ import datetime
 import math
 import geopandas as gpd
 from SavingResults import SavingResults
-
+import json
+import matplotlib.pyplot as plt
 
 class GFA():
-    def __init__(self, length: float, width: float, nb_gfa: int, vigR: float, trimming_angle = 360, trimming_geometry = None, angle_offset = None) -> MultiPolygon:
+    def __init__(self, length: float, width: float, nb_gfa: int, vigR: float, trimming_geometry = None, angle_offset = None, **kwargs) -> MultiPolygon:
         self.length = length
         self.width = width
         self.vigR = vigR
         self.nb_gfa = nb_gfa
-        self.trimming_angle = trimming_angle
+        self.trimming_angle = kwargs.get('trimming_angle', 360)
         self.trimming_geometry = trimming_geometry
         self.angle_offset = angle_offset
         self.gdf_gfa = self.make_GFA_array()
@@ -34,7 +35,8 @@ class GFA():
         gfa_df = {'gfa_index':[], 'center': [], 'orientation': [], 'geometry':[], 'color':[], 'label':[]}
         # gfa_pos_on_vigR = make_vigR_polygon(n_vigR = self.nb_gfa + 1).exterior.coords.xy
         Dangle = 360/self.nb_gfa 
-        angles = np.linspace(Dangle,Dangle * self.nb_gfa, self.nb_gfa) + self.angle_offset
+        angles = np.arange(0,Dangle * self.nb_gfa, Dangle) + self.angle_offset
+        print(angles)
         gfa_pos_on_vigR_x = self.vigR * np.cos(np.deg2rad(angles))
         gfa_pos_on_vigR_y = self.vigR * np.sin(np.deg2rad(angles))
 
@@ -45,7 +47,7 @@ class GFA():
             gfa = self.make_GFA()
             placed_gfa = self.rotate_and_translate(gfa, angles[i], x, y)
 
-            if self.trimming_angle != 360 and not placed_gfa.intersects(self.trimming_geometry):
+            if theta > self.trimming_angle and theta !=0 and not placed_gfa.intersects(self.trimming_geometry):
                 continue
 
             gfa_df['gfa_index'].append(i)
@@ -92,3 +94,31 @@ class GFA():
     
     def norm2d(p,q):
      return math.sqrt((p[0]-q[0])**2 + (p[1]-q[1])**2)
+    
+    def plot_gfa(self):
+    
+            self.gdf_gfa.plot(facecolor = 'None', edgecolor = 'brown', linestyle = '--')
+
+
+if __name__ == "__main__":
+
+    PROJECT = 'MUST'  # Example project name, change as needed
+    project_parameters = json.load(open('projects.json', 'r'))
+    vigR = project_parameters[PROJECT]['vigD']/2
+    nb_gfa = 6
+    angle_offset = 0
+    gfa_length = 100
+    gfa_width = 100
+    trimming_angle = 60
+    #TODO: fix warning appearing twice --> FocalSurf called twice at begining of main AND within Grid class
+    #FIX: input surf as parameter to Grid class
+    gfa = GFA(nb_gfa = nb_gfa,
+            angle_offset = angle_offset,
+            vigR = vigR,
+            length = gfa_length,
+            width = gfa_width,
+            trimming_angle = trimming_angle)
+    gfa.plot_gfa()
+    plt.scatter(0,0,color='red')
+    plt.grid()
+    plt.show()
