@@ -85,7 +85,7 @@ class FocalSurf:
         return optics_data
     
     @property
-    def vignetting_disk(self, trimming_angle: int = 360, changed_vigR: float = None):
+    def vignetting_disk(self, trimming_angle: int = 180, changed_vigR: float = None):
         """
         Returns the vignetting disk as a shapely Polygon object
         
@@ -101,10 +101,14 @@ class FocalSurf:
         else:
             vigR = self.vigR # [mm] vignetting radius, nominal case declared for each project
 
-        vigR_lim_x = vigR * np.cos(np.deg2rad(np.linspace(0,trimming_angle,500)))
-        vigR_lim_y = vigR * np.sin(np.deg2rad(np.linspace(0,trimming_angle,500)))
-
-        pizza = Polygon([[x,y] for x,y in zip(vigR_lim_x, vigR_lim_y)])
+        vigR_lim_x = vigR * np.cos(np.deg2rad(np.linspace(0,self.trimming_angle,500)))
+        vigR_lim_y = vigR * np.sin(np.deg2rad(np.linspace(0,self.trimming_angle,500)))
+        
+        points = [[x, y] for x, y in zip(vigR_lim_x, vigR_lim_y)]
+        if self.trimming_angle < 360:
+            points.append([0, 0])  # Add the origin to close the polygon
+        pizza = Polygon(points)
+        
 
         if 'WST' in self.project_name:
             pizza = pizza.difference(self.donut_hole)  # remove the central region for IFU mode in case of WST layouts
@@ -258,9 +262,10 @@ class FocalSurf:
         return arcmin * self.vigD / (self.FoV * 60)
 
 if __name__ == "__main__":
-    project = 'VLT_2030'  # Example project name, change as needed
+    project = 'MUST'  # Example project name, change as needed
     project_parameters = json.load(open('projects.json', 'r'))
-    surf = FocalSurf(project, **project_parameters[project])
+    trimming_angle = 60
+    surf = FocalSurf(project, trimming_angle = trimming_angle, **project_parameters[project])
     R2Z, R2CRD, R2NORM, R2NUT, S2R = surf.transfer_functions()
 
     # print(optical_data := surf.optics_data)  # Should print the optics data as a pandas DataFrame
