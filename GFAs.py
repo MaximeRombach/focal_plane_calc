@@ -47,8 +47,9 @@ class GFA():
             gfa = self.make_GFA()
             placed_gfa = self.rotate_and_translate(gfa, angles[i], x, y)
 
-            if theta > self.trimming_angle and theta !=0 and not placed_gfa.intersects(self.trimming_geometry):
-                continue
+            if self.trimming_angle is not None:
+                if theta > self.trimming_angle and theta !=0 and not placed_gfa.intersects(self.trimming_geometry):
+                    continue
 
             gfa_df['gfa_index'].append(i)
             gfa_df['center'].append([x,y])

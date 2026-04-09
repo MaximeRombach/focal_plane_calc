@@ -69,7 +69,7 @@ class Grid():
         """ Returns the polygon that bounds the fiducials within the grid.
         """
         fid_lim_pol = None
-        buffer = 0 # [mm] buffer to always include fiducials close to the edge
+        buffer = 10 # [mm] buffer to always include fiducials close to the edge
         # Check if limiting polygon already provided, otherwise use vignetting disk
         if self.limiting_polygon is not None:
             fid_lim_pol = self.limiting_polygon.difference(self.surf.donut_hole)
@@ -142,11 +142,11 @@ class Grid():
           self.flat_grid_dict['z'] = np.zeros_like(self.flat_grid_dict['x'])
           self.flat_grid_dict = pd.DataFrame(self.flat_grid_dict)
           self.flat_grid_dict.drop_duplicates(subset=['x','y'],inplace=True) # remove duplicates to avoid problems with geometries
-          self.flat_grid_dict = self.trim_grid(self.flat_grid_dict, trimming_angle=self.trimming_angle) if self.trimming_angle is not None else self.flat_grid_dict #trim grid if trimming angle provided
+          self.flat_grid_dict = self.trim_grid(self.flat_grid_dict)
 
           self.fiducials = pd.DataFrame(self.fiducials)
           self.fiducials.drop_duplicates(subset=['x','y'],inplace=True)
-          self.fiducials = self.trim_grid(self.fiducials, trimming_angle=self.trimming_angle) if self.trimming_angle is not None else self.fiducials
+          self.fiducials = self.trim_grid(self.fiducials) if self.trimming_angle is not None else self.fiducials
 
           return
     
@@ -267,36 +267,44 @@ class Grid():
 
           return np.array([x,y,z]).T
     
-    def trim_grid(self, grid : pd.DataFrame, trimming_angle: float = 0):
-         #     index2drop = grid[(grid['phi'] > trimming_angle) & (grid['phi'] < 0)].index
-         grid['phi'] =  np.rad2deg(np.arctan2(np.array(grid['y']), np.array(grid['x'])))
-         trimmed_grid = grid[(0 <= grid['phi']) & (grid['phi'] <= trimming_angle)]
-         
-         return trimmed_grid
+    def trim_grid(self, grid: pd):
+
+     """ Trims both modules AND fiducials grid """
+
+     if self.trimming_angle is None or self.trimming_angle == 360:
+          trimmed_grid = grid
+
+     else:
+          grid['phi'] =  np.rad2deg(np.arctan2(np.array(grid['y']), np.array(grid['x'])))
+          trimmed_grid = grid[(0 <= grid['phi']) & (grid['phi'] <= self.trimming_angle + 1)] # adding 1° to catch badly rounded fiducial angles
+
+     return trimmed_grid
 
 
 if __name__ == "__main__":
     # Example of how to use the Grid class
     
 
-     PROJECT = "VLT_2030"
+     PROJECT = "MUST"
      project_parameters = json.load(open('projects.json', 'r'))
-     INNER_GAP = 0.5 # [mm] gap between two adjacent modules
-     GLOBAL_GAP = 4 # [mm] gap between two adjacent modules
+     INNER_GAP = 4.4 # [mm] gap between two adjacent modules
+     GLOBAL_GAP = 4.4 # [mm] gap between two adjacent modules
+     trimming_angle = 60
      from Module import Module
      mod = Module(nb_robots = 63, 
                pitch = 6.2,
                module_points_up = True)
-     
+
      nb_gfa = 6
-     angle_offset = 30
+     angle_offset = 0
      gfa_length = 60
      gfa_width = 60
      gfa = GFA(nb_gfa = nb_gfa,
           angle_offset = angle_offset,
           vigR = project_parameters[PROJECT]['vigD'] / 2,
           length = gfa_length,
-          width = gfa_width)
+          width = gfa_width,
+          trimming_angle = trimming_angle)
      gdf_gfa = gfa.gdf_gfa
      polygon_gfa = MultiPolygon(list(gdf_gfa['geometry']))
 
@@ -310,11 +318,18 @@ if __name__ == "__main__":
                module_side_length = mod.module_side_length,
                GFA_polygon = polygon_gfa,
                limiting_polygon = limiting_polygon,
+               trimming_angle = trimming_angle,
                **project_parameters[PROJECT])
 
      modules = []
 
      grid.flat_grid()
+     plt.figure(figsize=(8,8))
+     plt.scatter(grid.flat_grid_dict['x'], grid.flat_grid_dict['y'], color='blue', alpha=0.4, label='Modules')
+     plt.scatter(grid.fiducials['x'], grid.fiducials['y'], color='red')
+     plot_polygon(grid.fiducials_bounding_polygon, add_points=False, facecolor='None')
+     plot_polygon(grid.layout_concave_hull(), add_points=False, facecolor='None', edgecolor = 'green')
+     plt.show()
      grid_3d = grid.grid_3d(grid.flat_grid_dict['x'], grid.flat_grid_dict['y'])
      grid_3d_back = grid.grid_3d_back(grid_3d)
      print(grid.fiducials)
