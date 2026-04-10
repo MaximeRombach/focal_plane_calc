@@ -1,3 +1,4 @@
+#%%
 import numpy as np
 np.set_printoptions(legacy='1.25')
 from math import sqrt
@@ -47,10 +48,23 @@ class Module:
         # self.HR_fibers = kwargs.get('HR_fibers', [12, 15, 29, 34, 50, 52])
         # self.HR_fibers = kwargs.get('HR_fibers', [])
 
+        # Initial module position (typically on a flat grid) ==> x points right, y points up, z points out of the screen
         self.x0 = kwargs.get('x0', 0)
         self.y0 = kwargs.get('y0', 0)
         self.z0 = kwargs.get('z0', 0)
-        self.module_centroid = [self.x0, self.y0, self.z0]
+        self.r0 = np.sqrt(self.x0**2 + self.y0**2 + self.z0**2) # [mm] INITIAL radial distance of the center of the module in 3D space
+        self.phi0 = np.degrees(np.arctan2(self.y0, self.x0)) # [deg] INITIAL azimuthal angle of the center of the module in spherical coordinates
+        self.theta0 = np.degrees(np.arccos(self.z0 / self.r0)) if self.r0 != 0 else 0 # [deg] INITIAL polar angle of the center of the module in spherical coordinates
+
+        # New: updated location, initialized to starting location
+        self.x1 = kwargs.get('x1', self.x0)
+        self.y1 = kwargs.get('y1', self.y0)
+        self.z1 = kwargs.get('z1', self.z0)
+        self.r1 = np.sqrt(self.x1**2 + self.y1**2 + self.z1**2) # [mm] UPDATED radial distance of the center of the module in 3D space
+        self.phi1 = np.degrees(np.arctan2(self.y1, self.x1)) # [deg] UPDATED azimuthal angle of the center of the module in spherical coordinates
+        self.theta1 = np.degrees(np.arccos(self.z1 / self.r1)) if self.r1 != 0 else 0 # [deg] UPDATED polar angle of the center of the module in spherical coordinates
+
+        self.module_centroid = [self.x1, self.y1, self.z1]
         self.module_points_up = kwargs.get('module_points_up', True) # True if module oriented upward; False if module points down
 
         self.safety_margin = kwargs.get('safety_margin', 0.5) # [mm] distance kept betwee a positioner and the module walls
@@ -66,7 +80,9 @@ class Module:
         self.remove_corners = kwargs.get('remove_corners', True)
         
         self.robots = []
-        self.dataframe ={'module_id':[], 'robot_id':[], 'fiber_type':[], 'l_alpha':[], 'l_beta':[], 'x0':[], 'y0':[], 'z0':[], 'color':[], 'geometry':[]}
+        self.dataframe ={'module_id':[], 'robot_id':[], 'fiber_type':[], 'l_alpha':[], 'l_beta':[],
+                         'x0':[], 'y0':[], 'z0':[],
+                         'color':[], 'geometry':[]}
 
     @property
     def module_side_length(self):
@@ -231,7 +247,7 @@ class Module:
                 else:
                     x = (i * self.pitch + 0.5 * self.pitch * j) + layout_center_x
                     y = (j * self.pitch * sqrt3 / 2) + layout_center_y
-                    z = self.z0
+                    z = self.z1
                     is_hr = False
 
                     if not self.module_points_up:
@@ -253,9 +269,9 @@ class Module:
                                     l_alpha = new_l_alpha + l_alpha_tolerance,
                                     l_beta = new_l_beta + l_beta_tolerance,
                                     fiber_type = fiber_types[robot_index],
-                                    x0 = x + self.x0,
-                                    y0 = y + self.y0,
-                                    z0 = z + self.z0,)
+                                    x0 = x + self.x1,
+                                    y0 = y + self.y1,
+                                    z0 = z + self.z1,)
 
                     self.dataframe['module_id'].append(new_robot.module_id)
                     self.dataframe['robot_id'].append(new_robot.robot_id)
@@ -459,6 +475,20 @@ class Module:
 
         return coord
     
+    def update_position(self, x1, y1, z1):
+        """Update the module's new location after creation and update robots' positions."""
+        self.x1 = x1
+        self.y1 = y1
+        self.z1 = z1
+        self.module_centroid = [self.x1, self.y1, self.z1]
+        # Clear old robots and dataframe
+        self.robots = []
+        for key in self.dataframe:
+            self.dataframe[key] = []
+        # Regenerate robots with new positions
+        self.robots_layout
+        self.module_boundaries_with_safety_margin
+    
     def plot_module(self, plot_rob_numbers = False):
         """Plots the module boundaries and the robots in the module."""
         fig = plt.figure(figsize=(10, 10))
@@ -478,14 +508,19 @@ class Module:
         # Plot module boundaries with safety margin
         plot_polygon(self.module_boundaries_with_safety_margin, ax=ax, add_points=False, fill=False, color='red', linestyle='--')
 
+       
         # Plot robots
         geo = gpd.GeoDataFrame(self.dataframe)
         geo.plot(ax = ax, color=geo['color'], alpha=0.5, markersize=10, legend=True)
         
+         # Plot module centroid
+        plt.scatter(x=self.module_centroid[0],
+                    y=self.module_centroid[1], color='red')
+
         if plot_rob_numbers == True:
             """ Plot robot ID at the center of each robot """
             for rob in self.robots_layout:
-                plt.text(rob.x0, rob.y0, str(rob.robot_id+1), fontsize=11, ha='center', va='center')
+                plt.text(rob.x1, rob.y1, str(rob.robot_id+1), fontsize=11, ha='center', va='center')
 
 
         if self.nb_of_HR_fibers != 0:
@@ -502,26 +537,33 @@ class Module:
         # plt.ylim([-500, 500])
         plt.title(cl.module_title(self.nb_robots, self.module_side_length, self.pitch, self.l_alpha, self.l_beta, self.HR_l_alpha, self.HR_l_beta))
         plt.grid()
-    
+
+#%%
 if __name__ == "__main__":
 
+    import pandas as pd
     save = sr.SavingResults({"save_plots": True,
                             "save_txt": False},
                             project_name = 'test')
     mod = Module(63,
                 6.2, 
-                module_points_up = True,
+                module_points_up = False,
                 x0 = 100,
                 y0 = 100,
                 z0 = 0,
                 HR_fibers = [],
-                arms_length_tol = 0.1)
+                arms_length_tol = 0,
+                is_wall = True)
                 # HR_fibers = [21, 25, 39, 51])
 
     robots = mod.robots_layout
     print(robots[0].theta, robots[0].phi, robots[0].r, robots[0].r_flat)
 
     mod.plot_module(plot_rob_numbers=True)
-    print(mod.dataframe)
+    print(pd.DataFrame(mod.dataframe))
+    mod.update_position(x1=-200, y1=-300, z1=400)
+    mod.plot_module(plot_rob_numbers=True)
+    # plot_polygon(mod.module_coverage, color='green', ax=plt.gca(), add_points=False, fill=True, alpha=0.5)
+    plot_polygon(mod.module_boundaries)
     # plt.scatter(robots[31].x0, robots[31].y0, color='blue')
     plt.show()

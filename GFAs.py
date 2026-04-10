@@ -36,7 +36,6 @@ class GFA():
         # gfa_pos_on_vigR = make_vigR_polygon(n_vigR = self.nb_gfa + 1).exterior.coords.xy
         Dangle = 360/self.nb_gfa 
         angles = np.arange(0,Dangle * self.nb_gfa, Dangle) + self.angle_offset
-        print(angles)
         gfa_pos_on_vigR_x = self.vigR * np.cos(np.deg2rad(angles))
         gfa_pos_on_vigR_y = self.vigR * np.sin(np.deg2rad(angles))
 
