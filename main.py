@@ -37,7 +37,7 @@ timesstamp0 = time.time()
 PROJECT = "MUST"
 
 """ Saving results """
-save = SavingResults({"save_plots": True,
+save = SavingResults({"save_plots": False,
                       "save_txt": False,
                       "save_csv": False,
                       "save_dxf": False,
@@ -50,7 +50,7 @@ trimming_angle = None # [deg] angle to trim the grid in phi direction
 surf = FocalSurf(PROJECT, trimming_angle = trimming_angle, **project_parameters[PROJECT])
 vigR = surf.vigD / 2
 vignetting_area = surf.vignetting_disk.area
-limit_pol = True
+limit_pol = False
 if limit_pol:
     limiting_polygon = surf.trimming_polygon(geometry='circle', trim_diff_to_vigR = 15)
 else:
@@ -66,10 +66,11 @@ pitch = 6.2 # [mm] distance between two adjacent robots
 HR_fibers = []
 is_HR = len(HR_fibers) != 0
 
-HR_l_beta = 3.6 # [mm] length of the HR fibers in beta direction
-HR_l_alpha = 3.6 # [mm] length of the HR fibers in alpha direction
+HR_l_beta = 1.8 # [mm] length of the HR fibers in beta direction
+HR_l_alpha = 1.8 # [mm] length of the HR fibers in alpha direction
 arms_length_tol = 0 # [mm] max error on the arms lengths of the robots, used to compute the worst case coverage of the module
 is_wall = False
+show_modules_id = True
 
 mod0 = Module(nb_robots = 63, 
                 pitch = 6.2,
@@ -80,7 +81,7 @@ mod0 = Module(nb_robots = 63,
                 arms_length_tol = arms_length_tol)
 robots0 = mod0.robots_layout
 
-INNER_GAP = 0.3 # [mm] gap between two modules within an intermediate triangle
+INNER_GAP = 4.4 # [mm] gap between two modules within an intermediate triangle
 GLOBAL_GAP = 4.4 # [mm] gap between two intermediate triangles; if inner = global, all modules are eqaully spaced
 OUT_ALLOWANCE = 0 # fraction of the module coverage that is allowed to stick out of the vignetting disk
 
@@ -96,7 +97,8 @@ gfa = GFA(nb_gfa = nb_gfa,
           angle_offset = angle_offset,
           vigR = surf.vigR,
           length = gfa_length,
-          width = gfa_width)
+          width = gfa_width,
+          trimming_angle = trimming_angle)
 gdf_gfa = gfa.make_GFA_array()
 gfa_polygon = MultiPolygon(list(gdf_gfa['geometry'])) # GFA polygon
 
@@ -221,8 +223,11 @@ with Bar('Aranging focal plane modules', max = len(grid_3d['x'])) as bar:
 
 #%%
 grid_3d.drop(index2drop, inplace = True) # drop the modules that do not contribute to the coverage
-grid_3d = grid.trim_grid(grid_3d, trimming_angle = 360) # trim the grid to remove modules with phi < 0
+grid_3d = grid.trim_grid(grid_3d) # trim the grid to remove modules with phi < 0
 grid_3d_back = grid.grid_3d_back(grid_3d)
+
+for mod, x, y, z in zip(modules, grid_3d['x'], grid_3d['y'], grid_3d['z']):
+    mod.update_position(x1 =x, y1= y, z1=z)
 
 save.save_grid_to_txt2(grid_3d, filename = f"Grid_{nb_robots_per_module}_rob__Inner_{INNER_GAP}_mm__Global_{GLOBAL_GAP}_mm", columns = ['x', 'y', 'z', 'tri_points_up'])
 save.save_grid_to_txt2(grid_3d_back, filename = f"Grid_back_{nb_robots_per_module}_rob__Inner_{INNER_GAP}_mm__Global_{GLOBAL_GAP}_mm", columns = ['x', 'y', 'z', 'tri_points_up'])
@@ -232,7 +237,7 @@ save.save_grid_to_csv(robots_workspaces, filename = f"Robots_positions_{nb_robot
 LR_coverage_dict = {'geometry': [mod.LR_coverage for mod in modules]}
 HR_coverage_dict = {'geometry': [mod.HR_coverage for mod in modules]}
 boundaries = {'geometry': [mod.module_boundaries for mod in modules]}
-
+#%%
 HR_vignetting_coverage = 100 * total_HR_area/vignetting_area
 HR_layout_coverage = 100 * total_HR_area/concave_hull_area
 
@@ -253,17 +258,23 @@ geo_LR = gpd.GeoDataFrame(LR_coverage_dict)
 geo_LR.plot(ax = ax, alpha=0.4, legend=True, color = 'C0')
 geo_boundaries = gpd.GeoDataFrame(boundaries)
 geo_boundaries.plot(ax = ax, facecolor = 'None', edgecolor = 'green')
-gdf_gfa = gfa.make_GFA_array()
+gdf_gfa = gfa.gdf_gfa
 gdf_gfa.plot(ax = ax, facecolor = 'None', edgecolor = gdf_gfa['color'], linestyle = '--')
 geo_fiducials = gpd.GeoDataFrame(grid.fiducials)
 geo_fiducials.plot(ax = ax, facecolor = 'red', edgecolor = 'w', markersize = 10, label='Fiducials')
 gdf_robots = gpd.GeoDataFrame({}, geometry = [Point(xy) for xy in zip(robots_workspaces['x'], robots_workspaces['y'])])
 gdf_robots.plot(ax = ax, facecolor = 'blue', edgecolor = 'None', alpha =0.5, markersize = 1)
-# for i, mod in enumerate(modules):
-#     plt.text(mod.x0, mod.y0, f"{i+1}", fontsize=8, ha='center', va='center', color='white')
+if show_modules_id:
+    for i, mod in enumerate(modules):
+        plt.text(mod.x1, mod.y1, f"{i+1}", fontsize=8, ha='center', va='center', color='white')
 plot_polygon(grid.surf.vignetting_disk, ax = ax, fill = False, add_points=False, linestyle = '--', color = 'black')
 plot_polygon(grid.layout_concave_hull(), ax = ax, fill = False, add_points=False, color = 'orange')
 
+# print(f"mod0: x0={modules[-1].x0}, y0={modules[-1].y0}")
+# print(f"mod0: x1={modules[-1].x1}, y1={modules[-1].y1}")
+# for mod in modules:
+#     plt.scatter(mod.x0, mod.y0, color='green')
+#     plt.scatter(mod.x1, mod.y1, color='red', s = 6)
 # plot_polygon(grid.fiducials_bounding_polygon, ax = ax, fill = False, add_points=False, color = 'purple')
 # geo_grid = gpd.GeoDataFrame(grid_3d)
 # geo_grid.plot(ax = ax, facecolor= 'None', markersize = 16, edgecolor = 'orange')
@@ -277,13 +288,18 @@ else:
     plt.legend(handles=[cl.LR_handle(f'Vignetting coverage: {LR_vignetting_coverage: .1f} % \nLayout coverage: {LR_layout_coverage: .1f} %'),
                         cl.GFA_handle(lab = f'GFAs: {nb_gfa}'), 
                         cl.fiducials_handle(lab = f'Fiducials: {nb_fiducials}')], loc='upper right')
-plt.title(cl.final_layout_title(PROJECT, surf.vigD, 
-                                nb_robots_per_module, 
-                                len(modules), 
-                                nb_robots_per_module*len(modules), 
-                                INNER_GAP, GLOBAL_GAP, 
-                                OUT_ALLOWANCE,
-                                total_HR_fibers, total_LR_fibers))
+plt.title(cl.final_layout_title(
+                                project = PROJECT, 
+                                vigD = surf.vigD,
+                                nb_robots =  nb_robots_per_module,
+                                total_modules =  len(modules),
+                                total_robots=  nb_robots_per_module*len(modules),
+                                inner_gap = INNER_GAP, global_gap = GLOBAL_GAP,
+                                is_wall = is_wall,
+                                out_allowance = OUT_ALLOWANCE,
+                                HR_fibers = total_HR_fibers,
+                                LR_fibers = total_LR_fibers)
+        )
 plt.xlabel('x [mm]')
 
 if "WST" in PROJECT:
