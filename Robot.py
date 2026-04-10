@@ -1,3 +1,4 @@
+#%%
 import numpy as np
 from shapely.geometry import Polygon
 from shapely.plotting import plot_polygon
@@ -39,9 +40,15 @@ class Robot:
         self.__x0 = kwargs.get('x0', 0)
         self.__y0 = kwargs.get('y0', 0)
         self.__z0 = kwargs.get('z0', 0)
-        self.r = np.sqrt(self.__x0**2 + self.__y0**2 + self.__z0**2) # [mm] radial distance of the center of the robot in 3D space
-        self.phi = np.degrees(np.arctan2(self.__y0, self.__x0)) # [deg] azimuthal angle of the center of the robot in spherical coordinates
-        self.theta = np.degrees(np.arccos(self.__z0 / self.r)) if self.r != 0 else 0 # [deg] polar angle of the center of the robot in spherical coordinates
+
+        # Add updated positions, initialized to starting positions
+        self.__x1 = kwargs.get('x1', self.__x0)
+        self.__y1 = kwargs.get('y1', self.__y0)
+        self.__z1 = kwargs.get('z1', self.__z0)
+
+        self.r = np.sqrt(self.__x1**2 + self.__y1**2 + self.__z1**2) # [mm] radial distance of the center of the robot in 3D space
+        self.phi = np.degrees(np.arctan2(self.__y1, self.__x1)) # [deg] azimuthal angle of the center of the robot in spherical coordinates
+        self.theta = np.degrees(np.arccos(self.__z1 / self.r)) if self.r != 0 else 0 # [deg] polar angle of the center of the robot in spherical coordinates
 
     # Internal cache for expensive computation
         self._workspace = None
@@ -72,12 +79,28 @@ class Robot:
         self.__x0 = x0
 
     @property
+    def x1(self):
+        return self.__x1
+
+    @x1.setter
+    def x1(self, x1):
+        self.__x1 = x1
+
+    @property
     def y0(self):
         return self.__y0
     
     @y0.setter
     def y0(self, y0):
         self.__y0 = y0
+
+    @property
+    def y1(self):
+        return self.__y1
+
+    @y1.setter
+    def y1(self, y1):
+        self.__y1 = y1
 
     @property
     def z0(self):
@@ -88,8 +111,22 @@ class Robot:
         self.__z0 = z0
 
     @property
+    def z1(self):
+        return self.__z1
+
+    @z1.setter
+    def z1(self, z1):
+        self.__z1 = z1
+
+    @property
     def r_flat(self):
         return np.sqrt(self.__x0**2 + self.__y0**2)
+    
+    def update_position(self, x1, y1, z1):
+        """Update the robot's new location after creation."""
+        self.x1 = x1
+        self.y1 = y1
+        self.z1 = z1
 
     @property
     def workspace(self):
@@ -105,18 +142,18 @@ class Robot:
 
         "Outer boundaries of positioner workspace"
         # CALCULATE THE those things only once in declaration of class!!!
-        x_wk_ext = self.x0 + self._workspace_outer_radius * np.cos(angle_outer)
-        y_wk_ext = self.y0 + self._workspace_outer_radius * np.sin(angle_outer)
-        z_wk_ext = self.z0 * np.ones_like(x_wk_ext)
+        x_wk_ext = self.x1 + self._workspace_outer_radius * np.cos(angle_outer)
+        y_wk_ext = self.y1 + self._workspace_outer_radius * np.sin(angle_outer)
+        z_wk_ext = self.z1 * np.ones_like(x_wk_ext)
         wk_ext = [(x,y,z) for x,y,z in zip(x_wk_ext, y_wk_ext, z_wk_ext)]
 
         "Inner boundaries of positioner workspace; 0 if l_alpha = l_beta"
         if self.l_alpha == self.l_beta:
             wk_int = []
         else:
-            x_wk_int = self.x0 + self._workspace_inner_radius * np.cos(angle_lower)
-            y_wk_int = self.y0 + self._workspace_inner_radius * np.sin(angle_lower)
-            z_wk_int = self.z0 * np.ones_like(x_wk_ext)
+            x_wk_int = self.x1 + self._workspace_inner_radius * np.cos(angle_lower)
+            y_wk_int = self.y1 + self._workspace_inner_radius * np.sin(angle_lower)
+            z_wk_int = self.z1 * np.ones_like(x_wk_ext)
             wk_int = [(x,y,z) for x,y,z in zip(x_wk_int, y_wk_int, z_wk_int)]
             wk_int = wk_int[::-1] # Remove last point of inner boundary to avoid having a straight line in the center of the workspace
 
@@ -137,11 +174,13 @@ class Robot:
         self.r = r
         self.theta = theta
         self.phi = phi
-        self.__x0 = r * np.sin(np.radians(theta)) * np.cos(np.radians(phi))
-        self.__y0 = r * np.sin(np.radians(theta)) * np.sin(np.radians(phi))
-        self.__z0 = r * np.cos(np.radians(theta))
-        self.r_flat = np.sqrt(self.__x0**2 + self.__y0**2)
+        self.__x1 = r * np.sin(np.radians(theta)) * np.cos(np.radians(phi))
+        self.__y1 = r * np.sin(np.radians(theta)) * np.sin(np.radians(phi))
+        self.__z1 = r * np.cos(np.radians(theta))
+        self.r_flat = np.sqrt(self.__x1**2 + self.__y1**2)
 
+
+#%%
 if __name__ == '__main__':
     robot = Robot(l_alpha = 1,
                   l_beta = 2,
