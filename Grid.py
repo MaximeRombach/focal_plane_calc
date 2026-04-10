@@ -172,7 +172,7 @@ class Grid():
          grid_3d['type'] = 'module' # add a column to specify the type of point (module or fiducial)
          grid_3d['grid_pos'] = 'front'
          grid_3d['geometry'] = [Point(x, y, z) for x, y, z in zip(grid_3d['x'], grid_3d['y'], grid_3d['z'])]
-         grid_3d = grid_3d.round(3)
+         grid_3d = grid_3d.round(6)
          
          return grid_3d
     
@@ -289,7 +289,7 @@ if __name__ == "__main__":
      project_parameters = json.load(open('projects.json', 'r'))
      INNER_GAP = 4.4 # [mm] gap between two adjacent modules
      GLOBAL_GAP = 4.4 # [mm] gap between two adjacent modules
-     trimming_angle = 60
+     trimming_angle = 360
      from Module import Module
      mod = Module(nb_robots = 63, 
                pitch = 6.2,
@@ -329,7 +329,6 @@ if __name__ == "__main__":
      plt.scatter(grid.fiducials['x'], grid.fiducials['y'], color='red')
      plot_polygon(grid.fiducials_bounding_polygon, add_points=False, facecolor='None')
      plot_polygon(grid.layout_concave_hull(), add_points=False, facecolor='None', edgecolor = 'green')
-     plt.show()
      grid_3d = grid.grid_3d(grid.flat_grid_dict['x'], grid.flat_grid_dict['y'])
      grid_3d_back = grid.grid_3d_back(grid_3d)
      print(grid.fiducials)
@@ -380,13 +379,41 @@ if __name__ == "__main__":
      ax = fig.add_subplot(projection='3d')
 
      ax.scatter(grid_3d['x'], grid_3d['y'], grid_3d['z'], c='blue', alpha=0.4, label=f'grid_front')
-     ax.scatter(grid_3d_back['x'], grid_3d_back['y'], grid_3d_back['z'], c='red', alpha=0.4, label=f'grid_back')
-     for x_start, y_start, z_start, x_end, y_end, z_end in zip(grid_3d['x'], grid_3d['y'], grid_3d['z'], grid_3d_back['x'], grid_3d_back['y'], grid_3d_back['z']):
+     
+     ax.scatter(grid.flat_grid_dict['x'], grid.flat_grid_dict['y'], np.zeros_like(grid.flat_grid_dict['x']), color='green', alpha=0.4, label='Modules (flat)')
+     for x_start, y_start, z_start, x_end, y_end, z_end in zip(grid_3d['x'], grid_3d['y'], grid_3d['z'], grid.flat_grid_dict['x'], grid.flat_grid_dict['y'], grid.flat_grid_dict['z']):
           ax.plot([x_start, x_end], [y_start, y_end], [z_start, z_end], c='gray', alpha=0.2)
+
+     ax.view_init(elev=90, azim=-90)
      ax.set_xlabel('X [mm]')
      ax.set_ylabel('Y [mm]')
      ax.set_zlabel('Z [mm]')
      ax.set_title(f'{grid.project} - 3D grid')
      ax.legend()
      ax.set_box_aspect((5,5,1))
+
+     fig = plt.figure(figsize=(10, 10))
+     ax = fig.add_subplot(projection='3d')
+
+     ax.scatter(grid_3d['x'], grid_3d['y'], grid_3d['z'], c='blue', alpha=0.4, label=f'grid_front')
+
+     ax.scatter(grid_3d_back['x'], grid_3d_back['y'], grid_3d_back['z'], c='red', alpha=0.4, label=f'grid_back')
+     for x_start, y_start, z_start, x_end, y_end, z_end in zip(grid_3d['x'], grid_3d['y'], grid_3d['z'], grid_3d_back['x'], grid_3d_back['y'], grid_3d_back['z']):
+          ax.plot([x_start, x_end], [y_start, y_end], [z_start, z_end], c='gray', alpha=0.2)
+
+     ax.view_init(elev=90, azim=-90)
+     ax.set_xlabel('X [mm]')
+     ax.set_ylabel('Y [mm]')
+     ax.set_zlabel('Z [mm]')
+     ax.set_title(f'{grid.project} - 3D grid')
+     ax.legend()
+     ax.set_box_aspect((5,5,1))
+
+     plt.figure(figsize=(8,8))
+     plt.plot(grid_3d['dx_from_flat'], grid_3d['dy_from_flat'], 'o', alpha=0.4)
+     plt.xlabel('dx from flat [mm]')
+     plt.ylabel('dy from flat [mm]')
+     plt.title(f'{grid.project} - 2D grid')
+     plt.grid()
+     plt.axis('equal')
      plt.show()
