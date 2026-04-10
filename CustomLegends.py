@@ -32,15 +32,16 @@ def final_layout_title(project: str,
                        total_modules: int,
                        total_robots: int,
                        inner_gap, global_gap,
+                       is_wall: bool,
                        out_allowance: float,
-                       HR_fibers: int = 0,
-                       LR_fibers: int = 0) -> str:
+                       HR_fibers: int,
+                       LR_fibers: int) -> str:
 
     project_info = "Project: " + project + r" - $\varnothing$" + f"{vigD} mm"
     # project_info = r"$\bf{Project: MUST}$"
 
     robots_info = f"Total # modules: {total_modules} - Total # robots: {total_robots}"
-    modules_info = f" {nb_robots} robots per module"
+    modules_info = f" {nb_robots} robots per module - {'Module Walls: Yes' if is_wall else 'Modules Walls: No'}"
     if HR_fibers == 0:
         fibers_info = ""
     else:
@@ -53,7 +54,7 @@ def final_layout_title(project: str,
     elif inner_gap == global_gap and global_gap == 0:
         figtitle = f"{project_info}\n Frameless - {modules_info} {robots_info} \n {out_allowance_info} \n {robots_info} \n {fibers_info}"
     else:
-        figtitle = f"{project_info}\n Framed - {modules_info} \n Gap: {inner_gap} mm {robots_info} \n {out_allowance_info} \n {robots_info} \n {fibers_info}"
+        figtitle = f"{project_info}\n Framed - {modules_info} \n Gap: {inner_gap} mm \n {out_allowance_info} \n {robots_info} \n {fibers_info}"
 
     return figtitle
 
