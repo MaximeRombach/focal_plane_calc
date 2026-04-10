@@ -198,7 +198,6 @@ class FocalSurf:
         R2NORM = interp1d(r, norm,kind='cubic')
 
         """ R2NORM """
-        print("R = ", r)
         nut = R2NORM(r) + crd # Joe: -(R2NORM(r) + crd)
         R2NUT = interp1d(r, nut, kind='cubic', fill_value="extrapolate")
 
@@ -219,7 +218,7 @@ class FocalSurf:
         Output:   
                   - z: [np.array] height positions on focal plane
         """
-        print(f"Using aspherical formula with coefficients: c={self.c}, k={self.k}, a2={self.a2}, a4={self.a4}, a6={self.a6}, a8={self.a8}")
+        logging.info(f"Using aspherical formula with coefficients: c={self.c}, k={self.k}, a2={self.a2}, a4={self.a4}, a6={self.a6}, a8={self.a8}")
         return lambda r: (r**2 * self.c) / (1 + np.sqrt(1 - (1 + self.k) * (r**2 * self.c**2))) + self.a2 * r**2 + self.a4 * r**4 + self.a6 * r**6 + self.a8 * r**8 # analytical formula to get Z from R for aspheric surfaces, if asph_formula is True
 
     def BFS_radius(self):

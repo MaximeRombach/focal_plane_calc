@@ -46,7 +46,7 @@ class Grid():
         self.grid_3d_dict = {'x':[], 'y':[], 'z':[], 'r':[], 's':[], 'phi':[], 'theta':[], 'tri_spin':[], 'type':[], 'grid_pos':[]}
         self.fiducials = {'x': [], 'y': [], 'r': [], 'phi': [], 'z': [], 'geometry': []}
 
-        self.R2Z, self.R2CRD, self.R2NORM, self.R2NUT, self.S2R = self.surf.transfer_functions()
+        self.R2Z, self.R2CRD, self.R2NORM, self.R2NUT, self.S2R = self.surf.R2Z, self.surf.R2CRD, self.surf.R2NORM, self.surf.R2NUT, self.surf.S2R
 
     @property
     def inter_triangle_side_length(self):
