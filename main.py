@@ -34,7 +34,7 @@ logging.basicConfig(
 timesstamp0 = time.time()
 
 """ Available projects: MUST, Spec-S5, WST25, WST27, VLT_2030"""
-PROJECT = "MUST"
+PROJECT = "WST25"
 
 """ Saving results """
 save = SavingResults({"save_plots": False,
@@ -46,13 +46,13 @@ save = SavingResults({"save_plots": False,
 
 """ Load focal surface data """
 project_parameters = json.load(open('projects.json', 'r'))
-trimming_angle = None # [deg] angle to trim the grid in phi direction
-surf = FocalSurf(PROJECT, trimming_angle = trimming_angle, **project_parameters[PROJECT])
+TRIMMING_ANGLE = 360 # [deg] angle to trim the grid in phi direction
+surf = FocalSurf(PROJECT, trimming_angle = TRIMMING_ANGLE, **project_parameters[PROJECT])
 vigR = surf.vigD / 2
 vignetting_area = surf.vignetting_disk.area
-limit_pol = False
+limit_pol = True
 if limit_pol:
-    limiting_polygon = surf.trimming_polygon(geometry='circle', trim_diff_to_vigR = 15)
+    limiting_polygon = surf.trimming_polygon(geometry='hex', trim_diff_to_vigR = -1)
 else:
     limiting_polygon = surf.vignetting_disk
 
@@ -81,16 +81,16 @@ mod0 = Module(nb_robots = 63,
                 arms_length_tol = arms_length_tol)
 robots0 = mod0.robots_layout
 
-INNER_GAP = 4.4 # [mm] gap between two modules within an intermediate triangle
+INNER_GAP = 0.5# [mm] gap between two modules within an intermediate triangle
 GLOBAL_GAP = 4.4 # [mm] gap between two intermediate triangles; if inner = global, all modules are eqaully spaced
 OUT_ALLOWANCE = 0 # fraction of the module coverage that is allowed to stick out of the vignetting disk
 
 """ GFA parameters """
 
 nb_gfa = 6
-angle_offset = 0
-gfa_length = 100
-gfa_width = 100
+angle_offset = 30
+gfa_length = 90
+gfa_width = 90
 #TODO: fix warning appearing twice --> FocalSurf called twice at begining of main AND within Grid class
 #FIX: input surf as parameter to Grid class
 gfa = GFA(nb_gfa = nb_gfa,
@@ -98,7 +98,7 @@ gfa = GFA(nb_gfa = nb_gfa,
           vigR = surf.vigR,
           length = gfa_length,
           width = gfa_width,
-          trimming_angle = trimming_angle)
+          trimming_angle = TRIMMING_ANGLE)
 gdf_gfa = gfa.make_GFA_array()
 gfa_polygon = MultiPolygon(list(gdf_gfa['geometry'])) # GFA polygon
 
@@ -110,11 +110,12 @@ grid = Grid(focal_surface = surf,
             module_side_length = mod0.module_side_length,
             GFA_polygon = gfa_polygon,
             limiting_polygon = limiting_polygon,
-            trimming_angle = trimming_angle,
+            trimming_angle = TRIMMING_ANGLE,
             **project_parameters[PROJECT])
 
 grid.flat_grid() # create the grid of modules
-grid_3d = grid.grid_3d(grid.flat_grid_dict['x'], grid.flat_grid_dict['y'])
+grid_3d = grid.grid_3d(grid.flat_grid_dict['x'], grid.flat_grid_dict['y'], fp_type = 'module') # project the grid to 3D to include the curvature of the focal surface
+grid_3d_fiducials = grid.grid_3d(grid.fiducials['x'], grid.fiducials['y'], fp_type = 'fiducial') # project the fiducials grid to 3D to include the curvature of the focal surface
 concave_hull = grid.layout_concave_hull() # concave hull of the module layout
 concave_hull_area = concave_hull.area # area of the concave hull
 
@@ -123,6 +124,7 @@ modules = [] # list of modules
 robots_workspaces = {'Module ID': [], 'Robot ID': [], 'x':[], 'y':[], 'z':[], 'geometry': []}
 # robots_workspaces = {'geometry': []}
 # robots_workspaces = {'Module ID': [], 'Robot ID': [], 'x':[], 'y':[]}
+bundled_robots_geometry_list = [] # list of the geometries of the robots, used to plot them all together at the end
 
 total_HR_fibers = 0
 total_HR_area = 0
@@ -196,15 +198,29 @@ with Bar('Aranging focal plane modules', max = len(grid_3d['x'])) as bar:
             total_HR_fibers += mod.nb_of_HR_fibers
             total_LR_fibers += mod.nb_of_LR_fibers
 
-
-            robots_workspaces['geometry'].append(MultiPolygon(mod.dataframe['geometry']))
-            # robots_workspaces['geometry'].append(mod.module_boundaries)
-            # robots_workspaces['color'].append('yellow')
+            # TODO: fix bug saving the robots workspaces to the dataframe when using OUT_ALLOWANCE > 0, the geometries are not saved correctly
+            robots_workspaces['geometry'].extend(mod.dataframe['geometry'])
             robots_workspaces['Module ID'].extend(mod.dataframe["module_id"])
             robots_workspaces['Robot ID'].extend(mod.dataframe['robot_id'])
             robots_workspaces['x'].extend(mod.dataframe['x0'])
             robots_workspaces['y'].extend(mod.dataframe['y0'])
             robots_workspaces['z'].extend(mod.dataframe['z0'])
+
+
+            # robots_workspaces['geometry'].append(MultiPolygon(mod.dataframe['geometry']))
+            """" Only use it when I want to export to dxf for target assignment. Basically trims the outer robots workspace to the boundaries of modules
+            WHILE keeping the inner robot workspaces lines intact"""
+            if save.save_dxf:
+                bundled_robots_geometry = MultiPolygon(mod.dataframe['geometry'])
+                if is_wall:
+                    bundled_robots_geometry = mod.raw_module_coverage(bundled_robots_geometry)
+                    bundled_robots_geometry_list.append(bundled_robots_geometry)
+                else:
+                    bundled_robots_geometry_list.append(bundled_robots_geometry)
+
+            
+
+
 
         assign_times.append(time.time() - assign_stamp)
 
@@ -212,25 +228,39 @@ with Bar('Aranging focal plane modules', max = len(grid_3d['x'])) as bar:
         bar.next()
 
 #%% 
+def print_dict_lengths(d):
+    """
+    Prints the length of each key's value in the dictionary.
+    """
+    for key, value in d.items():
+        try:
+            print(f"{key}: {len(value)}")
+        except TypeError:
+            print(f"{key}: value has no length")
 
-# robots_workspaces = pd.DataFrame(robots_workspaces)
-# # Renumber the 'Module ID' column in robots_workspaces to be consecutive starting from 1
-# unique_ids = robots_workspaces['Module ID'].unique()
-# id_map = {old_id: new_id for new_id, old_id in enumerate(sorted(unique_ids), start=1)}
-# robots_workspaces['Module ID'] = robots_workspaces['Module ID'].map(id_map)
-# # Renumber 'Robot ID' within each module from 1 to 63
-# robots_workspaces['Robot ID'] = robots_workspaces.groupby('Module ID').cumcount() + 1
+# print_dict_lengths(robots_workspaces)
+robots_workspaces_df = pd.DataFrame(robots_workspaces)
+
+# Renumber the 'Module ID' column in robots_workspaces to be consecutive starting from 1
+unique_ids = robots_workspaces_df['Module ID'].unique()
+id_map = {old_id: new_id for new_id, old_id in enumerate(sorted(unique_ids), start=1)}
+robots_workspaces_df['Module ID'] = robots_workspaces_df['Module ID'].map(id_map)
+# Renumber 'Robot ID' within each module from 1 to 63
+robots_workspaces_df['Robot ID'] = robots_workspaces_df.groupby('Module ID').cumcount() + 1
 
 #%%
 grid_3d.drop(index2drop, inplace = True) # drop the modules that do not contribute to the coverage
 grid_3d = grid.trim_grid(grid_3d) # trim the grid to remove modules with phi < 0
 grid_3d_back = grid.grid_3d_back(grid_3d)
+grid_3d_fiducials_back = grid.grid_3d_back(grid_3d_fiducials)
 
 for mod, x, y, z in zip(modules, grid_3d['x'], grid_3d['y'], grid_3d['z']):
     mod.update_position(x1 =x, y1= y, z1=z)
 
-save.save_grid_to_txt2(grid_3d, filename = f"Grid_{nb_robots_per_module}_rob__Inner_{INNER_GAP}_mm__Global_{GLOBAL_GAP}_mm", columns = ['x', 'y', 'z', 'tri_points_up'])
-save.save_grid_to_txt2(grid_3d_back, filename = f"Grid_back_{nb_robots_per_module}_rob__Inner_{INNER_GAP}_mm__Global_{GLOBAL_GAP}_mm", columns = ['x', 'y', 'z', 'tri_points_up'])
+save.save_grid_to_txt2(grid_3d, filename = f"MODULES_Grid_{nb_robots_per_module}_rob__Inner_{INNER_GAP}_mm__Global_{GLOBAL_GAP}_mm", columns = ['x', 'y', 'z', 'tri_points_up'])
+save.save_grid_to_txt2(grid_3d_back, filename = f"MODULES_Grid_back_{nb_robots_per_module}_rob__Inner_{INNER_GAP}_mm__Global_{GLOBAL_GAP}_mm", columns = ['x', 'y', 'z', 'tri_points_up'])
+save.save_grid_to_txt2(grid_3d_fiducials, filename = f"FIDUCIALS_Grid_{nb_robots_per_module}_rob__Inner_{INNER_GAP}_mm__Global_{GLOBAL_GAP}_mm", columns = ['x', 'y', 'z', 'tri_points_up'])
+save.save_grid_to_txt2(grid_3d_fiducials_back, filename = f"FIDUCIALS_Grid_back_{nb_robots_per_module}_rob__Inner_{INNER_GAP}_mm__Global_{GLOBAL_GAP}_mm", columns = ['x', 'y', 'z', 'tri_points_up'])
 save.save_grid_to_csv(grid_3d, filename = f"Grid_{nb_robots_per_module}_rob__Inner_{INNER_GAP}_mm__Global_{GLOBAL_GAP}_mm", results_string = f"Grid with {len(grid_3d)} modules, {len(modules)} contributing to the coverage")
 save.save_grid_to_csv(robots_workspaces, filename = f"Robots_positions_{nb_robots_per_module}_rob__Inner_{INNER_GAP}_mm__Global_{GLOBAL_GAP}_mm")
 
@@ -286,7 +316,7 @@ if len(HR_fibers) != 0:
                         cl.fiducials_handle(lab = f'Fiducials: {nb_fiducials}')], loc='upper right')
 else:
     plt.legend(handles=[cl.LR_handle(f'Vignetting coverage: {LR_vignetting_coverage: .1f} % \nLayout coverage: {LR_layout_coverage: .1f} %'),
-                        cl.GFA_handle(lab = f'GFAs: {nb_gfa}'), 
+                        cl.GFA_handle(lab = f'GFAs: {nb_gfa}; {gfa_length}x{gfa_width} mm'),
                         cl.fiducials_handle(lab = f'Fiducials: {nb_fiducials}')], loc='upper right')
 plt.title(cl.final_layout_title(
                                 project = PROJECT, 
@@ -313,7 +343,10 @@ if "WST" in PROJECT:
 else:
         ax.set_ylabel('y [mm]')
 
-save.save_dxf_to_dir(geometries = robots_workspaces['geometry'], suffix_name = f"Robots_boundaries_{nb_robots_per_module}_rob__Inner_{INNER_GAP}_mm__Global_{GLOBAL_GAP}_mm")
+boundaries_and_rob_workspaces = {'geometry': [*bundled_robots_geometry_list, *boundaries['geometry']]}
+save.save_dxf_to_dir(geometries = boundaries_and_rob_workspaces['geometry'], suffix_name = f"Robots_&_modules_boundaries_{nb_robots_per_module}_rob__Inner_{INNER_GAP}_mm__Global_{GLOBAL_GAP}_mm")
+# save.save_dxf_to_dir(geometries = geo_LR['geometry'], suffix_name = f"Robots_boundaries_{nb_robots_per_module}_rob__Inner_{INNER_GAP}_mm__Global_{GLOBAL_GAP}_mm")
+# save.save_dxf_to_dir(geometries = bundled_robots_geometry_list, suffix_name = f"Robots_boundaries_{nb_robots_per_module}_rob__Inner_{INNER_GAP}_mm__Global_{GLOBAL_GAP}_mm")
 
 plt.grid(visible=True)
 print(f"Mean time for module: {sum(times)/len(times)} s")
