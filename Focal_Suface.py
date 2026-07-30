@@ -167,7 +167,7 @@ class FocalSurf:
             if 'Z' in self.optics_data.keys():
                 Z = self.optics_data['Z']
                 # R2Z = interp1d(R,Z,kind='cubic', fill_value = "extrapolate")
-                R2Z = interp1d(R,Z,kind='cubic') #leave 'cubic' interpolation for normal vectors calculations
+                R2Z = interp1d(R,Z,kind='cubic', fill_value = "extrapolate") #leave 'cubic' interpolation for normal vectors calculations
             else:
                 R2Z = lambda r: self.BFS - np.sqrt(self.BFS**2 - r**2) # Spherical focal surface
                 logging.warning('No Z data available in samples - assuming SPHERICAL surface')
@@ -180,7 +180,7 @@ class FocalSurf:
         if self.is_CRD:
             CRD = self.optics_data['CRD']
             R = self.optics_data['R']
-            R2CRD = interp1d(R,CRD,kind='cubic')
+            R2CRD = interp1d(R,CRD,kind='cubic', fill_value = "extrapolate") # R2CRD maps the radial position on the focal plane to the chief ray deviation (CRD) at that position, which is the angle between the chief ray and the normal vector of the focal surface at that position
         else:
             CRD = np.zeros_like(R)
             R2CRD = interp1d(R,CRD,kind='cubic')
