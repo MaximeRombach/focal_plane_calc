@@ -5,6 +5,7 @@ from math import sqrt
 from shapely.geometry import Polygon, MultiPolygon
 from shapely.plotting import plot_polygon
 from shapely.ops import unary_union
+from shapely.validation import explain_validity, make_valid
 from Robot import Robot
 import matplotlib.pyplot as plt
 plt.rc('axes', labelsize=13)    # fontsize of the x and y labels
@@ -16,6 +17,12 @@ plt.rc('legend', fontsize=13)    # legend fontsize
 import CustomLegends as cl
 import geopandas as gpd
 import SavingResults as sr
+
+import logging
+logging.basicConfig(
+    format='%(asctime)s %(levelname)-4s %(message)s',
+    level=logging.INFO,
+    datefmt='%Y-%m-%d %H:%M:%S')
 
 import copy
 
@@ -424,10 +431,18 @@ class Module:
         - (Polygon): trimmed coverage polygon
         
         """
-        
-        return coverage_polygon.difference(self.module_boundaries_with_safety_margin)
+        if not coverage_polygon.is_valid:
+            logging.warning("coverage_polygon is invalid, attempting to fix...")
+            explain_validity(coverage_polygon)
+            coverage_polygon = make_valid(coverage_polygon)
+        if not self.module_boundaries_with_safety_margin.is_valid:
+            explain_validity(self.module_boundaries_with_safety_margin)
+            self.module_boundaries_with_safety_margin = make_valid(self.module_boundaries_with_safety_margin)
+            logging.warning("module_boundaries_with_safety_margin is invalid, attempting to fix...")
+            # self.module_boundaries_with_safety_margin = self.module_boundaries_with_safety_margin.buffer(0)
 
-    
+        return self.module_boundaries_with_safety_margin.intersection(coverage_polygon)
+
     def nb_lines_of_robots(self):
         """Computes the number of lines of robots in a module for a given amount of robots.
         Solves equation for n: n(n+1)/2 = nb_robots + 3 (see triangular number formula: https://en.wikipedia.org/wiki/Triangular_number)
@@ -542,7 +557,7 @@ class Module:
 if __name__ == "__main__":
 
     import pandas as pd
-    save = sr.SavingResults({"save_plots": True,
+    save = sr.SavingResults({"save_plots": False,
                             "save_txt": False},
                             project_name = 'test')
     mod = Module(63,
@@ -562,8 +577,9 @@ if __name__ == "__main__":
     mod.plot_module(plot_rob_numbers=True)
     print(pd.DataFrame(mod.dataframe))
     mod.update_position(x1=-200, y1=-300, z1=400)
-    mod.plot_module(plot_rob_numbers=True)
-    # plot_polygon(mod.module_coverage, color='green', ax=plt.gca(), add_points=False, fill=True, alpha=0.5)
-    plot_polygon(mod.module_boundaries)
+    # mod.plot_module(plot_rob_numbers=True)
+    plt.figure()
+    plot_polygon(unary_union(mod.dataframe['geometry']), color='green', ax=plt.gca(), add_points=False, fill=True, alpha=0.5)
+    # plot_polygon(mod.module_boundaries)
     # plt.scatter(robots[31].x0, robots[31].y0, color='blue')
     plt.show()

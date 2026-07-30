@@ -137,8 +137,8 @@ class Robot:
 
         """Returns the workspace of the robot as a shapely Polygon object"""
 
-        angle_outer = np.linspace(0, 2* np.pi, 20)
-        angle_lower = np.linspace(0, 2* np.pi, 10)
+        angle_outer = np.linspace(0, 2* np.pi, 25)
+        angle_lower = np.linspace(0, 2* np.pi, 15)
 
         "Outer boundaries of positioner workspace"
         # CALCULATE THE those things only once in declaration of class!!!

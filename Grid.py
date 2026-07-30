@@ -69,7 +69,7 @@ class Grid():
         """ Returns the polygon that bounds the fiducials within the grid.
         """
         fid_lim_pol = None
-        buffer = 10 # [mm] buffer to always include fiducials close to the edge
+        buffer = 30 # [mm] buffer to always include fiducials close to the edge
         # Check if limiting polygon already provided, otherwise use vignetting disk
         if self.limiting_polygon is not None:
             fid_lim_pol = self.limiting_polygon.difference(self.surf.donut_hole)
@@ -150,7 +150,7 @@ class Grid():
 
           return
     
-    def grid_3d(self, x, y):
+    def grid_3d(self, x: float, y: float, fp_type: str):
          """ Project flat grid to 3D to include curvature of the focal surface """
          grid_3d = {'x':[], 'y':[], 'z':[], 'r':[], 's':[], 'phi':[], 'theta':[], 'tri_spin':[], 'type':[], 'grid_pos':[]}
          grid_3d = pd.DataFrame.from_dict(grid_3d)  # Define the variable "grid_asph_pd"
@@ -158,21 +158,24 @@ class Grid():
 
 
          grid_3d['s'] = np.sqrt(np.array(x)**2 + np.array(y)**2)
-         grid_3d['phi']= np.rad2deg(np.arctan2(np.array(self.flat_grid_dict['y']), np.array(self.flat_grid_dict['x'])))
+         grid_3d['phi']= np.rad2deg(np.arctan2(np.array(y), np.array(x)))
          r = self.S2R(grid_3d['s'])
 
          grid_3d['x'] = r * np.cos(np.deg2rad(grid_3d['phi']))
-         grid_3d['dx_from_flat'] = grid_3d['x'] - np.array(self.flat_grid_dict['x'])
+         grid_3d['dx_from_flat'] = grid_3d['x'] - np.array(x)
          grid_3d['y'] = r * np.sin(np.deg2rad(grid_3d['phi']))
-         grid_3d['dy_from_flat'] = grid_3d['y'] - np.array(self.flat_grid_dict['y'])
+         grid_3d['dy_from_flat'] = grid_3d['y'] - np.array(y)
          grid_3d['r'] = np.sqrt(grid_3d['x']**2 + grid_3d['y']**2)
-         grid_3d['tri_points_up'] = np.asarray(self.flat_grid_dict['tri_points_up'])    
+         if fp_type == 'module':
+              grid_3d['tri_points_up'] = np.asarray(self.flat_grid_dict['tri_points_up'])
+         else:
+              grid_3d['tri_points_up'] = np.ones_like(grid_3d['x'], dtype=int) # fiducials are not in a triangular pattern, so we can set this column to 0 or any other value
          grid_3d['z'] = self.R2Z(grid_3d['r'])
          grid_3d['theta'] = self.R2NUT(r)
-         grid_3d['type'] = 'module' # add a column to specify the type of point (module or fiducial)
+         grid_3d['type'] = fp_type # add a column to specify the type of point (module or fiducial)
          grid_3d['grid_pos'] = 'front'
          grid_3d['geometry'] = [Point(x, y, z) for x, y, z in zip(grid_3d['x'], grid_3d['y'], grid_3d['z'])]
-         grid_3d = grid_3d.round(6)
+         grid_3d = grid_3d.round(3)
          
          return grid_3d
     
@@ -217,8 +220,8 @@ class Grid():
                     if type(ch) == GeometryCollection:
                          ch = ch.geoms[0]
                
-               # if 'WST' in self.project:
-               #      ch = ch.difference(self.donut_hole)
+               if 'WST' in self.project:
+                    ch = ch.difference(self.donut_hole)
                return ch
           except: 
                return fiducials.convex_hull
@@ -285,11 +288,11 @@ if __name__ == "__main__":
     # Example of how to use the Grid class
     
 
-     PROJECT = "MUST"
+     PROJECT = "Spec-S5"
      project_parameters = json.load(open('projects.json', 'r'))
      INNER_GAP = 4.4 # [mm] gap between two adjacent modules
      GLOBAL_GAP = 4.4 # [mm] gap between two adjacent modules
-     trimming_angle = 360
+     trimming_angle = 60
      from Module import Module
      mod = Module(nb_robots = 63, 
                pitch = 6.2,
@@ -329,9 +332,10 @@ if __name__ == "__main__":
      plt.scatter(grid.fiducials['x'], grid.fiducials['y'], color='red')
      plot_polygon(grid.fiducials_bounding_polygon, add_points=False, facecolor='None')
      plot_polygon(grid.layout_concave_hull(), add_points=False, facecolor='None', edgecolor = 'green')
-     grid_3d = grid.grid_3d(grid.flat_grid_dict['x'], grid.flat_grid_dict['y'])
+     grid_3d = grid.grid_3d(grid.flat_grid_dict['x'], grid.flat_grid_dict['y'], fp_type = 'module')
      grid_3d_back = grid.grid_3d_back(grid_3d)
-     print(grid.fiducials)
+     grid_3d_fiducials = grid.grid_3d(grid.fiducials['x'], grid.fiducials['y'], fp_type = 'fiducial')
+     grid_3d_fiducials_back = grid.grid_3d_back(grid_3d_fiducials)
 
 #%%
      # project2 =  'VLT_2030'
@@ -416,4 +420,22 @@ if __name__ == "__main__":
      plt.title(f'{grid.project} - 2D grid')
      plt.grid()
      plt.axis('equal')
+
+     fig = plt.figure(figsize=(10, 10))
+     ax = fig.add_subplot(projection='3d')
+
+     ax.scatter(grid_3d_fiducials['x'], grid_3d_fiducials['y'], grid_3d_fiducials['z'], c='blue', alpha=0.4, label=f'fiducials_front')
+
+     ax.scatter(grid_3d_fiducials_back['x'], grid_3d_fiducials_back['y'], grid_3d_fiducials_back['z'], c='red', alpha=0.4, label=f'fiducials_back')
+     for x_start, y_start, z_start, x_end, y_end, z_end in zip(grid_3d_fiducials['x'], grid_3d_fiducials['y'], grid_3d_fiducials['z'],grid_3d_fiducials_back['x'], grid_3d_fiducials_back['y'], grid_3d_fiducials_back['z']):
+          ax.plot([x_start, x_end], [y_start, y_end], [z_start, z_end], c='gray', alpha=0.2)
+
+     ax.view_init(elev=90, azim=-90)
+     ax.set_xlabel('X [mm]')
+     ax.set_ylabel('Y [mm]')
+     ax.set_zlabel('Z [mm]')
+     ax.set_title(f'{grid.project} - Fiducials 3D grid')
+     ax.legend()
+     ax.set_box_aspect((5,5,1))
+
      plt.show()

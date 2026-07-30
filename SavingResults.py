@@ -115,7 +115,7 @@ class SavingResults:
           
           logging.info(f'{filename}.txt succesfully saved in {self.results_dir_path}')
 
-     def save_grid_to_txt2(self, grid: pd, filename: str, **kwargs):
+     def save_grid_to_txt2(self, grid: dict, filename: str, **kwargs):
           #TODO: more optimal than the previous function, needs to replace all calls to the previous function
           columns = kwargs.get('columns', None)
           index = kwargs.get('index', False)
@@ -129,12 +129,13 @@ class SavingResults:
 
           logging.info(f'{filename}.txt succesfully saved in {self.results_dir_path}')
 
-     def save_grid_to_csv(self, grid: pd, filename: str, results_string: str = None):
-          if not self.save_txt:
+     def save_grid_to_csv(self, grid: dict, filename: str, results_string: str = None):
+          if not self.save_csv:
                return
           now = datetime.now()
           now_str = now.strftime("%Y-%m-%d-%H-%M_")
           file_path = self.results_dir_path + now_str + self.project_name + '_' + filename + '.csv'
+          grid = pd.DataFrame(grid)
           if results_string is not None:
                with open(file_path, 'w') as file:
                     file.write(results_string)
