@@ -37,7 +37,7 @@ timesstamp0 = time.time()
 PROJECT = "WST25"
 
 """ Saving results """
-save = SavingResults({"save_plots": False,
+save = SavingResults({"save_plots": True,
                       "save_txt": False,
                       "save_csv": False,
                       "save_dxf": False,
@@ -53,6 +53,8 @@ vignetting_area = surf.vignetting_disk.area
 limit_pol = True
 if limit_pol:
     limiting_polygon = surf.trimming_polygon(geometry='hex', trim_diff_to_vigR = -1)
+    if 'WST' in PROJECT:
+            limiting_polygon = limiting_polygon.difference(surf.donut_hole)  # remove the central region for IFU mode in case of WST layouts
 else:
     limiting_polygon = surf.vignetting_disk
 
@@ -60,14 +62,22 @@ else:
 
 nb_robots_per_module = 63 # number of robots per module
 pitch = 6.2 # [mm] distance between two adjacent robots
-# HR_fibers = [10, 12, 15, 17, 29, 34, 39, 50, 52, 59] # position of the HR fibers in the module
-# HR_fibers = [12, 15, 29, 34, 50, 52]
-# HR_fibers = [21, 25, 39, 51]
-HR_fibers = []
+
+# HR_fibers = [21, 25, 39, 51] # HR fibers for WST layout: symetrical triangle
+HR_fibers = [28, 6, 39, 57] # HR fibers for WST layout: asymetrical triangle
+# HR_fibers = []
 is_HR = len(HR_fibers) != 0
 
-HR_l_beta = 1.8 # [mm] length of the HR fibers in beta direction
-HR_l_alpha = 1.8 # [mm] length of the HR fibers in alpha direction
+HR_l_beta = 7.75 # [mm] length of the HR fibers in beta direction
+HR_l_alpha = 7.75 # [mm] length of the HR fibers in alpha direction
+l_alpha = 7.75 # [mm] length of the LR fibers in alpha direction
+l_beta = 7.75 # [mm] length of the LR fibers in beta direction
+
+# HR_l_beta = 7.75 # [mm] length of the HR fibers in beta direction
+# HR_l_alpha = 7.75 # [mm] length of the HR fibers in alpha direction
+# l_alpha = 7.75 # [mm] length of the LR fibers in alpha direction
+# l_beta = 7.75 # [mm] length of the LR fibers in beta direction
+
 arms_length_tol = 0 # [mm] max error on the arms lengths of the robots, used to compute the worst case coverage of the module
 is_wall = False
 show_modules_id = True
@@ -77,12 +87,14 @@ mod0 = Module(nb_robots = 63,
                 HR_fibers = HR_fibers,
                 HR_l_beta = HR_l_beta,
                 HR_l_alpha = HR_l_alpha,
+                l_alpha = l_alpha,
+                l_beta = l_beta,
                 is_wall = is_wall,
                 arms_length_tol = arms_length_tol)
 robots0 = mod0.robots_layout
 
-INNER_GAP = 0.5# [mm] gap between two modules within an intermediate triangle
-GLOBAL_GAP = 4.4 # [mm] gap between two intermediate triangles; if inner = global, all modules are eqaully spaced
+INNER_GAP = 0.5 # [mm] gap between two modules within an intermediate triangle ; Nominal: 0.5 mm
+GLOBAL_GAP = 4.4 # [mm] gap between two intermediate triangles; if inner = global, all modules are eqaully spaced ; Nominal: 4.4 mm
 OUT_ALLOWANCE = 0 # fraction of the module coverage that is allowed to stick out of the vignetting disk
 
 """ GFA parameters """
@@ -117,6 +129,8 @@ grid.flat_grid() # create the grid of modules
 grid_3d = grid.grid_3d(grid.flat_grid_dict['x'], grid.flat_grid_dict['y'], fp_type = 'module') # project the grid to 3D to include the curvature of the focal surface
 grid_3d_fiducials = grid.grid_3d(grid.fiducials['x'], grid.fiducials['y'], fp_type = 'fiducial') # project the fiducials grid to 3D to include the curvature of the focal surface
 concave_hull = grid.layout_concave_hull() # concave hull of the module layout
+if "WST" in PROJECT:
+    concave_hull = concave_hull.difference(surf.donut_hole)  # remove the central region for IFU mode in case of WST layouts
 concave_hull_area = concave_hull.area # area of the concave hull
 
 
@@ -155,6 +169,8 @@ with Bar('Aranging focal plane modules', max = len(grid_3d['x'])) as bar:
                         HR_fibers = HR_fibers,
                         HR_l_beta = HR_l_beta,
                         HR_l_alpha = HR_l_alpha,
+                        l_alpha = l_alpha,
+                        l_beta = l_beta,
                         is_wall = is_wall,
                         arms_length_tol = arms_length_tol)
 
@@ -227,6 +243,46 @@ with Bar('Aranging focal plane modules', max = len(grid_3d['x'])) as bar:
         for_times.append(time.time() - time1)
         bar.next()
 
+print(modules[0])
+
+def calculate_coverage(modules, limiting_polygon, plot_coverage = False):
+    """
+    Calculates the coverage of the module within the limiting polygon.
+    Args:
+        modules (list): List of Module objects.
+        limiting_polygon (shapely.geometry.Polygon): The limiting polygon to calculate coverage within.
+        plot_coverage (bool): Whether to plot the coverage or not.
+    Returns:
+        LR_coverage (float): The coverage of the LR fibers within the limiting polygon.
+        HR_coverage (float): The coverage of the HR fibers within the limiting polygon in the case of HR fibers being present, otherwise 0.
+    """
+
+    limiting_polygon_area = limiting_polygon.area
+
+    if is_HR:
+            total_coverage_HR = [mod_cov.HR_coverage for mod_cov in modules]
+            HR_union = unary_union(total_coverage_HR)
+            HR_union_area = HR_union.area
+            HR_coverage = 100 * HR_union_area / limiting_polygon_area
+    else:
+        HR_coverage = 0
+
+    total_coverage_LR = [mod_cov.LR_coverage for mod_cov in modules] # extract the LR coverage of each module
+    LR_union = unary_union(total_coverage_LR) # compute the union of all LR coverages, to not account twice for overlapping areas between modules
+    LR_union_area = LR_union.area # compute the area of the union of all LR coverages
+    LR_coverage = 100 * LR_union_area / limiting_polygon_area # compute the coverage of the LR fibers within the limiting polygon
+
+    if plot_coverage:
+        plot_polygon(LR_union, fill = False, add_points=False, color = 'blue', alpha = 0.5)
+        if is_HR:
+            plot_polygon(HR_union, fill = False, add_points=False, color = 'red', alpha = 0.5)
+        plot_polygon(limiting_polygon, fill = False, add_points=False, color = 'black', alpha = 0.5)
+        plt.show()
+
+    return LR_coverage, HR_coverage
+
+LR_vignetting_coverage2, HR_vignetting_coverage2 = calculate_coverage(modules, surf.vignetting_disk)
+LR_layout_coverage2, HR_layout_coverage2 = calculate_coverage(modules, concave_hull)
 #%% 
 def print_dict_lengths(d):
     """
@@ -310,8 +366,8 @@ plot_polygon(grid.layout_concave_hull(), ax = ax, fill = False, add_points=False
 # geo_grid.plot(ax = ax, facecolor= 'None', markersize = 16, edgecolor = 'orange')
 nb_fiducials = len(grid.fiducials['x'])
 if len(HR_fibers) != 0:
-    plt.legend(handles=[cl.HR_handle(extra_lab = f'HR vig : {HR_vignetting_coverage: .1f} %, layout : {HR_layout_coverage: .1f} %'),
-                        cl.LR_handle(f'LR vig : {LR_vignetting_coverage: .1f} %, layout : {LR_layout_coverage: .1f} %'),
+    plt.legend(handles=[cl.HR_handle(extra_lab = f'HR vig : {HR_vignetting_coverage2: .1f} %, layout : {HR_layout_coverage2: .1f} %'),
+                        cl.LR_handle(f'LR vig : {LR_vignetting_coverage2: .1f} %, layout : {LR_layout_coverage2: .1f} %'),
                         cl.GFA_handle(lab = f'GFAs: {nb_gfa}; {gfa_length}x{gfa_width} mm'), 
                         cl.fiducials_handle(lab = f'Fiducials: {nb_fiducials}')], loc='upper right')
 else:
