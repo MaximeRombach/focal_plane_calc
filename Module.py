@@ -49,7 +49,8 @@ class Module:
         self.l_beta = kwargs.get('l_beta', 1.8) # [mm], length of the beta arm for LR (or normal) fibers
         self.HR_l_alpha = kwargs.get('HR_l_alpha', 1.8) # [mm], length of the alpha arm for HR fibers
         self.HR_l_beta = kwargs.get('HR_l_beta', 1.8) # [mm], length of the beta arm for HR fibers
-        self.arms_length_tol = kwargs.get('arms_length_tol', 0) # [mm] worst tolerance on the arms lengths of the robots, used to compute the worst case coverage of the module
+        self.tolerance_arms_length = kwargs.get('tolerance_arms_length', 0) # [mm] worst tolerance on the arms lengths of the robots, used to compute the worst case coverage of the module
+        self.tolerance_pitch = kwargs.get('tolerance_pitch', 0) # [mm] worst tolerance on the pitch of the robots, used to compute the worst case coverage of the module
         # self.HR_fibers = kwargs.get('HR_fibers', [10, 12, 15, 17, 29, 34, 39, 50, 52, 59])
         self.HR_fibers = kwargs.get('HR_fibers', [21, 25, 51])
         # self.HR_fibers = kwargs.get('HR_fibers', [12, 15, 29, 34, 50, 52])
@@ -252,8 +253,10 @@ class Module:
                     """ Remove corner robots"""
                     continue
                 else:
-                    x = (i * self.pitch + 0.5 * self.pitch * j) + layout_center_x
-                    y = (j * self.pitch * sqrt3 / 2) + layout_center_y
+                    pitch_random_uncertainty_x = self.pitch_uncertainty()
+                    pitch_random_uncertainty_y = self.pitch_uncertainty()
+                    x = (i * self.pitch  + 0.5 * self.pitch * j) + layout_center_x + pitch_random_uncertainty_x
+                    y = (j * self.pitch * sqrt3 / 2) + layout_center_y + pitch_random_uncertainty_x
                     z = self.z1
                     is_hr = False
 
@@ -475,10 +478,26 @@ class Module:
             # l_alpha_tolerance = np.random.normal(loc=0, scale=self.arms_lengths_tol)
             # l_beta_tolerance = np.random.normal(loc=0, scale=self.arms_lengths_tol)
 
-            l_alpha_tolerance = np.random.uniform(-self.arms_length_tol, self.arms_length_tol)
-            l_beta_tolerance = np.random.uniform(-self.arms_length_tol, self.arms_length_tol)
-            
+            l_alpha_tolerance = np.random.uniform(-self.tolerance_arms_length, self.tolerance_arms_length)
+            l_beta_tolerance = np.random.uniform(-self.tolerance_arms_length, self.tolerance_arms_length)
+
             return l_alpha_tolerance, l_beta_tolerance
+    
+    def pitch_uncertainty(self):
+        """Changes the pitch value to account for manufacturing uncertainties.
+        
+        Args:
+        - (float) tolerance_pitch: max tolerance on the pitch of the robots
+
+        Returns:
+        - (float) tolerance_pitch_random: random value of the pitch tolerance
+        
+        """
+        # tolerance_pitch_random = np.random.uniform(-self.tolerance_pitch, self.tolerance_pitch)
+        tolerance_pitch_random = np.random.normal(loc=0, scale=self.tolerance_pitch)
+
+
+        return tolerance_pitch_random
 
     def flip_coordinates(self, coord):
         """ Flips coordinates 180° about z axis """
@@ -503,7 +522,29 @@ class Module:
         # Regenerate robots with new positions
         self.robots_layout
         self.module_boundaries_with_safety_margin
-    
+
+    def calculate_pitch(self):
+        """Calculates the distance between each robot and its nearest neighbor.
+
+        Returns:
+        - (list) pitches: nearest-neighbor distance [mm] for each robot in self.robots
+        """
+        positions = np.array([[rob.x0, rob.y0] for rob in self.robots])
+        pitches = []
+        for i, pos in enumerate(positions):
+            distances = np.linalg.norm(positions - pos, axis=1) # Calculate the euclidean norm between the given pos and all the others
+            distances[i] = np.inf # Exclude the robot itself
+            min_pitches_threshold = np.ones_like(distances) * (self.pitch - 1) # Define a ditance threshold to avoid counting robots that are too far; assumes if you are pm 1 mm away from nominal pitch you are no longer a direct neighbor
+            max_pitches_threshold = np.ones_like(distances) * (self.pitch + 1) # Define a ditance threshold to avoid counting robots that are too far
+            neighboring_distances = distances[np.where((distances > min_pitches_threshold) & (distances < max_pitches_threshold))] # Isolates neighboring distances that are within the defined thresholds
+            # print(f"Robot {i}: Neighbors distances = {neighboring_distances.tolist()} mm")
+
+            pitches.append(neighboring_distances.tolist())
+        pitches = np.concatenate(pitches).ravel().tolist()  # Flatten the list of lists into a single list
+        pitches = np.unique(np.array(pitches)).tolist()  # Get unique pitches as they are counted twice (once for each robot in the pair; ex: robot 1 to robot 2 and robot 2 to robot 1)
+        # print(f"Unique pitches: {pitches} mm \n len(pitches) = {len(pitches)}")
+        return pitches
+
     def plot_module(self, plot_rob_numbers = False):
         """Plots the module boundaries and the robots in the module."""
         fig = plt.figure(figsize=(10, 10))
@@ -534,8 +575,8 @@ class Module:
 
         if plot_rob_numbers == True:
             """ Plot robot ID at the center of each robot """
-            for rob in self.robots_layout:
-                plt.text(rob.x1, rob.y1, str(rob.robot_id+1), fontsize=11, ha='center', va='center')
+            for rob in self.robots:
+                plt.text(rob.x1, rob.y1, str(rob.robot_id), fontsize=11, ha='center', va='center')
 
 
         if self.nb_of_HR_fibers != 0:
@@ -553,6 +594,26 @@ class Module:
         plt.title(cl.module_title(self.nb_robots, self.module_side_length, self.pitch, self.l_alpha, self.l_beta, self.HR_l_alpha, self.HR_l_beta))
         plt.grid()
 
+    def plot_pitches(self):
+        """Plots the distribution of pitch values for the robots in the module."""
+        pitches = self.calculate_pitch()
+        sorted_pitches = np.sort(pitches)
+        std_pitches = np.std(sorted_pitches)
+        mean_pitches = np.mean(sorted_pitches)
+        
+        plt.figure(figsize=(10, 6))
+        plt.hist(sorted_pitches, bins=20, color='blue', alpha=0.7)
+        plt.axvline(x=self.pitch, color='red', linestyle='--', label=f'Nominal Pitch: {self.pitch} mm')
+        plt.axvline(x=mean_pitches, color='orange', linestyle='-', label=f'Mean Pitch: {mean_pitches:.2f} mm')
+        plt.axvline(x=mean_pitches + std_pitches, color='green', linestyle=':', label=f'+1 Std Dev: {std_pitches:.3f} mm')
+        plt.axvline(x=mean_pitches - std_pitches, color='green', linestyle=':', label=f'-1 Std Dev: {-std_pitches:.3f} mm')
+
+        plt.xlabel('Pitch [mm]')
+        plt.ylabel('Frequency')
+        plt.title('Distribution of Pitch Values')
+        plt.legend()
+        plt.grid(True)
+
 #%%
 if __name__ == "__main__":
 
@@ -562,21 +623,27 @@ if __name__ == "__main__":
                             project_name = 'test')
     mod = Module(63,
                 6.2, 
-                module_points_up = False,
-                x0 = 100,
-                y0 = 100,
+                tolerance_pitch=0.1,
+                module_points_up = True,
+                x0 = 0,
+                y0 = 0,
                 z0 = 0,
                 HR_fibers = [],
                 arms_length_tol = 0,
-                is_wall = True)
+                is_wall = True,
+                # HR_l_alpha = 7.75,
+                # HR_l_beta = 7.75,
+                l_alpha = 1.8,
+                l_beta = 1.8)
                 # HR_fibers = [21, 25, 39, 51])
 
     robots = mod.robots_layout
     print(robots[0].theta, robots[0].phi, robots[0].r, robots[0].r_flat)
 
     mod.plot_module(plot_rob_numbers=True)
+    mod.plot_pitches()
     print(pd.DataFrame(mod.dataframe))
-    mod.update_position(x1=-200, y1=-300, z1=400)
+    # mod.update_position(x1=-200, y1=-300, z1=400)
     # mod.plot_module(plot_rob_numbers=True)
     plt.figure()
     plot_polygon(unary_union(mod.dataframe['geometry']), color='green', ax=plt.gca(), add_points=False, fill=True, alpha=0.5)
