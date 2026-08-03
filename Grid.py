@@ -69,7 +69,7 @@ class Grid():
         """ Returns the polygon that bounds the fiducials within the grid.
         """
         fid_lim_pol = None
-        buffer = 0 # [mm] buffer to always include fiducials close to the edge
+        buffer = -5 # [mm] buffer to always include fiducials close to the edge
         # Check if limiting polygon already provided, otherwise use vignetting disk
         if self.limiting_polygon is not None:
             fid_lim_pol = self.limiting_polygon.difference(self.surf.donut_hole)

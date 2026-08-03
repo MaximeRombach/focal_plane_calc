@@ -34,7 +34,7 @@ logging.basicConfig(
 timesstamp0 = time.time()
 
 """ Available projects: MUST, Spec-S5, WST25, WST27, VLT_2030"""
-PROJECT = "WST25"
+PROJECT = "MUST"
 
 """ Saving results """
 save = SavingResults({"save_plots": True,
@@ -50,7 +50,7 @@ TRIMMING_ANGLE = 360 # [deg] angle to trim the grid in phi direction
 surf = FocalSurf(PROJECT, trimming_angle = TRIMMING_ANGLE, **project_parameters[PROJECT])
 vigR = surf.vigD / 2
 vignetting_area = surf.vignetting_disk.area
-limit_pol = True
+limit_pol = False
 if limit_pol:
     limiting_polygon = surf.trimming_polygon(geometry='hex', trim_diff_to_vigR = -1)
     if 'WST' in PROJECT:
@@ -62,16 +62,17 @@ else:
 
 nb_robots_per_module = 63 # number of robots per module
 pitch = 6.2 # [mm] distance between two adjacent robots
+pitch_tolerance = 0.5 # [mm] uncertainty on the xy placement of the robot; uncertainty on pitch iteself: tol*Sqrt(2)
 
 # HR_fibers = [21, 25, 39, 51] # HR fibers for WST layout: symetrical triangle
-HR_fibers = [28, 6, 39, 57] # HR fibers for WST layout: asymetrical triangle
-# HR_fibers = []
+# HR_fibers = [28, 6, 39, 57] # HR fibers for WST layout: asymetrical triangle
+HR_fibers = []
 is_HR = len(HR_fibers) != 0
 
-HR_l_beta = 7.75 # [mm] length of the HR fibers in beta direction
-HR_l_alpha = 7.75 # [mm] length of the HR fibers in alpha direction
-l_alpha = 7.75 # [mm] length of the LR fibers in alpha direction
-l_beta = 7.75 # [mm] length of the LR fibers in beta direction
+HR_l_beta = 1.8 # [mm] length of the HR fibers in beta direction
+HR_l_alpha = 1.8 # [mm] length of the HR fibers in alpha direction
+l_alpha = 1.8 # [mm] length of the LR fibers in alpha direction
+l_beta = 1.8 # [mm] length of the LR fibers in beta direction
 
 # HR_l_beta = 7.75 # [mm] length of the HR fibers in beta direction
 # HR_l_alpha = 7.75 # [mm] length of the HR fibers in alpha direction
@@ -84,6 +85,7 @@ show_modules_id = True
 
 mod0 = Module(nb_robots = 63, 
                 pitch = 6.2,
+                tolerance_pitch = pitch_tolerance,
                 HR_fibers = HR_fibers,
                 HR_l_beta = HR_l_beta,
                 HR_l_alpha = HR_l_alpha,
@@ -100,9 +102,9 @@ OUT_ALLOWANCE = 0 # fraction of the module coverage that is allowed to stick out
 """ GFA parameters """
 
 nb_gfa = 6
-angle_offset = 30
-gfa_length = 90
-gfa_width = 90
+angle_offset = 0
+gfa_length = 120
+gfa_width = 120
 #TODO: fix warning appearing twice --> FocalSurf called twice at begining of main AND within Grid class
 #FIX: input surf as parameter to Grid class
 gfa = GFA(nb_gfa = nb_gfa,
@@ -162,6 +164,7 @@ with Bar('Aranging focal plane modules', max = len(grid_3d['x'])) as bar:
         mod = Module(module_id = mod_id+1,
                         nb_robots = 63, 
                         pitch = 6.2,
+                        tolerance_pitch = pitch_tolerance,
                         module_points_up = points_up,
                         x0 = x,
                         y0 = y,
@@ -336,6 +339,11 @@ mod0.plot_module(plot_rob_numbers = True)
 filename = f"Module_{nb_robots_per_module}_rob_pitch_{mod.pitch}_mm"
 save.save_figures_to_dir(filename)
 
+if pitch_tolerance != 0:
+    mod0.plot_pitches()
+    filename = f"Module_pitches_{mod.pitch}_mm_tol_{pitch_tolerance}_mm"
+    save.save_figures_to_dir(filename)
+
 figure, ax = plt.subplots(figsize=(10, 10))
 if len(HR_fibers) != 0:
     geo_HR = gpd.GeoDataFrame(HR_coverage_dict)
@@ -371,7 +379,7 @@ if len(HR_fibers) != 0:
                         cl.GFA_handle(lab = f'GFAs: {nb_gfa}; {gfa_length}x{gfa_width} mm'), 
                         cl.fiducials_handle(lab = f'Fiducials: {nb_fiducials}')], loc='upper right')
 else:
-    plt.legend(handles=[cl.LR_handle(f'Vignetting coverage: {LR_vignetting_coverage: .1f} % \nLayout coverage: {LR_layout_coverage: .1f} %'),
+    plt.legend(handles=[cl.LR_handle(f'Vignetting coverage: {LR_vignetting_coverage2: .1f} % \nLayout coverage: {LR_layout_coverage2: .1f} %'),
                         cl.GFA_handle(lab = f'GFAs: {nb_gfa}; {gfa_length}x{gfa_width} mm'),
                         cl.fiducials_handle(lab = f'Fiducials: {nb_fiducials}')], loc='upper right')
 plt.title(cl.final_layout_title(
