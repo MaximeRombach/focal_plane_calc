@@ -6,7 +6,7 @@ def LR_handle(extra_lab = ''):
     return handle
 
 def HR_handle(extra_lab = ''):
-    handle = mpatches.Patch(facecolor='red', alpha = 0.4, edgecolor='black', label = 'HR ' + extra_lab)
+    handle = mpatches.Patch(facecolor='red', alpha = 0.4, edgecolor='black', label = '' + extra_lab)
     return handle
 
 def boundary_handle(lab = None):
