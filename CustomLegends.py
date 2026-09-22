@@ -29,6 +29,7 @@ def safety_margin_handle(lab = None):
 def final_layout_title(project: str, 
                        vigD:float,
                        nb_robots: int,
+                       pitch:float,
                        total_modules: int,
                        total_robots: int,
                        inner_gap, global_gap,
@@ -41,7 +42,7 @@ def final_layout_title(project: str,
     # project_info = r"$\bf{Project: MUST}$"
 
     robots_info = f"Total # modules: {total_modules} - Total # robots: {total_robots}"
-    modules_info = f" {nb_robots} robots per module - {'Module Walls: Yes' if is_wall else 'Modules Walls: No'}"
+    modules_info = f" {nb_robots} robots per module - Pitch: {pitch} mm - {'Module Walls: Yes' if is_wall else 'Modules Walls: No'}"
     if HR_fibers == 0:
         fibers_info = ""
     else:
@@ -66,6 +67,6 @@ def module_title(nb_robots: int, module_side_length: float, pitch: float, l_alph
         hr_fiber_arms = f'\n HR: l_alpha: {HR_l_alpha} mm - l_beta: {HR_l_beta} mm'
         fiber_arms += hr_fiber_arms   
 
-    title = f'Workspaces of {nb_robots} robots per module \n Primitive triangle side length: {module_side_length} mm - Pitch: {pitch} mm \n' + fiber_arms
+    title = f'Workspaces of {nb_robots} robots per module \n Primitive triangle side length: {module_side_length:.1f} mm - Pitch: {pitch} mm \n' + fiber_arms
 
     return title    
