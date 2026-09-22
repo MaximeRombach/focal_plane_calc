@@ -74,6 +74,7 @@ class Module:
 
         self.module_centroid = [self.x1, self.y1, self.z1]
         self.module_points_up = kwargs.get('module_points_up', True) # True if module oriented upward; False if module points down
+        self.nutation = kwargs.get('nutation', 0) # [deg] tilt of the module plane w.r.t. the flat xy-plane, i.e. FocalSurf.R2NUT at the module's radial position. 0 keeps the module flat
 
         self.safety_margin = kwargs.get('safety_margin', 0.5) # [mm] distance kept betwee a positioner and the module walls
         self.beta2fibre = kwargs.get('beta2fibre', 1) # [mm] physical distance between tip of the physical beta arm and the center of the optical fiber
@@ -89,7 +90,7 @@ class Module:
         
         self.robots = []
         self.dataframe ={'module_id':[], 'robot_id':[], 'fiber_type':[], 'l_alpha':[], 'l_beta':[],
-                         'x0':[], 'y0':[], 'z0':[],
+                         'x0':[], 'y0':[], 'z0':[], 'phi':[], 'theta':[],
                          'color':[], 'geometry':[]}
 
     @property
@@ -103,7 +104,7 @@ class Module:
         
         """
         # return 80 + self.pitch * (self.nb_lines_of_robots() - 12)
-        if self.nb_robots == 63:
+        if self.nb_robots == 63 and self.pitch == 6.2:
             "Force value to 73.8 for 63 robots"
             return 73.8
         else:
@@ -257,11 +258,13 @@ class Module:
                     pitch_random_uncertainty_y = self.pitch_uncertainty()
                     x = (i * self.pitch  + 0.5 * self.pitch * j) + layout_center_x + pitch_random_uncertainty_x
                     y = (j * self.pitch * sqrt3 / 2) + layout_center_y + pitch_random_uncertainty_x
-                    z = self.z1
+                    z = 0 # robots lie in the module's own plane; the module z is added below
                     is_hr = False
 
                     if not self.module_points_up:
                         x,y,z = self.flip_coordinates([x,y,z])
+
+                    x,y,z = self.tilt_to_focal_surface([x,y,z]) # make the robot distribution follow the focal surface tilt at the module's position
 
                     if robot_index in self.HR_fibers:
                         is_hr =True
@@ -281,7 +284,8 @@ class Module:
                                     fiber_type = fiber_types[robot_index],
                                     x0 = x + self.x1,
                                     y0 = y + self.y1,
-                                    z0 = z + self.z1,)
+                                    z0 = z + self.z1,
+                                    nutation = self.nutation,)
 
                     self.dataframe['module_id'].append(new_robot.module_id)
                     self.dataframe['robot_id'].append(new_robot.robot_id)
@@ -291,6 +295,8 @@ class Module:
                     self.dataframe['x0'].append(new_robot.x0)
                     self.dataframe['y0'].append(new_robot.y0)
                     self.dataframe['z0'].append(new_robot.z0)
+                    self.dataframe['phi'].append(new_robot.phi) # [deg] azimuthal angle of the robot about z
+                    self.dataframe['theta'].append(new_robot.nutation) # [deg] tilt of the robot, same convention as the 'theta' column of the modules grid
                     self.dataframe['color'].append(new_robot.color)
                     self.dataframe['geometry'].append(new_robot.workspace)
 
@@ -499,6 +505,35 @@ class Module:
 
         return tolerance_pitch_random
 
+    def tilt_to_focal_surface(self, coord):
+        """ Tilts a coordinate of the module's own (flat) plane so that the module plane becomes
+        tangent to the focal surface at the module's position.
+
+        The module normal is the focal surface normal at that position (same convention as
+        Grid.orientation_vector): n = (-sin(nut)cos(phi), -sin(nut)sin(phi), cos(nut)).
+        Rotating the module's local +z onto n is a rotation of angle nut about the horizontal
+        axis k = (sin(phi), -cos(phi), 0), applied here with Rodrigues' rotation formula.
+
+        Args:
+        - (list) coord: [x, y, z] coordinate in the module's local frame, relative to its centroid
+
+        Returns:
+        - (list) coord: tilted [x, y, z] coordinate, still relative to the module centroid
+        """
+        nut = np.radians(self.nutation)
+        if nut == 0:
+            return coord
+
+        # Recomputed from x1/y1 rather than read from self.phi1, which is not refreshed by update_position
+        phi = np.arctan2(self.y1, self.x1)
+        k = np.array([np.sin(phi), -np.cos(phi), 0]) # rotation axis, horizontal and perpendicular to the module's radial direction
+        v = np.array(coord)
+        v_rot = (v * np.cos(nut)
+                 + np.cross(k, v) * np.sin(nut)
+                 + k * np.dot(k, v) * (1 - np.cos(nut)))
+
+        return v_rot.tolist()
+
     def flip_coordinates(self, coord):
         """ Flips coordinates 180° about z axis """
         R_theta = np.array([[np.cos(np.pi), -np.sin(np.pi), 0],
@@ -550,22 +585,13 @@ class Module:
         fig = plt.figure(figsize=(10, 10))
         ax = fig.add_subplot(111)
         
-        # Plot module boundaries
-        plot_polygon(self.module_boundaries, ax=ax, add_points=False, fill=False, color='black', linestyle='--')
-        
-        # Plot LR coverage
-        # if self.LR_coverage is not None:
-        #     plot_polygon(self.LR_coverage, add_points=False, ax=ax, fill=True, color='C0', alpha=0.4)
-        
-        # Plot HR coverage
-        # if self.HR_coverage is not None:
-        #     plot_polygon(self.HR_coverage, add_points=False, ax=ax, fill=True, color='red', alpha=0.2)
-        
-        # Plot module boundaries with safety margin
-        plot_polygon(self.module_boundaries_with_safety_margin, ax=ax, add_points=False, fill=False, color='red', linestyle='--')
+        if not self.remove_corners:
+            actual_nb_robots = self.nb_robots+3
+        else:
+            actual_nb_robots = self.nb_robots
 
        
-        # Plot robots
+        ### Plot robots
         geo = gpd.GeoDataFrame(self.dataframe)
         geo.plot(ax = ax, color=geo['color'], alpha=0.5, markersize=10, legend=True)
         
@@ -587,11 +613,25 @@ class Module:
             plt.legend(handles = [cl.LR_handle(extra_lab = f'LR fibers: {self.nb_of_LR_fibers} robots workspaces'),
                                 cl.safety_margin_handle(lab = f'Dist2wall: {self.dist2wall} mm')])
 
+        ### Plot module boundaries
+        plot_polygon(self.module_boundaries, ax=ax, add_points=False, fill=False, color='black', linestyle='--')
+        
+        # Plot LR coverage
+        # if self.LR_coverage is not None:
+        #     plot_polygon(self.LR_coverage, add_points=False, ax=ax, fill=True, color='C0', alpha=0.4)
+        
+        # Plot HR coverage
+        # if self.HR_coverage is not None:
+        #     plot_polygon(self.HR_coverage, add_points=False, ax=ax, fill=True, color='red', alpha=0.2)
+        
+        # Plot module boundaries with safety margin
+        plot_polygon(self.module_boundaries_with_safety_margin, ax=ax, add_points=False, fill=False, color='red', linestyle='--')
+
         plt.xlabel('x [mm]')
         plt.ylabel('y [mm]')
         # plt.xlim([-500, 500])
         # plt.ylim([-500, 500])
-        plt.title(cl.module_title(self.nb_robots, self.module_side_length, self.pitch, self.l_alpha, self.l_beta, self.HR_l_alpha, self.HR_l_beta))
+        plt.title(cl.module_title(actual_nb_robots, self.module_side_length, self.pitch, self.l_alpha, self.l_beta, self.HR_l_alpha, self.HR_l_beta))
         plt.grid()
 
     def plot_pitches(self):
@@ -622,8 +662,8 @@ if __name__ == "__main__":
                             "save_txt": False},
                             project_name = 'test')
     mod = Module(63,
-                6.2, 
-                tolerance_pitch=0.1,
+                6.86, 
+                tolerance_pitch=0,
                 module_points_up = True,
                 x0 = 0,
                 y0 = 0,
@@ -631,10 +671,12 @@ if __name__ == "__main__":
                 HR_fibers = [],
                 arms_length_tol = 0,
                 is_wall = True,
-                # HR_l_alpha = 7.75,
-                # HR_l_beta = 7.75,
-                l_alpha = 1.8,
-                l_beta = 1.8)
+                HR_l_alpha = 8.575,
+                HR_l_beta = 8.575,
+                l_alpha = 8.575,
+                l_beta = 8.575,
+                remove_corners = False,
+                chamfer_size = 5,)
                 # HR_fibers = [21, 25, 39, 51])
 
     robots = mod.robots_layout
@@ -647,6 +689,6 @@ if __name__ == "__main__":
     # mod.plot_module(plot_rob_numbers=True)
     plt.figure()
     plot_polygon(unary_union(mod.dataframe['geometry']), color='green', ax=plt.gca(), add_points=False, fill=True, alpha=0.5)
-    # plot_polygon(mod.module_boundaries)
+    plot_polygon(mod.module_boundaries)
     # plt.scatter(robots[31].x0, robots[31].y0, color='blue')
     plt.show()

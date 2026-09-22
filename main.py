@@ -23,7 +23,7 @@ import json
 
 from shapely.plotting import plot_polygon
 from shapely.ops import unary_union
-from shapely.geometry import Point, MultiPolygon
+from shapely.geometry import Point, MultiPolygon, Polygon
 
 import logging
 logging.basicConfig(
@@ -34,12 +34,12 @@ logging.basicConfig(
 timesstamp0 = time.time()
 
 """ Available projects: MUST, Spec-S5, WST25, WST27, VLT_2030"""
-PROJECT = "MUST"
+PROJECT = "WST25"
 
 """ Saving results """
 save = SavingResults({"save_plots": True,
                       "save_txt": False,
-                      "save_csv": False,
+                      "save_csv": True,
                       "save_dxf": False,
                       "project_name": PROJECT},
                       project_name = PROJECT)
@@ -50,9 +50,9 @@ TRIMMING_ANGLE = 360 # [deg] angle to trim the grid in phi direction
 surf = FocalSurf(PROJECT, trimming_angle = TRIMMING_ANGLE, **project_parameters[PROJECT])
 vigR = surf.vigD / 2
 vignetting_area = surf.vignetting_disk.area
-limit_pol = False
+limit_pol = True
 if limit_pol:
-    limiting_polygon = surf.trimming_polygon(geometry='hex', trim_diff_to_vigR = -1)
+    limiting_polygon = surf.trimming_polygon(geometry='hex', trim_diff_to_vigR = -40)
     if 'WST' in PROJECT:
             limiting_polygon = limiting_polygon.difference(surf.donut_hole)  # remove the central region for IFU mode in case of WST layouts
 else:
@@ -62,11 +62,11 @@ else:
 
 nb_robots_per_module = 63 # number of robots per module
 pitch = 6.2 # [mm] distance between two adjacent robots
-pitch_tolerance = 0.5 # [mm] uncertainty on the xy placement of the robot; uncertainty on pitch iteself: tol*Sqrt(2)
+pitch_tolerance = 0 # [mm] uncertainty on the xy placement of the robot; uncertainty on pitch iteself: tol*Sqrt(2)
 
 # HR_fibers = [21, 25, 39, 51] # HR fibers for WST layout: symetrical triangle
-# HR_fibers = [28, 6, 39, 57] # HR fibers for WST layout: asymetrical triangle
-HR_fibers = []
+HR_fibers = [28, 6, 39, 57] # HR fibers for WST layout: asymetrical triangle
+# HR_fibers = []
 is_HR = len(HR_fibers) != 0
 
 HR_l_beta = 1.8 # [mm] length of the HR fibers in beta direction
@@ -79,12 +79,18 @@ l_beta = 1.8 # [mm] length of the LR fibers in beta direction
 # l_alpha = 7.75 # [mm] length of the LR fibers in alpha direction
 # l_beta = 7.75 # [mm] length of the LR fibers in beta direction
 
+# HR_l_beta = 8.575 # [mm] length of the HR fibers in beta direction
+# HR_l_alpha = 8.575 # [mm] length of the HR fibers in alpha direction
+# l_alpha = 8.575 # [mm] length of the LR fibers in alpha direction
+# l_beta = 8.575 # [mm] length of the LR fibers in beta direction
+
 arms_length_tol = 0 # [mm] max error on the arms lengths of the robots, used to compute the worst case coverage of the module
 is_wall = False
 show_modules_id = True
+remove_corners = True # if True, the 3 corner robots of the module are removed to avoid collisions with the walls of the module
 
 mod0 = Module(nb_robots = 63, 
-                pitch = 6.2,
+                pitch = pitch,
                 tolerance_pitch = pitch_tolerance,
                 HR_fibers = HR_fibers,
                 HR_l_beta = HR_l_beta,
@@ -92,19 +98,20 @@ mod0 = Module(nb_robots = 63,
                 l_alpha = l_alpha,
                 l_beta = l_beta,
                 is_wall = is_wall,
-                arms_length_tol = arms_length_tol)
+                arms_length_tol = arms_length_tol,
+                remove_corners = remove_corners)
 robots0 = mod0.robots_layout
 
-INNER_GAP = 0.5 # [mm] gap between two modules within an intermediate triangle ; Nominal: 0.5 mm
+INNER_GAP = 0.6 # [mm] gap between two modules within an intermediate triangle ; Nominal: 0.5 mm
 GLOBAL_GAP = 4.4 # [mm] gap between two intermediate triangles; if inner = global, all modules are eqaully spaced ; Nominal: 4.4 mm
 OUT_ALLOWANCE = 0 # fraction of the module coverage that is allowed to stick out of the vignetting disk
 
 """ GFA parameters """
 
 nb_gfa = 6
-angle_offset = 0
-gfa_length = 120
-gfa_width = 120
+angle_offset = 30
+gfa_length = 50
+gfa_width = 50
 #TODO: fix warning appearing twice --> FocalSurf called twice at begining of main AND within Grid class
 #FIX: input surf as parameter to Grid class
 gfa = GFA(nb_gfa = nb_gfa,
@@ -132,12 +139,16 @@ grid_3d = grid.grid_3d(grid.flat_grid_dict['x'], grid.flat_grid_dict['y'], fp_ty
 grid_3d_fiducials = grid.grid_3d(grid.fiducials['x'], grid.fiducials['y'], fp_type = 'fiducial') # project the fiducials grid to 3D to include the curvature of the focal surface
 concave_hull = grid.layout_concave_hull() # concave hull of the module layout
 if "WST" in PROJECT:
-    concave_hull = concave_hull.difference(surf.donut_hole)  # remove the central region for IFU mode in case of WST layouts
+    central_fiducials = grid.fiducials.nsmallest(12, 'r').sort_values('phi') # 6 fiducials closest to center, ordered by angle to close the polygon cleanly
+    central_hexagon = Polygon(central_fiducials[['x', 'y']].values)
+    concave_hull = concave_hull.difference(central_hexagon)  # remove the central region for IFU mode in case of WST layouts
+    # concave_hull = concave_hull.difference(surf.donut_hole)  # remove the central region for IFU mode in case of WST layouts
+
 concave_hull_area = concave_hull.area # area of the concave hull
 
 
 modules = [] # list of modules
-robots_workspaces = {'Module ID': [], 'Robot ID': [], 'x':[], 'y':[], 'z':[], 'geometry': []}
+robots_workspaces = {'Module ID': [], 'Robot ID in module': [], 'Robot ID in focal plane': [], 'x':[], 'y':[], 'z':[], 'phi':[], 'theta':[], 'fiber_type':[], 'geometry': []}
 # robots_workspaces = {'geometry': []}
 # robots_workspaces = {'Module ID': [], 'Robot ID': [], 'x':[], 'y':[]}
 bundled_robots_geometry_list = [] # list of the geometries of the robots, used to plot them all together at the end
@@ -155,7 +166,7 @@ index2drop = []
 
 with Bar('Aranging focal plane modules', max = len(grid_3d['x'])) as bar:
     # for mod_id,(x,y,z,points_up) in enumerate(zip(grid.flat_grid_dict['x'], grid.flat_grid_dict['y'], grid.flat_grid_dict['z'], grid.flat_grid_dict['tri_points_up'])):
-    for mod_id,(x,y,z,points_up) in enumerate(zip(grid_3d['x'], grid_3d['y'], grid_3d['z'], grid_3d['tri_points_up'])):
+    for mod_id,(x,y,z,points_up,nutation) in enumerate(zip(grid_3d['x'], grid_3d['y'], grid_3d['z'], grid_3d['tri_points_up'], grid_3d['theta'])):
 
         time1 = time.time()
 
@@ -163,19 +174,21 @@ with Bar('Aranging focal plane modules', max = len(grid_3d['x'])) as bar:
         
         mod = Module(module_id = mod_id+1,
                         nb_robots = 63, 
-                        pitch = 6.2,
+                        pitch = pitch,
                         tolerance_pitch = pitch_tolerance,
                         module_points_up = points_up,
                         x0 = x,
                         y0 = y,
                         z0 = z,
+                        nutation = nutation,
                         HR_fibers = HR_fibers,
                         HR_l_beta = HR_l_beta,
                         HR_l_alpha = HR_l_alpha,
                         l_alpha = l_alpha,
                         l_beta = l_beta,
                         is_wall = is_wall,
-                        arms_length_tol = arms_length_tol)
+                        arms_length_tol = arms_length_tol,
+                        remove_corners = remove_corners)
 
         robots = mod.robots_layout
         time2 = time.time()
@@ -220,10 +233,13 @@ with Bar('Aranging focal plane modules', max = len(grid_3d['x'])) as bar:
             # TODO: fix bug saving the robots workspaces to the dataframe when using OUT_ALLOWANCE > 0, the geometries are not saved correctly
             robots_workspaces['geometry'].extend(mod.dataframe['geometry'])
             robots_workspaces['Module ID'].extend(mod.dataframe["module_id"])
-            robots_workspaces['Robot ID'].extend(mod.dataframe['robot_id'])
+            robots_workspaces['Robot ID in module'].extend(mod.dataframe['robot_id'])
             robots_workspaces['x'].extend(mod.dataframe['x0'])
             robots_workspaces['y'].extend(mod.dataframe['y0'])
             robots_workspaces['z'].extend(mod.dataframe['z0'])
+            robots_workspaces['phi'].extend(mod.dataframe['phi'])
+            robots_workspaces['theta'].extend(mod.dataframe['theta'])
+            robots_workspaces['fiber_type'].extend(mod.dataframe['fiber_type'])
 
 
             # robots_workspaces['geometry'].append(MultiPolygon(mod.dataframe['geometry']))
@@ -247,6 +263,22 @@ with Bar('Aranging focal plane modules', max = len(grid_3d['x'])) as bar:
         bar.next()
 
 print(modules[0])
+
+""" Normalize module and robot IDs now that non-contributing modules have been dropped:
+module IDs become consecutive (1..N) in layout order, robot IDs become consecutive (1..nb_robots) within each module """
+module_id_map = {mod.module_id: new_id for new_id, mod in enumerate(modules, start=1)}
+for mod in modules:
+    new_module_id = module_id_map[mod.module_id]
+    mod.dataframe['module_id'] = [new_module_id] * len(mod.dataframe['module_id'])
+    mod.dataframe['robot_id'] = list(range(1, len(mod.dataframe['robot_id']) + 1))
+    for new_robot_id, robot in enumerate(mod.robots, start=1):
+        robot.module_id = new_module_id
+        robot.robot_id = new_robot_id
+    mod.module_id = new_module_id
+
+robots_workspaces['Module ID'] = [module_id_map[old_id] for old_id in robots_workspaces['Module ID']]
+robots_workspaces['Robot ID in module'] = pd.Series(robots_workspaces['Module ID']).groupby(robots_workspaces['Module ID']).cumcount().add(1).tolist()
+robots_workspaces['Robot ID in focal plane'] = list(range(1, len(robots_workspaces['Module ID']) + 1))
 
 def calculate_coverage(modules, limiting_polygon, plot_coverage = False):
     """
@@ -298,14 +330,7 @@ def print_dict_lengths(d):
             print(f"{key}: value has no length")
 
 # print_dict_lengths(robots_workspaces)
-robots_workspaces_df = pd.DataFrame(robots_workspaces)
-
-# Renumber the 'Module ID' column in robots_workspaces to be consecutive starting from 1
-unique_ids = robots_workspaces_df['Module ID'].unique()
-id_map = {old_id: new_id for new_id, old_id in enumerate(sorted(unique_ids), start=1)}
-robots_workspaces_df['Module ID'] = robots_workspaces_df['Module ID'].map(id_map)
-# Renumber 'Robot ID' within each module from 1 to 63
-robots_workspaces_df['Robot ID'] = robots_workspaces_df.groupby('Module ID').cumcount() + 1
+robots_workspaces_df = pd.DataFrame(robots_workspaces) # Module ID / Robot ID are already normalized (see arranging loop above)
 
 #%%
 grid_3d.drop(index2drop, inplace = True) # drop the modules that do not contribute to the coverage
@@ -362,7 +387,8 @@ if show_modules_id:
     for i, mod in enumerate(modules):
         plt.text(mod.x1, mod.y1, f"{i+1}", fontsize=8, ha='center', va='center', color='white')
 plot_polygon(grid.surf.vignetting_disk, ax = ax, fill = False, add_points=False, linestyle = '--', color = 'black')
-plot_polygon(grid.layout_concave_hull(), ax = ax, fill = False, add_points=False, color = 'orange')
+# plot_polygon(grid.layout_concave_hull(), ax = ax, fill = False, add_points=False, color = 'orange')
+plot_polygon(concave_hull, ax = ax, fill = False, add_points=False, color = 'orange')
 
 # print(f"mod0: x0={modules[-1].x0}, y0={modules[-1].y0}")
 # print(f"mod0: x1={modules[-1].x1}, y1={modules[-1].y1}")
@@ -370,6 +396,7 @@ plot_polygon(grid.layout_concave_hull(), ax = ax, fill = False, add_points=False
 #     plt.scatter(mod.x0, mod.y0, color='green')
 #     plt.scatter(mod.x1, mod.y1, color='red', s = 6)
 # plot_polygon(grid.fiducials_bounding_polygon, ax = ax, fill = False, add_points=False, color = 'purple')
+# plot_polygon(limiting_polygon, ax = ax, fill = False, add_points=False, color = 'purple')
 # geo_grid = gpd.GeoDataFrame(grid_3d)
 # geo_grid.plot(ax = ax, facecolor= 'None', markersize = 16, edgecolor = 'orange')
 nb_fiducials = len(grid.fiducials['x'])
@@ -386,6 +413,7 @@ plt.title(cl.final_layout_title(
                                 project = PROJECT, 
                                 vigD = surf.vigD,
                                 nb_robots =  nb_robots_per_module,
+                                pitch = pitch,
                                 total_modules =  len(modules),
                                 total_robots=  nb_robots_per_module*len(modules),
                                 inner_gap = INNER_GAP, global_gap = GLOBAL_GAP,
@@ -420,6 +448,39 @@ print(f"Mean time for 1 for loop: {sum(for_times)/len(for_times)} s")
 
 filename = f"Coverage_global_{nb_robots_per_module}_rob__Inner_{INNER_GAP}_mm__Global_{GLOBAL_GAP}_mm"
 save.save_figures_to_dir(filename, dpi = 800)
+
+#%%
+""" 3D view of every robot position projected onto the curved focal surface.
+Each module stays a flat triangle, placed at the z of its centroid --> the layout appears as a
+staircase of flat tiles following the focal surface curvature. """
+
+fig3d = plt.figure(figsize=(12, 10))
+ax3d = fig3d.add_subplot(projection='3d')
+
+for fiber_type, color in [('LR', 'C0'), ('HR', 'red')]:
+    robots_of_type = robots_workspaces_df[robots_workspaces_df['fiber_type'] == fiber_type]
+    if robots_of_type.empty:
+        continue
+    ax3d.scatter(robots_of_type['x'], robots_of_type['y'], robots_of_type['z'],
+                 color = color, s = 1, alpha = 0.5, depthshade = False,
+                 label = f"{fiber_type} fibers: {len(robots_of_type)}")
+
+# Module centroids, to show how the modules tile the surface
+ax3d.scatter(grid_3d['x'], grid_3d['y'], grid_3d['z'],
+             color = 'black', s = 6, depthshade = False, label = f"Module centroids: {len(modules)}")
+
+ax3d.set_xlabel('x [mm]')
+ax3d.set_ylabel('y [mm]')
+ax3d.set_zlabel('z [mm]')
+ax3d.set_box_aspect((5, 5, 1)) # z range is tiny compared to x/y, exaggerate it to see the curvature
+ax3d.view_init(elev = 25, azim = -60)
+ax3d.legend(loc = 'upper right', markerscale = 8)
+ax3d.set_title(f"{PROJECT} - Robots on the 3D focal surface \n"
+               f"{len(modules)} modules - {len(robots_workspaces_df)} robots - "
+               f"z span: {robots_workspaces_df['z'].max() - robots_workspaces_df['z'].min():.1f} mm")
+
+filename = f"Robots_3D_{nb_robots_per_module}_rob__Inner_{INNER_GAP}_mm__Global_{GLOBAL_GAP}_mm"
+save.save_figures_to_dir(filename, dpi = 400)
 
 timesstamp1 = time.time()
 print(f"Total time: {timesstamp1 - timesstamp0} s")

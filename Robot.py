@@ -19,6 +19,9 @@ class Robot:
     - (float) x0: x-coordinate of the center of the robot workspace in the global coordinate system
     - (float) y0: y-coordinate of the center of the robot workspace in the global coordinate system
     - (float) z0: z-coordinate of the center of the robot workspace in the global coordinate system
+    - (float) nutation: tilt of the robot w.r.t. the flat xy-plane, inherited from its module.
+        Same quantity as the 'theta' column of Grid.grid_3d (FocalSurf.R2NUT), NOT the polar
+        angle from +z that is stored in the theta attribute below
     - (float) r_flat: radial position of the center of the robot in spherical coordinates
     - (float) theta_flat: azimuthal position of the center of the robot in spherical coordinates
     - (float) phi_flat: polar position of the center of the robot in spherical coordinates
@@ -37,6 +40,7 @@ class Robot:
         self.__robot_id = kwargs.get('robot_id', None)
         self.__module_id = kwargs.get('module_id', None)
         self.fiber_type = kwargs.get('fiber_type', None) # Type of fiber that the robot is carrying: Default is None if the fibers are all the same in the project
+        self.nutation = kwargs.get('nutation', 0) # [deg] tilt of the robot w.r.t. the flat xy-plane, inherited from the module it belongs to
         self.__x0 = kwargs.get('x0', 0)
         self.__y0 = kwargs.get('y0', 0)
         self.__z0 = kwargs.get('z0', 0)
